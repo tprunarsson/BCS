@@ -302,9 +302,7 @@ int init_model(char *fname) {
     transfer[ATTR_LOCATION] = (double)location;
     transfer[ATTR_PERSON] = (double)id;
     departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
-    printf("departureday = %g\n", departureday);
-    departureday = sim_time + MAX(1.0,departureday);
-    printf("corrected departureday = %g\n", departureday);
+    departureday = sim_time + MAX(0.0,departureday);
     transfer[ATTR_DEPARTDAY] = (double)departureday;
     list_file (INCREASING, location);
     transfer[ATTR_LOCATION] = (double)location;
@@ -324,8 +322,7 @@ int init_model(char *fname) {
 void arrive(int n) {
   int i;
   /* this is the agegroup distribution CDF 28/3 */
-  //double ageCDF[10] = {0.02076843,0.09449637,0.24714434,0.41640706,0.64174455,0.82658359,0.95742471,0.99376947,0.99688474,1.0};
-  int day, dayinloc, location, age, agegroup, gender;
+  int day, dayinloc, location, agegroup, gender;
   double departureday, u;
 
   for (i = 0; i < n; i++) {
@@ -342,7 +339,7 @@ void arrive(int n) {
     transfer[ATTR_GENDER] = (double)gender;
     transfer[ATTR_DAYSINLOC] = (double)dayinloc;
     transfer[ATTR_LOCATION] = (double)location;
-    departureday = sim_time + MAX(1.0,lengthOfStay(location, agegroup) - (double)dayinloc);
+    departureday = sim_time + lengthOfStay(location, agegroup);
     transfer[ATTR_DEPARTDAY] = (double)departureday;
     list_file (INCREASING, location);
     transfer[ATTR_LOCATION] = (double)location; /* must be repeated since transfer is new */
@@ -467,21 +464,14 @@ int main(int argc, char *argv[]) {
         case EVENT_ARRIVAL:
           //printf("trace: Arrival event at %.2f days\n", sim_time);
           /* add the patient to the home ward */
-          //arrive (60); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
+          arrive (60); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
           event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals next day */
           // here we could write out statistics for the day!
           report(1);
           break;
         case EVENT_DEPARTURE:
           //printf("trace: Departure event at %.2f days\n", sim_time);
-          for (i = HOME; i <= RECOVERED; i++)
-            printf("%d ", list_size[i]);
-          printf("\n");
-          printf("event_list_size=%d\n", list_size[LIST_EVENT]);
- //         for (i = 0; i < maxatr; i++) printf("%.0f ", transfer[i]); printf("\n");
-          printf("enter depart()");
           depart();
-          printf("we did it!\n");
           break;
         default:
           break;
