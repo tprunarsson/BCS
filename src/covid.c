@@ -3,7 +3,7 @@
   COVID-19  Population-Quarantine-Isolation-(pre)-Ward-ICU-(ventilator) 
             Discrete Event Simulator 
   author:   tpr@hi.is        
-  version:  27/3/2020
+  version:  27/3/2020 (under construction!!!)
 
   Notes: the resolution of this simulation is in days, time zero denotes the day today!
 
@@ -20,8 +20,8 @@
 #include "covid.h"  /* all #DEFINEs for the this file */
 
 /* The following is the transition probability matrix from one
-   location to the next. Note that it has a zero on the diagonal
-   and uses 10 different agegroups, this variable is global */
+   location to the next, length of stay, and location on first 
+   arrival... */
 double CDF[MAX_AGE_GROUPS][RECOVERED-HOME+1][RECOVERED-HOME+1];
 double losCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1][MAX_LOS_DAYS];
 double firstLocCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1];
@@ -33,12 +33,13 @@ double ProbUnder50; /* this is set when we compute the first destination */
 
 FILE *infile, *outfile;
 
+/* for a workaround with the .csv files */
 int get_index(char* string, char c) {
-    char *e = strchr(string, c);
-    if (e == NULL) {
-        return -1;
-    }
-    return (int)(e - string);
+  char *e = strchr(string, c);
+  if (e == NULL) {
+    return -1;
+  }
+  return (int)(e - string);
 }
 
 int readFirstCDF(char *fname) {
@@ -315,7 +316,6 @@ void arrive(int n) {
   double departureday, u;
 
   for (i = 0; i < n; i++) {
-
     u = urand (STREAM_AGE);
     agegroup = (u <= ProbUnder50);
     day = sim_time; /* new arrivals today, that is sim_time wall-clock */
@@ -460,8 +460,6 @@ int main(int argc, char *argv[]) {
           break;
     }
   }
-//  report();
   fclose(outfile);
-
   return 0;
 }
