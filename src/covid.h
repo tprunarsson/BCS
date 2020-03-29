@@ -4,7 +4,7 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define MAX_AGE_GROUPS       2
-#define MAX_LOS_DAYS        30
+#define MAX_LOS_DAYS        60
 
 #define EVENT_ARRIVAL        1
 #define EVENT_DEPARTURE      2
