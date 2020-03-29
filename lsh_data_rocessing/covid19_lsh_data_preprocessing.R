@@ -8,16 +8,12 @@ library(readr)
 today <- Sys.Date()
 
 path_data <-'~/COVID19/Data/'
-path_coding <- '~/COVID19/Processing/'
-path_hi_predictions <- '~/COVID19/Processing/'
 
 file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
-file_name_lsh_coding <- 'lsh_coding.xlsx'
-file_name_hi_predictions <- 'Iceland_Predictions_2020-03-27.csv'
+file_path_coding <- 'lsh_coding.xlsx'
+file_path_predictions <- 'Iceland_Predictions_2020-03-27.csv'
 
 file_path_data <- paste0(path_data,file_name_lsh_data)
-file_path_coding <- paste0(path_coding,file_name_lsh_coding)
-file_path_predictions <- paste0(path_hi_predictions,file_name_hi_predictions)
 
 individs_raw <- read_excel(file_path_data,sheet = 1, skip=3)
 hospital_visits_raw <- read_excel(file_path_data,sheet =2, skip=3)
