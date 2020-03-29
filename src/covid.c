@@ -468,6 +468,8 @@ int main(int argc, char *argv[]) {
           event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals next day */
           // here we could write out statistics for the day!
           report(1);
+          numRecovered = 0;
+          numDeath = 0;
           break;
         case EVENT_DEPARTURE:
           //printf("trace: Departure event at %.2f days\n", sim_time);
