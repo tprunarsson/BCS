@@ -20,18 +20,21 @@
 #include "covid.h"  /* all #DEFINEs for the this file */
 
 /* The following is the transition probability matrix from one
-   location to the next, length of stay, and location on first 
-   arrival... */
+   location to the next, length of stay for different agegroups
+   and location, and location on first arrival for different age
+   groups. */
 double CDF[MAX_AGE_GROUPS][RECOVERED-HOME+1][RECOVERED-HOME+1];
 double losCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1][MAX_LOS_DAYS];
 double firstLocCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1];
 
-char *szLocations[RECOVERED-HOME+1] = {"HOME","EMERGENCY_ROOM","OUTPATIENT_CLINIC",
-                      "INPATIENT_WARD","INTENSIVE_CARE_UNIT","DEATH","RECOVERED"};
+/* The different locations used */ 
+char *szLocations[RECOVERED-HOME+1] = {"HOME","INPATIENT_WARD","INTENSIVE_CARE_UNIT","DEATH","RECOVERED"};
 
-double ProbUnder50; /* this is set when we compute the first destination */
+double ProbUnder50; /* this is computed by the function readFirstCDF */
+int numRecovered = 0;
+int numDeath = 0;
 
-FILE *infile, *outfile;
+FILE *infile, *outfile; /* global file pointers for report writing */
 
 /* for a workaround with the .csv files */
 int get_index(char* string, char c) {
@@ -42,6 +45,9 @@ int get_index(char* string, char c) {
   return (int)(e - string);
 }
 
+/*
+  Computes the CDF for the different locations 
+*/
 int readFirstCDF(char *fname) {
   FILE *fid;
   int age, agegroup, location, under50 = 0, over50 = 0;
@@ -101,9 +107,10 @@ int readFirstCDF(char *fname) {
     }
   }
   for (i = 0; i < MAX_AGE_GROUPS; i++) {
+    fprintf(outfile, "firstLocCDF[%d] = ", i);
     for (j = 0; j < n; j++)
-      printf("%.4g ",firstLocCDF[i][j]);
-    printf("\n");
+      fprintf(outfile, "%.4g ",firstLocCDF[i][j]);
+    fprintf(outfile, "\n");
   }
   ProbUnder50 = (double)under50 / (double)(under50+over50);
   printf("numer of age > 50 is %d and <= 50 %d, probUnder50 = %g\n", over50, under50, ProbUnder50);
@@ -147,11 +154,9 @@ int readLosP(char *fname) {
         printf("error: unknown keyword (age) in %s called %s\n", fname, szagegroup);
         exit(1);
       }
-    if (0 == strcmp(szlocation,"emergency_room")) location = EMERGENCY_ROOM;
-    else if (0 == strcmp(szlocation,"home")) location = HOME;
+    if (0 == strcmp(szlocation,"home")) location = HOME;
     else if (0 == strcmp(szlocation,"inpatient_ward")) location = INPATIENT_WARD;
     else if (0 == strcmp(szlocation,"intensive_care_unit")) location = INTENSIVE_CARE_UNIT;
-    else if (0 == strcmp(szlocation,"outpatient_clinic")) location = OUTPATIENT_CLINIC;
     else if (0 == strcmp(szlocation,"death")) location = DEATH;
     else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
     else {
@@ -172,6 +177,14 @@ int readLosP(char *fname) {
           losCDF[i][j][k] = losCDF[i][j][k]/sum;
         }
       }
+    }
+  }
+  for (i = 0; i < MAX_AGE_GROUPS; i++) {
+    fprintf(outfile,"losCDF[%d]= \n", i);
+    for (j = 0; j < n; j++) {
+      for (k = 0; k < MAX_LOS_DAYS; k++)
+        fprintf(outfile, "%.4g ", losCDF[i][j][k]);
+      fprintf(outfile,"\n");
     }
   }
   fclose(fid);
@@ -216,13 +229,13 @@ int readTransitionP(char *fname, int agegroup) {
       CDF[agegroup][i][j] = CDF[agegroup][i][j-1] + P[i][j];
     }
   }
-  /*
+  fprintf(outfile, "CDF[%d] = \n", agegroup);
   for (i = 0; i < n; i++) {
     for (j = 0; j < n; j++)
-      printf("%.4g ", CDF[agegroup][i][j]);
-    printf("\n");
+      fprintf(outfile, "%.4g ", CDF[agegroup][i][j]);
+    fprintf(outfile, "\n");
   }
-  */
+  
   fclose(fid);
   return 0;
 }
@@ -234,7 +247,7 @@ int readTransitionP(char *fname, int agegroup) {
 double lengthOfStay(int location, int agegroup) {
   double los = 0.0;
   los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
-    return los;
+  return los;
 }
 
 /*
@@ -267,11 +280,9 @@ int init_model(char *fname) {
       agegroup = 0;
     else
       agegroup = 1;
-    if (0 == strcmp(szlocation,"emergency_room")) location = EMERGENCY_ROOM;
-    else if (0 == strcmp(szlocation,"home")) location = HOME;
+    if (0 == strcmp(szlocation,"home")) location = HOME;
     else if (0 == strcmp(szlocation,"inpatient_ward")) location = INPATIENT_WARD;
     else if (0 == strcmp(szlocation,"intensive_care_unit")) location = INTENSIVE_CARE_UNIT;
-    else if (0 == strcmp(szlocation,"outpatient_clinic")) location = OUTPATIENT_CLINIC;
     else if (0 == strcmp(szlocation,"death")) location = DEATH;
     else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
     else {
@@ -291,7 +302,9 @@ int init_model(char *fname) {
     transfer[ATTR_LOCATION] = (double)location;
     transfer[ATTR_PERSON] = (double)id;
     departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
+    printf("departureday = %g\n", departureday);
     departureday = sim_time + MAX(1.0,departureday);
+    printf("corrected departureday = %g\n", departureday);
     transfer[ATTR_DEPARTDAY] = (double)departureday;
     list_file (INCREASING, location);
     transfer[ATTR_LOCATION] = (double)location;
@@ -371,27 +384,32 @@ void depart(void) {
   }
   printf("Person-%d is leaving %s for %s on day %.2g\n", id, szLocations[location], szLocations[newlocation], sim_time);
   transfer[ATTR_LOCATION] = (double)newlocation;
-  if ((newlocation == RECOVERED) || (newlocation == DEATH))
-    departureday = 365; /* that is were not leaving this state */
-  else
-    departureday = sim_time + MAX(1.0,lengthOfStay(newlocation, agegroup));
-  transfer[ATTR_DEPARTDAY] = (double)departureday;
-  transfer[newlocation+10] = transfer[newlocation+10] + 1;
-  list_file (INCREASING, newlocation);
-  transfer[ATTR_LOCATION] = (double)newlocation; /* must be repeated since transfer is new */
-  event_schedule(departureday, EVENT_DEPARTURE);
+  
+  departureday = lengthOfStay(newlocation, agegroup);
+  departureday = sim_time + MAX(1.0,departureday);
+  if (newlocation == RECOVERED) 
+    numRecovered++;
+  else if (newlocation == DEATH)
+    numDeath++;
+  else {
+    transfer[ATTR_DEPARTDAY] = (double)departureday;
+    transfer[newlocation+10] = transfer[newlocation+10] + 1;
+    list_file (INCREASING, newlocation);
+    transfer[ATTR_LOCATION] = (double)newlocation; /* must be repeated since transfer is new */
+    event_schedule(departureday, EVENT_DEPARTURE);
+  }
 }
 
 void report(append) {
   int i;
   if (0 == append) {
-    fprintf(outfile,"home,emergency_room,outpatient_clinic,inpatient_ward,intensive_care_unit,death,recovered\n");
+    fprintf(outfile,"home,inpatient_ward,intensive_care_unit,death,recovered\n");
   }
   else {
-    for (i = HOME; i < RECOVERED; i++)
+    for (i = HOME; i < (RECOVERED-1); i++)
       fprintf(outfile, "%d,", list_size[i]);
-    fprintf(outfile,"%d\n",list_size[RECOVERED]);
-  }
+    fprintf(outfile, "%d,%d\n", numDeath, numRecovered);
+   }
 }
 
 /* 
@@ -407,7 +425,7 @@ int main(int argc, char *argv[]) {
   /* check user input to main */
   if (argc < (4+MAX_AGE_GROUPS)) {
     printf("Covid: Discrete Event Simulator\n");
-    printf("usage: %s persons.csv loshistogram.csv firstdata.csv transition_agegroupX.csv ... \n", argv[0]);
+    printf("usage: %s current.csv lengthofstay.csv firstdata.csv transition_agegroupX.csv ... \n", argv[0]);
     return 1;
   }
 
@@ -456,7 +474,16 @@ int main(int argc, char *argv[]) {
           break;
         case EVENT_DEPARTURE:
           //printf("trace: Departure event at %.2f days\n", sim_time);
+          for (i = HOME; i <= RECOVERED; i++)
+            printf("%d ", list_size[i]);
+          printf("\n");
+          printf("event_list_size=%d\n", list_size[LIST_EVENT]);
+ //         for (i = 0; i < maxatr; i++) printf("%.0f ", transfer[i]); printf("\n");
+          printf("enter depart()");
           depart();
+          printf("we did it!\n");
+          break;
+        default:
           break;
     }
   }

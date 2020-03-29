@@ -23,9 +23,7 @@
 // home,emergency_room,outpatient_clinic,inpatient_ward,intensive_care_unit,death,recovered
 
 #define HOME                0
-#define EMERGENCY_ROOM      1
-#define OUTPATIENT_CLINIC   2
-#define INPATIENT_WARD      3
-#define INTENSIVE_CARE_UNIT 4
-#define DEATH               5
-#define RECOVERED           6
+#define INPATIENT_WARD      1
+#define INTENSIVE_CARE_UNIT 2
+#define DEATH               3
+#define RECOVERED           4
