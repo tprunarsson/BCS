@@ -3,7 +3,7 @@
   COVID-19  Population-Quarantine-Isolation-(pre)-Ward-ICU-(ventilator) 
             Discrete Event Simulator 
   author:   tpr@hi.is        
-  version:  27/3/2020 (under construction!!!)
+  version:  30/3/2020 ... getting there
 
   Notes: the resolution of this simulation is in days, time zero denotes the day today!
 
@@ -333,7 +333,10 @@ int init_model(char *fname) {
     transfer[ATTR_LOCATION] = (double)location;
     transfer[ATTR_PERSON] = (double)id;
     departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
-    departureday = sim_time + MAX(0.0,departureday);
+    while (departureday < 0) {
+      departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
+    }
+    departureday = sim_time + departureday;
     transfer[ATTR_DEPARTDAY] = (double)departureday;
     list_file (INCREASING, location);
     transfer[ATTR_LOCATION] = (double)location;
