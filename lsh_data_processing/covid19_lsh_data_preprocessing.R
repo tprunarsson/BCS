@@ -7,7 +7,7 @@ library(readr)
 
 today <- Sys.Date()
 
-<<<<<<< HEAD:lsh_data_rocessing/covid19_lsh_data_preprocessing.R
+
 #date on output files
 current_date=as.Date('2020-03-30','%Y-%m-%d')
 
@@ -21,17 +21,6 @@ path_to_output <- paste0(path_to_root,'Data/')
 file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_predictions <- 'Iceland_Predictions_2020-03-27.csv'
-=======
-path_to_root <- '~/projects/covid/BCS/'
-path_data <- paste0(path_to_root,'Data/')
-path_coding <- paste0(path_to_root,'lsh_data_processing/')
-path_hi_predictions <- paste0(path_to_root,'lsh_data_processing/')
-path_to_output <- paste0(path_to_root,'Data/')
-
-file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_28_03_2020.xlsx'
-file_name_lsh_coding <- 'lsh_coding.xlsx'
-file_name_hi_predictions <- 'Iceland_Predictions_2020-03-27.csv'
->>>>>>> 7e963056c42caf24a3a58db6bf155112f04db075:lsh_data_processing/covid19_lsh_data_preprocessing.R
 
 file_path_data <- paste0(path_data,file_name_lsh_data)
 
@@ -237,11 +226,7 @@ patient_transition_counts_all <- group_by(patient_transitions,state,state_tomorr
                               right_join(.,state_transitions_all,by=c('state','state_tomorrow')) %>%
                               mutate(count=if_else(is.na(count),0,count))
 patient_transition_counts_matrix_all <- matrix(patient_transition_counts_all$count,ncol=length(states),nrow=length(states))
-<<<<<<< HEAD:lsh_data_rocessing/covid19_lsh_data_preprocessing.R
 
-#write
-=======
->>>>>>> 7e963056c42caf24a3a58db6bf155112f04db075:lsh_data_processing/covid19_lsh_data_preprocessing.R
 write.table(patient_transition_counts_matrix_all,file=paste0(path_to_output,'transition_matrix_',current_date,'.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
 
 #simple age groups
@@ -264,11 +249,7 @@ patient_transition_counts_matrix_age_simple_over_50 <- filter(patient_transition
 select(count) %>% 
 unlist() %>% 
 matrix(.,ncol=length(states),nrow=length(states))
-<<<<<<< HEAD:lsh_data_rocessing/covid19_lsh_data_preprocessing.R
 
-#write
-=======
->>>>>>> 7e963056c42caf24a3a58db6bf155112f04db075:lsh_data_processing/covid19_lsh_data_preprocessing.R
 write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_to_output,'transition_matrix_under_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
 write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_to_output,'transition_matrix_over_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
 
@@ -313,10 +294,7 @@ current_state <-  filter(patient_transitions_state_blocks,date==current_date) %>
                   mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
                   select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
 
-<<<<<<< HEAD:lsh_data_rocessing/covid19_lsh_data_preprocessing.R
-#write
-=======
->>>>>>> 7e963056c42caf24a3a58db6bf155112f04db075:lsh_data_processing/covid19_lsh_data_preprocessing.R
+
 write.table(current_state,file=paste0(path_to_output,'current_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #length of stay by age 
@@ -326,11 +304,7 @@ length_of_stay_by_age_simple <- inner_join(select(patient_transitions_state_bloc
                                             group_by(state,age_group_simple,state_duration) %>%
                                             summarise(count=n()) %>%
                                             arrange(state,age_group_simple)
-<<<<<<< HEAD:lsh_data_rocessing/covid19_lsh_data_preprocessing.R
-#write
-=======
 
->>>>>>> 7e963056c42caf24a3a58db6bf155112f04db075:lsh_data_processing/covid19_lsh_data_preprocessing.R
 write.table(length_of_stay_by_age_simple,file=paste0(path_to_output,'length_of_stay_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #first state of all patients that have been diagnosed
@@ -341,10 +315,7 @@ first_state <- group_by(hospital_visits_filtered,patient_id) %>%
                 mutate(initial_state=if_else(is.na(initial_state_hospital),'home',if_else(min_date_in==date_diagnosis,initial_state_hospital,'home'))) %>%
                 select(age,sex,initial_state)
 
-<<<<<<< HEAD:lsh_data_rocessing/covid19_lsh_data_preprocessing.R
-#write
-=======
->>>>>>> 7e963056c42caf24a3a58db6bf155112f04db075:lsh_data_processing/covid19_lsh_data_preprocessing.R
+
 write.table(first_state,file=paste0(path_to_output,'first_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #get predictions from covid hi model
@@ -352,7 +323,7 @@ write.table(first_state,file=paste0(path_to_output,'first_state_',current_date,'
 hi_predictions <- filter(hi_predictions_raw,name=='cases',type=='new',age=='total') %>%
                   select(date,median,upper)
 
-<<<<<<< HEAD:lsh_data_rocessing/covid19_lsh_data_preprocessing.R
+
 #write
 write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
 
@@ -372,7 +343,3 @@ length_of_stay_updated <- inner_join(select(patient_transitions_state_blocks_sum
 #write
 
 #write.table(length_of_stay_updated,file=paste0(path_to_output,'length_of_stay_updated_',current_date,'.csv'),sep=',',row.names=F,quote=F)
-=======
-write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
-
->>>>>>> 7e963056c42caf24a3a58db6bf155112f04db075:lsh_data_processing/covid19_lsh_data_preprocessing.R
