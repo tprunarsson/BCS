@@ -151,7 +151,7 @@ int readFirstCDF(char *fname) {
     fprintf(outfile, "\n");
   }
   ProbUnder50 = (double)under50 / (double)(under50+over50);
-  printf("numer of age > 50 is %d and <= 50 %d, probUnder50 = %g\n", over50, under50, ProbUnder50);
+  fprintf(outfile,"numer of age > 50 is %d and <= 50 %d, probUnder50 = %g\n", over50, under50, ProbUnder50);
   fclose(fid);
   return 0;
 }
