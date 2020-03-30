@@ -7,9 +7,11 @@ library(readr)
 
 today <- Sys.Date()
 
-path_data <-'~/COVID19/Data/'
-path_coding <- '~/COVID19/Processing/'
-path_hi_predictions <- '~/COVID19/Processing/'
+path_to_root <- '~/projects/covid/BCS/'
+path_data <- paste0(path_to_root,'Data/')
+path_coding <- paste0(path_to_root,'lsh_data_rocessing/')
+path_hi_predictions <- paste0(path_to_root,'lsh_data_rocessing/')
+path_to_output <- paste0(path_to_root,'src/')
 
 file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 file_name_lsh_coding <- 'lsh_coding.xlsx'
@@ -196,7 +198,7 @@ patient_transition_counts_all <- group_by(patient_transitions,state,state_tomorr
                               right_join(.,state_transitions_all,by=c('state','state_tomorrow')) %>%
                               mutate(count=if_else(is.na(count),0,count))
 patient_transition_counts_matrix_all <- matrix(patient_transition_counts_all$count,ncol=length(states),nrow=length(states))
-write.table(patient_transition_counts_matrix_all,file=paste0('~/Downloads/transition_matrix_',current_date,'.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
+write.table(patient_transition_counts_matrix_all,file=paste0(path_to_output,'transition_matrix_',current_date,'.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
 
 #simple age groups
 age_group_simple=c('0-50','51+')
@@ -218,8 +220,8 @@ patient_transition_counts_matrix_age_simple_over_50 <- filter(patient_transition
 select(count) %>% 
 unlist() %>% 
 matrix(.,ncol=length(states),nrow=length(states))
-write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0('~/Downloads/transition_matrix_under_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
-write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0('~/Downloads/transition_matrix_over_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
+write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_to_output,'transition_matrix_under_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
+write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_to_output,'transition_matrix_over_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
 
 # get length of stay for each state
 
@@ -262,7 +264,7 @@ current_state <-  filter(patient_transitions_state_blocks,date==current_date) %>
                   mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
                   select(patient_id,age,sex,state,days_in_state,days_from_diagnosis)
 
-write.table(current_state,file=paste0('~/Downloads/current_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+write.table(current_state,file=paste0(path_to_output,'current_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #length of stay by age 
 
@@ -273,7 +275,7 @@ length_of_stay_by_age_simple <- inner_join(select(patient_transitions_state_bloc
                                             summarise(count=n()) %>%
                                             arrange(state,age_group_simple)
 
-write.table(length_of_stay_by_age_simple,file=paste0('~/Downloads/length_of_stay_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+write.table(length_of_stay_by_age_simple,file=paste0(path_to_output,'length_of_stay_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #first state of all patients that have been diagnosed
 
@@ -283,12 +285,12 @@ first_state <- group_by(hospital_visits_filtered,patient_id) %>%
                 mutate(initial_state=if_else(is.na(initial_state_hospital),'home',if_else(min_date_in==date_diagnosis,initial_state_hospital,'home'))) %>%
                 select(age,sex,initial_state)
 
-write.table(first_state,file=paste0('~/Downloads/first_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+write.table(first_state,file=paste0(path_to_output,'first_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #get predictions from covid hi model
 
 hi_predictions <- filter(hi_predictions_raw,name=='cases',type=='new',age=='total') %>%
                   select(date,median,upper)
 
-write.table(hi_predictions,file=paste0('~/Downloads/hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
+write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
 
