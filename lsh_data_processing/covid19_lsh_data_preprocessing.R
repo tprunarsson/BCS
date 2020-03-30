@@ -11,7 +11,7 @@ path_to_root <- '~/projects/covid/BCS/'
 path_data <- paste0(path_to_root,'Data/')
 path_coding <- paste0(path_to_root,'lsh_data_rocessing/')
 path_hi_predictions <- paste0(path_to_root,'lsh_data_rocessing/')
-path_to_output <- paste0(path_to_root,'src/')
+path_to_output <- paste0(path_to_root,'Data/')
 
 file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 file_name_lsh_coding <- 'lsh_coding.xlsx'
