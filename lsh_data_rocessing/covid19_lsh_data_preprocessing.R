@@ -7,9 +7,17 @@ library(readr)
 
 today <- Sys.Date()
 
-path_data <-'~/COVID19/Data/'
+#date on output files
+current_date=as.Date('2020-03-30','%Y-%m-%d')
 
-file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
+path_to_root <- '~/projects/covid/BCS/'
+path_data <- paste0(path_to_root,'Data/')
+path_coding <- paste0(path_to_root,'lsh_data_processing/')
+path_hi_predictions <- paste0(path_to_root,'lsh_data_processing/')
+path_to_output <- paste0(path_to_root,'Data/')
+
+#file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
+file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_predictions <- 'Iceland_Predictions_2020-03-27.csv'
 
@@ -77,14 +85,18 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
 hospital_visit_first_date <- group_by(hospital_visits,patient_id) %>% 
                               summarise(min_date_in=min(date_in,na.rm=TRUE)) %>%
                               ungroup()
-
+# fix to remove redundancies due to simple classification
 #filter out units that are not predicted and relabel the units in the terms to be predicted.Also relabel text_out
-hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
+hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
+                            filter(!(unit_category_all) %in% c('emergency_room','outpatient_clinic')) %>% 
+                            select(-unit_category_all) %>%
+                            inner_join(.,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
                             mutate(unit_in=unit_category) %>%
                             select(-unit_category) %>%
                             inner_join(.,select(text_out_categories,text_out_category_raw,text_out_category),by=c('text_out'='text_out_category_raw')) %>%
                             mutate(.,text_out=text_out_category) %>%
-                            select(.,-text_out_category)
+                            select(.,-text_out_category) %>%
+                            arrange(patient_id,date_time_in) #arrange precisely in time
 
 hospital_outcomes <- group_by(hospital_visits_filtered,patient_id) %>%
                       summarise(.,outcome_tmp=if_else(any(grepl('death',text_out)),'death',NULL),
@@ -114,7 +126,7 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       mutate(.,date_diagnosis=pmin(date_diagnosis_tmp,date_diagnosis,na.rm=TRUE)) %>%
                       mutate(.,priority=ifelse(is.na(priority),priority_tmp,priority)) %>%
                       select(.,-date_diagnosis_tmp) %>%
-                      filter(.,!is.na(date_diagnosis)) %>%
+                      filter(.,is.finite(date_diagnosis)) %>%
                       mutate(outcome=ifelse(covid_class=='COVID-19 útskrifaðir úr eftirliti','recovered','in_hospital_system')) %>%
                       left_join(.,hospital_outcomes,by='patient_id') %>%
                       mutate(outcome=if_else(!is.na(outcome_tmp),outcome_tmp,outcome)) %>%
@@ -156,6 +168,9 @@ dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
 patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
                         mutate(state=if_else(state_hospital!=state_home & !is.na(state_hospital),state_hospital,state_home)) %>%
                         select(-state_hospital,-state_home) %>%
+                        group_by(.,patient_id,date) %>%
+                        summarize(state=tail(state,1)) %>%
+                        ungroup() %>%
                         mutate(yesterday=date-1) %>% 
                         left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
                         filter(!is.na(state_tomorrow)) %>%
@@ -169,12 +184,30 @@ recovered_transitions <- mutate(patient_transitions,tomorrow=date+1) %>%
 
 patient_transitions <- bind_rows(patient_transitions,recovered_transitions)
 
+#Add worst case state to each patient
+#Find those who have at least one transition
+state_worst_case <- inner_join(distinct(patient_transitions,patient_id,state),unit_categories,by=c('state'='unit_category')) %>%
+                    group_by(.,patient_id) %>%
+                    summarize(.,state_worst=state[which.max(unit_category_order)]) %>%
+                    ungroup()
+#Find those who have no transition e.g. are new today.
+state_worst_case_special <- anti_join(select(individs_extended,patient_id),state_worst_case,by='patient_id') %>%
+                            mutate(.,state_worst='home') %>%
+                            left_join(.,select(hospital_visits_filtered,patient_id,unit_in),by='patient_id') %>%
+                            mutate(state_worst=if_else(is.na(unit_in),state_worst,unit_in)) %>%
+                            left_join(.,unit_categories,by=c('state_worst'='unit_category')) %>%
+                            group_by(.,patient_id) %>%
+                            summarize(.,state_worst=state_worst[which.max(unit_category_order)]) %>%
+                            ungroup()
+
+state_worst_case <- bind_rows(state_worst_case,state_worst_case_special)
+
+individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
+
+
 #Here we start to generate output
 
-current_date=as.Date('2020-03-28','%Y-%m-%d')
-
 #transition matrix
-
 
 states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
                   arrange(unit_category_order) %>%
@@ -192,7 +225,9 @@ patient_transition_counts_all <- group_by(patient_transitions,state,state_tomorr
                               right_join(.,state_transitions_all,by=c('state','state_tomorrow')) %>%
                               mutate(count=if_else(is.na(count),0,count))
 patient_transition_counts_matrix_all <- matrix(patient_transition_counts_all$count,ncol=length(states),nrow=length(states))
-write.table(patient_transition_counts_matrix_all,file=paste0('~/Downloads/transition_matrix_',current_date,'.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
+
+#write
+write.table(patient_transition_counts_matrix_all,file=paste0(path_to_output,'transition_matrix_',current_date,'.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
 
 #simple age groups
 age_group_simple=c('0-50','51+')
@@ -214,8 +249,10 @@ patient_transition_counts_matrix_age_simple_over_50 <- filter(patient_transition
 select(count) %>% 
 unlist() %>% 
 matrix(.,ncol=length(states),nrow=length(states))
-write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0('~/Downloads/transition_matrix_under_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
-write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0('~/Downloads/transition_matrix_over_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
+
+#write
+write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_to_output,'transition_matrix_under_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
+write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_to_output,'transition_matrix_over_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
 
 # get length of stay for each state
 
@@ -256,20 +293,20 @@ current_state <-  filter(patient_transitions_state_blocks,date==current_date) %>
                   mutate(days_in_state=as.numeric(current_date-state_block_nr_start)) %>%
                   inner_join(individs_extended,.,by='patient_id') %>%
                   mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
-                  select(patient_id,age,sex,state,days_in_state,days_from_diagnosis)
+                  select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
 
-write.table(current_state,file=paste0('~/Downloads/current_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+#write
+write.table(current_state,file=paste0(path_to_output,'current_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #length of stay by age 
 
 length_of_stay_by_age_simple <- inner_join(select(patient_transitions_state_blocks_summary,patient_id,state,state_block_nr,state_duration),
                                            select(individs_extended,patient_id,age_group_simple), by='patient_id') %>%
-                                            group_by(state,age_group_simple) %>%
                                             group_by(state,age_group_simple,state_duration) %>%
                                             summarise(count=n()) %>%
                                             arrange(state,age_group_simple)
-
-write.table(length_of_stay_by_age_simple,file=paste0('~/Downloads/length_of_stay_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+#write
+write.table(length_of_stay_by_age_simple,file=paste0(path_to_output,'length_of_stay_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #first state of all patients that have been diagnosed
 
@@ -279,12 +316,30 @@ first_state <- group_by(hospital_visits_filtered,patient_id) %>%
                 mutate(initial_state=if_else(is.na(initial_state_hospital),'home',if_else(min_date_in==date_diagnosis,initial_state_hospital,'home'))) %>%
                 select(age,sex,initial_state)
 
-write.table(first_state,file=paste0('~/Downloads/first_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+#write
+write.table(first_state,file=paste0(path_to_output,'first_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
 
 #get predictions from covid hi model
 
 hi_predictions <- filter(hi_predictions_raw,name=='cases',type=='new',age=='total') %>%
                   select(date,median,upper)
 
-write.table(hi_predictions,file=paste0('~/Downloads/hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
+#write
+write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
 
+#get length of stay distribution for those finishing home state
+patients_finished_home <- filter(patient_transitions,state=='home',state_tomorrow!='home') 
+length_of_stay_updated <- inner_join(select(patient_transitions_state_blocks_summary,patient_id,state,state_block_nr,state_duration),
+                                select(individs_extended,patient_id,age_group_simple,outcome),by='patient_id') %>%
+                                left_join(.,patients_finished_home,by=c('patient_id','state')) %>%
+                                filter(!(state=='home'&!is.finite(date))) %>%
+                                select(-date,-state_tomorrow) %>%
+                                group_by(state,age_group_simple,state_duration) %>%
+                                summarise(count=n()) %>%
+                                arrange(state,age_group_simple) %>%
+                                ungroup() %>%
+                                filter(!(state=='home' & state_duration==0))
+
+#write
+
+#write.table(length_of_stay_updated,file=paste0(path_to_output,'length_of_stay_updated_',current_date,'.csv'),sep=',',row.names=F,quote=F)
