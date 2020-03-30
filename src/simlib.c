@@ -1,17 +1,14 @@
-/* Time-stamp: "2006-03-19 11:06:21 tpr" */
-
 /* This is simlib.c (adapted from SUPERSIMLIB, written by Gregory Glockner). */
 
+/* Modified by: "2006-03-19 11:06:21 tpr" */
 
 /* Include files. */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include "simlibdefs.h"
 
 /* Declare simlib global variables. */
-
 int * list_rank, * list_size, next_event_type, maxatr = 0, maxlist = 0;
 double * transfer, sim_time;
 struct master {
@@ -21,36 +18,23 @@ struct master {
 } ** head, ** tail;
 
 /* Declare simlib functions. */
-void
-init_simlib(void);
-void
-list_file(int option, int list);
-void
-list_remove(int option, int list);
-void
-timing(void);
-void
-event_schedule(double time_of_event, int type_of_event);
-int
-event_cancel(int event_type);
-double
-sampst(double value, int variable);
-double
-timest(double value, int variable);
-double
-filest(int list);
-void
-out_sampst(FILE * unit, int lowvar, int highvar);
-void
-out_timest(FILE * unit, int lowvar, int highvar);
-void
-out_filest(FILE * unit, int lowlist, int highlist);
-void
-pprint_out(FILE * unit, int i);
+void init_simlib(void);
+void reset_simlib(void);
+void clear_transfer(void);
+void list_file(int option, int list);
+void list_remove(int option, int list);
+void timing(void);
+void event_schedule(double time_of_event, int type_of_event);
+int event_cancel(int event_type);
+double sampst(double value, int variable);
+double timest(double value, int variable);
+double filest(int list);
+void out_sampst(FILE * unit, int lowvar, int highvar);
+void out_timest(FILE * unit, int lowvar, int highvar);
+void out_filest(FILE * unit, int lowlist, int highlist);
+void pprint_out(FILE * unit, int i);
 
-void
-init_simlib()
-{
+void init_simlib() {
   /* Initialize simlib.c.  List LIST_EVENT is reserved for event list, ordered by
    * event time.  init_simlib must be called from main by user. */
 
@@ -61,13 +45,11 @@ init_simlib()
   listsize = maxlist + 1;
 
   /* Initialize system attributes. */
-
   sim_time = 0.0;
   if (maxatr < 4)
     maxatr = MAX_ATTR;
 
   /* Allocate space for the lists. */
-
   list_rank = (int *) calloc(listsize, sizeof(int));
   list_size = (int *) calloc(listsize, sizeof(int));
   head      = (struct master **) calloc(listsize, sizeof(struct master *));
@@ -75,7 +57,6 @@ init_simlib()
   transfer  = (double *) calloc(maxatr + 1, sizeof(double));
 
   /* Initialize list attributes. */
-
   for (list = 1; list <= maxlist; ++list) {
     head[list]      = NULL;
     tail[list]      = NULL;
@@ -84,18 +65,31 @@ init_simlib()
   }
 
   /* Set event list to be ordered by event time. */
-
   list_rank[LIST_EVENT] = EVENT_TIME;
 
   /* Initialize statistical routines. */
-
   sampst(0.0, 0);
   timest(0.0, 0);
 } /* init_simlib */
 
-void
-list_file(int option, int list)
-{
+void clear_transfer(void) {
+  int i;
+  for (i = 0; i < (maxatr + 1); i++)
+    transfer[i] = 0.0;
+}
+
+void reset_simlib(void) {
+  int i;
+
+  for (i = 0; i < MAX_LIST+1; i++) {
+      while (list_size[i] > 0) {
+        list_remove(FIRST, i);
+      }
+    }
+    sim_time = 0.0;
+}
+
+void list_file(int option, int list) {
   /* Place transfr into list "list".
    * Update timest statistics for the list.
    * option = FIRST place at start of list

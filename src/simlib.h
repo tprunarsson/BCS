@@ -21,6 +21,8 @@ extern struct master
 /* Declare simlib functions. */
 
 extern void init_simlib (void);
+extern void reset_simlib(void);
+extern void clear_transfer(void);
 extern void list_file (int option, int list);
 extern void list_remove (int option, int list);
 extern void timing (void);

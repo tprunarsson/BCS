@@ -34,16 +34,24 @@ char *szLocations[RECOVERED-HOME+1] = {"HOME","INPATIENT_WARD","INTENSIVE_CARE_U
 double ProbUnder50; /* this is computed by the function readFirstCDF */
 int numRecovered;
 int numDeath;
+int repeat;
 
 FILE *infile, *outfile; /* global file pointers for report writing */
 
-/* for a workaround with the .csv files */
+/* for a workaround with the .csv files, get rid of the commas! */
 int get_index(char* string, char c) {
   char *e = strchr(string, c);
   if (e == NULL) {
     return -1;
   }
   return (int)(e - string);
+}
+void clear_commas(char *buffer) {
+  int idx;
+  do { 
+    idx = get_index(buffer, ',');
+    if (idx > 0) buffer[idx] =  ' ';
+  } while (idx != -1);
 }
 
 /* 
@@ -53,7 +61,7 @@ int readHIpredictions(char *fname, char *szDate, int day, int *median, int *uppe
   FILE *fid;
   char sztmp[64];
   char buffer[1024];
-  int tmpday = -10000, tmpmedian, tmpupper, idx;
+  int tmpday = -10000, tmpmedian, tmpupper;
   *median = 0; *upper = 0;
   fid = fopen(fname, "r");
   if (fid == NULL) {
@@ -64,10 +72,7 @@ int readHIpredictions(char *fname, char *szDate, int day, int *median, int *uppe
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
     tmpday++;
-    do { /* silly hack to get rid of the commas! */
-      idx = get_index(buffer, ',');
-      if (idx > 0) buffer[idx] =  ' ';
-    } while (idx != -1);
+    clear_commas(buffer);
     sscanf(buffer, "%s %d %d", sztmp, &tmpmedian, &tmpupper);
     if (0 == strcmp(sztmp, szDate)) {
       tmpday = 0;
@@ -88,7 +93,7 @@ int readHIpredictions(char *fname, char *szDate, int day, int *median, int *uppe
 int readFirstCDF(char *fname) {
   FILE *fid;
   int age, agegroup, location, under50 = 0, over50 = 0;
-  int i, j, idx;
+  int i, j;
   int n = (RECOVERED - HOME + 1);
   double sum;
   char buffer[1024], szgender[128], szlocation[128];
@@ -106,10 +111,7 @@ int readFirstCDF(char *fname) {
   if (NULL == fgets(buffer, 1024, fid)) /* remove the header! */
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
-    do { /* silly hack to get rid of the commas! */
-      idx = get_index(buffer, ',');
-      if (idx > 0) buffer[idx] =  ' ';
-    } while (idx != -1);
+    clear_commas(buffer);
     sscanf(buffer, "%d %s %s", &age, szgender, szlocation);
     if (age <= 50) {
       agegroup = 0;
@@ -125,9 +127,8 @@ int readFirstCDF(char *fname) {
     else if (0 == strcmp(szlocation,"death")) location = DEATH;
     else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
     else {
-      //printf("error: unknown keyword (first) in %s called %s", fname, szlocation);
-      location = 0;
-      //exit(1);
+      printf("error: unknown keyword (first) in %s called %s", fname, szlocation);
+      exit(1);
     }
     firstLocCDF[agegroup][location] = firstLocCDF[agegroup][location] + 1.0;
   }
@@ -159,7 +160,7 @@ int readFirstCDF(char *fname) {
 int readLosP(char *fname) {
   FILE *fid;
   int agegroup, day, location, value;
-  int i, j, k, idx;
+  int i, j, k;
   int n = (RECOVERED - HOME + 1);
   double sum;
   char buffer[1024], szlocation[128], szagegroup[128];
@@ -178,10 +179,7 @@ int readLosP(char *fname) {
   if (NULL == fgets(buffer, 1024, fid)) /* remove the header! */
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
-    do { /* silly hack to get rid of the commas! */
-      idx = get_index(buffer, ',');
-      if (idx > 0) buffer[idx] =  ' ';
-    } while (idx != -1);
+    clear_commas(buffer);
     sscanf(buffer, "%s %s %d %d", szlocation, szagegroup, &day, &value);
     if (0 == strcmp(szagegroup,"0-50"))
       agegroup = 0;
@@ -282,7 +280,7 @@ int readTransitionP(char *fname, int agegroup) {
   defined by the CDF (see function in rndlib.c, note it returns integers 0,1,2,3 and so we add 1.0)
 */
 double lengthOfStay(int location, int agegroup) {
-  double los = 0.0;
+  double los;
   los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
   return los;
 }
@@ -294,7 +292,6 @@ double lengthOfStay(int location, int agegroup) {
 */
 int init_model(char *fname) {
   FILE *fid;
-  int idx;
   unsigned int id;
   int day, dayinloc, location, age, agegroup, gender;
   double departureday;
@@ -308,10 +305,7 @@ int init_model(char *fname) {
   if (NULL == fgets(buffer, 1024, fid)) /* remove the header! */
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
-    do { /* silly hack to get rid of the commas! */
-      idx = get_index(buffer, ',');
-      if (idx > 0) buffer[idx] =  ' ';
-    } while (idx != -1);
+    clear_commas(buffer);
     sscanf(buffer, "%u %d %s %s %d %d", &id, &age, szgender, szlocation, &dayinloc, &day);
     if (age <= 50) 
       agegroup = 0;
@@ -352,14 +346,10 @@ int init_model(char *fname) {
 /*
   The arrive function is used to generate new individuals arriving at sim_time.
   The EVENT_NEW_ARRIVE should be scheduled once every day and the total number of
-  newly infected should be based on a prediction model, the ratio of new arrivals are
-  at the time of writing in the ratio of: 
-  12 ICU, 6 ICU-VENT, 19 RECOVERED, 1 DEAD, 39 WARD, 860 HOME
+  newly infected should be based on a prediction model, we use covid.hi.is
 */
 void arrive(int n) {
-  int i;
-  /* this is the agegroup distribution CDF 28/3 */
-  int day, dayinloc, location, agegroup, gender;
+  int i, day, dayinloc, location, agegroup, gender;
   double departureday, u;
 
   for (i = 0; i < n; i++) {
@@ -367,10 +357,11 @@ void arrive(int n) {
     agegroup = (u <= ProbUnder50);
     day = sim_time; /* new arrivals today, that is sim_time wall-clock */
     u = urand (STREAM_AGE);
-    gender = (u < 0.5) + 1;
-    dayinloc = 0;
+    gender = (u < 0.5) + 1; /* TODO: for now assume 50/50 arrivals */
+    dayinloc = 0; /* "fresh" arrivals */
     /* we need a strategy for selecting which location we enter */
     location = discrete_empirical(firstLocCDF[agegroup], RECOVERED-HOME+1, STREAM_AGE);
+    transfer[ATTR_PERSON] = 0.0;
     transfer[ATTR_AGEGROUP] = (double)agegroup;
     transfer[ATTR_DAYS] = (double)day;
     transfer[ATTR_GENDER] = (double)gender;
@@ -385,7 +376,7 @@ void arrive(int n) {
 }
 
 /* The departure function removes the individual from the location list and moves the
-   patient to a new location based on some probability measure */
+   patient to a new location based on the cumulative transition probability matrix CDF */
 void depart(void) {
   int location, newlocation;
   int day, agegroup, gender;
@@ -393,47 +384,39 @@ void depart(void) {
   double departureday;
   int n = RECOVERED - HOME + 1;
   
-  location = (int)transfer[ATTR_LOCATION];
+  location = (int)transfer[ATTR_LOCATION]; /* location was in EVENT_LIST's transfer */
   list_remove (FIRST, location); /* now all the properties of this person is in transfer */
   
   agegroup = (int)transfer[ATTR_AGEGROUP];
   day = (int)transfer[ATTR_DAYS];
   gender = (int)transfer[ATTR_GENDER];
   id = (unsigned int)transfer[ATTR_PERSON];
-  /* find a new location for this person, for now we use RECOLOC */
+  /* find a new location for this person based on the CDF */
   newlocation = discrete_empirical(CDF[agegroup][location], n, STREAM_AGE);
   if (newlocation == n) {
-    printf("warning: stuck in state %d", location);
+    printf("warning: stuck in state (agegroup,location)=(%d,%s) basically all values in CDF are zero!", agegroup, szLocations[location]);
     newlocation = location; /* basically stuck where it is!!! */
   }
   /* we need to do some routing here */
-  while (transfer[newlocation + 10] > 0) { /* this location has been visited before so just stay where you are? */
-    if ((location == INTENSIVE_CARE_UNIT) && (newlocation == INPATIENT_WARD))
-      break;
-    newlocation = discrete_empirical(CDF[agegroup][location], n, STREAM_AGE);
-    if ((newlocation == HOME) && (transfer[HOME + 10] > 1))
-      newlocation = RECOVERED;
-    if ((newlocation == HOME) || (newlocation == DEATH) || (newlocation == RECOVERED))
-      break;
-  }
- // printf("Person-%d is leaving %s for %s on day %.2g\n", id, szLocations[location], szLocations[newlocation], sim_time);
-  transfer[ATTR_LOCATION] = (double)newlocation;
-  
-  departureday = lengthOfStay(newlocation, agegroup);
-  departureday = sim_time + MAX(1.0,departureday);
+  if (repeat == 0)
+    printf("trace[%d]: Person-%d is leaving %s for %s on day %.2g\n", repeat, id, szLocations[location], szLocations[newlocation], sim_time);
   if (newlocation == RECOVERED) 
     numRecovered++;
   else if (newlocation == DEATH)
     numDeath++;
   else {
+    departureday = sim_time + lengthOfStay(newlocation, agegroup);
     transfer[ATTR_DEPARTDAY] = (double)departureday;
-    transfer[newlocation+10] = transfer[newlocation+10] + 1;
+    transfer[ATTR_LOCATION] = (double)newlocation;
+    transfer[newlocation+10] = transfer[newlocation+10] + 1; /* DEBUG: trace where this individual has been before */
     list_file (INCREASING, newlocation);
-    transfer[ATTR_LOCATION] = (double)newlocation; /* must be repeated since transfer is new */
+    transfer[ATTR_LOCATION] = (double)newlocation; /* must be repeated since transfer is allocated again */
     event_schedule(departureday, EVENT_DEPARTURE);
   }
+  /* clear transfer variable on exit so next individual does not inherit anything */
+  // clear_transfer();
 }
-
+/* report is used to write to file the current day and the length of all location lists */
 void report(FILE *fid, int day, int append) {
   int i;
   if (0 == append) {
@@ -441,7 +424,7 @@ void report(FILE *fid, int day, int append) {
   }
   else {
     fprintf(fid, "%d,", day);
-    for (i = HOME; i < (RECOVERED-1); i++)
+    for (i = HOME; i < (RECOVERED-1); i++) /* note that DEATH and REVOVERED are the last two */
       fprintf(fid, "%d,", list_size[i]);
     fprintf(fid, "%d,%d\n", numDeath, numRecovered);
    }
@@ -454,13 +437,14 @@ void report(FILE *fid, int day, int append) {
  */
 int main(int argc, char *argv[]) {
  
-  int listid, i, repeat;
+  int listid, i;
   time_t t = time(NULL);
   struct tm tm = *localtime(&t);
   char szDate[12], fname[512];
-  int medianRun, predMedian[7], predUpper[7];
+  int medianRun, predMedian[MAX_SIM_TIME], predUpper[MAX_SIM_TIME];
   FILE *statfid;
 
+  /* get the current wall clock for the run, assumed live simulation from today! */
   sprintf(szDate,"%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1,  tm.tm_mday);
 
   maxatr = 13; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
@@ -472,13 +456,14 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  /* The file covid.out is used to report on the setting used for the run */
   outfile = fopen ("covid.out", "w");
   
-
   /* Type of run, median versus Upper */
   medianRun = atoi(argv[1]);
   fprintf(outfile,"run = %d\n", medianRun);
 
+  /* Generate output run file name and pointer */
   sprintf(fname, "covid_run_%d_%s.csv",medianRun,szDate);
   statfid = fopen (fname, "w");
 
@@ -500,7 +485,7 @@ int main(int argc, char *argv[]) {
   readFirstCDF(argv[4]);
 
   /* load predicted values on current date and day number */
-  for (i = 0; i < 7; i++) {
+  for (i = 0; i < MAX_SIM_TIME; i++) {
     readHIpredictions(argv[5], szDate, i, &predMedian[i], &predUpper[i]);
     fprintf(outfile,"median[%d]=%d upper[%d]=%d\n", i,predMedian[i],i,predUpper[i]);
   }
@@ -509,36 +494,29 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < MAX_AGE_GROUPS; i++)
     readTransitionP(argv[6+i], i);
 
-  report(statfid,0,0);
+  report(statfid,0,0); /* write header in output stats file */
   for (repeat = 0; repeat < 300; repeat++) {
-    numRecovered = 0;
-    numDeath = 0;
     /* Initialize the model and fire up departure event for thise in system */
     init_model(argv[2]);
-   // printf("list_size_event = %d\n", list_size[LIST_EVENT]);
-    /* Stop the simulation once the wall clock has reached 7 days */
-    while ((list_size[LIST_EVENT] != 0) && (sim_time <= 7)) {
+    numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
+    /* Stop the simulation once the wall clock has reached MAX_SIM_TIME days */
+    while ((list_size[LIST_EVENT] != 0) && (sim_time <= MAX_SIM_TIME)) {
     /* Determine the next event. */
       timing();
-      // for (i = 0; i < maxatr; i++) printf("%.0f ", transfer[i]); printf("\n");
       switch (next_event_type) {
         case EVENT_ARRIVAL:
-          //printf("trace: Arrival event at %.2f days\n", sim_time);
           /* add the patient to the home ward */
           if (medianRun == 1)
             i = predMedian[(int)floor(sim_time)];
           else
             i = predUpper[(int)floor(sim_time)];
           arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
-          event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals next day */
-          // here we could write out statistics for the day and zero daily counters
-          // report(outfile,1);
+          event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
+          /* Write out numbers in each location and zero daily counters */
           report(statfid,(int)floor(sim_time),1);
-          numRecovered = 0;
-          numDeath = 0;
+          numRecovered = 0; numDeath = 0;
           break;
         case EVENT_DEPARTURE:
-          //printf("trace: Departure event at %.2f days\n", sim_time);
           depart();
           break;
         default:
@@ -546,13 +524,7 @@ int main(int argc, char *argv[]) {
       }
     }
     /* empty all lists, ready for re-run */
-    for (i = 0; i < MAX_LIST+1; i++) {
-      while (list_size[i] > 0) {
-        list_remove(FIRST, i);
-      }
-    }
-    sim_time = 0.0;
-
+    reset_simlib();
   }
   fclose(outfile);
   fclose(statfid);
