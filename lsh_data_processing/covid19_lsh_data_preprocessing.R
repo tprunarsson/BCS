@@ -8,7 +8,7 @@ library(readr)
 today <- Sys.Date()
 
 #date on input data and output files
-current_date=as.Date('2020-03-31','%Y-%m-%d')
+current_date=as.Date('2020-03-30','%Y-%m-%d')
 #we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
 date_last_known_state <- current_date-1
 
@@ -20,8 +20,8 @@ path_to_output <- paste0(path_to_root,'Data/')
 
 
 #file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
-#file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
-file_name_lsh_data <- '20200331_0827_Covid-19_lsh_gogn.xlsx'
+file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
+#file_name_lsh_data <- '20200331_0827_Covid-19_lsh_gogn.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_predictions <- 'Iceland_Predictions_2020-03-30.csv'
 
@@ -49,7 +49,7 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
 
 #hospital_visits
 hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
-                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`) %>% 
+                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél`) %>% 
                   select(patient_id,unit_in,date_time_in,date_time_out,text_out,ventilator) %>%
                   mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
                   separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
