@@ -136,3 +136,9 @@ states_by_date_and_age_std <- bind_rows(first_states_hospitals,finished_states) 
     )) %>% rename(agegroup='age_group_std') %>% select(date,agegroup,variable,value)
 
 write.table(states_by_date_and_age_std,paste0('../output/events_per_date_and_age_',current_date,'.csv'),sep=',')
+
+#hospital and icu distributions for Brynjólfur
+group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('intensive_care_unit',unit_in))) %>%
+    ungroup() %>% left_join(select(individs_extended,patient_id,age_group_std),.,by='patient_id') %>%
+    group_by(age_group_std) %>% summarise(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>% 
+    ungroup() %>% arrange(age_group_std) %>% write.table('../output/hospital_and_icu_distr.csv',row.names=F,quote=F,sep=',')
