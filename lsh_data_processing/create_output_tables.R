@@ -134,4 +134,4 @@ states_by_date_and_age_std <- bind_rows(first_states_hospitals,finished_states) 
         state_next=='death' ~ 'fj_andlata'
     )) %>% rename(agegroup='age_group_std') %>% select(date,agegroup,variable,value)
 
-write.table(states_by_date_and_age_std,'../output/events_per_date_and_age.csv',sep=',')
+write.table(states_by_date_and_age_std,paste0('../output/events_per_date_and_age_',current_date,'.csv'),sep=',')
