@@ -1,5 +1,4 @@
-path_to_root <- '~/projects/covid/BCS/'
-source(paste0(path_to_root,'/lsh_data_processing/covid19_lsh_data_preprocessing.R'))
+source('covid19_lsh_data_preprocessing.R')
 #transition matrix
 
 states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
@@ -92,14 +91,31 @@ hi_predictions <- filter(hi_predictions_raw,name=='cases',type=='new',age=='tota
 #write
 write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
 
-#get length of stay distribution for those finishing home state
-length_of_stay_updated <- inner_join(select(patient_transitions_state_blocks_summary,patient_id,state,state_block_nr,state_duration),
-                                     select(individs_extended,patient_id,age_group_simple,outcome),by='patient_id') %>%
-    left_join(.,patients_finished_home,by=c('patient_id','state')) %>%
-    filter(!(state=='home'&!is.finite(date))) %>%
-    select(-date,-state_tomorrow) %>%
-    group_by(state,age_group_simple,state_duration) %>%
-    summarise(count=n()) %>%
-    arrange(state,age_group_simple) %>%
-    ungroup() %>%
-    filter(!(state=='home' & state_duration==0))
+#Create table of new hospital cases,new icu,out of hospital and out of icu per day
+finished_states <- inner_join(select(individs_extended,patient_id,age_group_std),
+                                select(patient_transitions_state_blocks_summary,-censored,-state_duration),
+                                by='patient_id')%>%
+                    filter(state!=state_next) %>%
+                    mutate(date=state_block_nr_end+1) %>% 
+                    select(patient_id,date,age_group_std,state,state_next)
+
+first_states_hospitals <- inner_join(select(individs_extended,patient_id,age_group_std),
+                                     select(patient_transitions_state_blocks_summary,-censored,-state_duration),
+                                     by='patient_id') %>%
+                            filter(state_block_nr==1 & state!='home') %>%
+                            mutate(date=state_block_nr_start,state_next=state) %>%
+                            mutate(state=NA) %>% select(patient_id,date,age_group_std,state,state_next)
+
+states_by_date_and_age_std <- bind_rows(first_states_hospitals,finished_states) %>%
+    group_by(.,date,age_group_std,state,state_next) %>%
+    summarise(.,value=n()) %>% ungroup() %>%
+    mutate(.,variable=case_when(
+        (state=='home' & state_next %in% c('inpatient_ward','intensive_care_unit')) | is.na(state)  ~ 'fj_innlagna_a_spitala',
+        state_next=='intensive_care_unit' ~ 'fj_innlagna_a_icu',
+        state_next=='home' ~ 'fj_utskrifta_af_spitala',
+        state=='intensive_care_unit' ~ 'fj_utskrifta_af_icu',
+        state_next=='recovered' ~ 'fj_batnad',
+        state_next=='death' ~ 'fj_andlata'
+    )) %>% rename(agegroup='age_group_std') %>% select(date,agegroup,variable,value)
+
+ 
