@@ -48,11 +48,27 @@ write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path
 #current state
 
 current_state <-  filter(patient_transitions_state_blocks,date==date_last_known_state-1) %>%
-    inner_join(.,select(patient_transitions_state_blocks_summary,patient_id,state_block_nr,state_block_nr_start),by=c('patient_id','state_block_nr')) %>%
-    mutate(days_in_state=as.numeric(current_date-state_block_nr_start)) %>%
+                    inner_join(.,select(patient_transitions_state_blocks_summary,patient_id,state_block_nr,state_block_nr_start),by=c('patient_id','state_block_nr')) %>%
+                    filter(!(state_tomorrow %in% c('recovered','death'))) %>%
+                    mutate(days_in_state=if_else(state==state_tomorrow,as.numeric(current_date-state_block_nr_start),1)) %>%
+                    inner_join(individs_extended,.,by='patient_id') %>%
+                    mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
+                    select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,outcome)
+
+current_state_newly_diagnosed <- anti_join(individs_extended,select(current_state,patient_id),by='patient_id') %>%
+    filter(.,outcome=='in_hospital_system') %>%
+    mutate(.,state='home') %>%
+    left_join(.,select(hospital_visits_filtered,patient_id,unit_in,date_time_in),by='patient_id') %>%
+    mutate(state=if_else(is.na(unit_in),state,unit_in)) %>%
+    group_by(.,patient_id) %>% arrange(date_time_in) %>%
+    summarize(.,state=tail(state,1)) %>%
+    ungroup() %>%
     inner_join(individs_extended,.,by='patient_id') %>%
-    mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
-    select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
+    mutate(.,days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
+    mutate(.,days_in_state=days_from_diagnosis) %>%
+    select(.,patient_id,age,sex,state,days_in_state,days_from_diagnosis)
+
+current_state <- bind_rows(current_state,current_state_newly_diagnosed)
 
 
 write.table(current_state,file=paste0(path_to_output,'current_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)

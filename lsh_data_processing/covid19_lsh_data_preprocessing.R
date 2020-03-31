@@ -8,7 +8,7 @@ library(readr)
 today <- Sys.Date()
 
 #date on input data and output files
-current_date=as.Date('2020-03-30','%Y-%m-%d')
+current_date=as.Date('2020-03-31','%Y-%m-%d')
 #we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
 date_last_known_state <- current_date-1
 
@@ -18,10 +18,11 @@ path_coding <- paste0(path_to_root,'lsh_data_processing/')
 path_hi_predictions <- paste0(path_to_root,'lsh_data_processing/')
 path_to_output <- paste0(path_to_root,'Data/')
 
-file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
+#file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 #file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
+file_name_lsh_data <- '20200331_0827_Covid-19_lsh_gogn.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
-file_path_predictions <- 'Iceland_Predictions_2020-03-27.csv'
+file_path_predictions <- 'Iceland_Predictions_2020-03-30.csv'
 
 file_path_data <- paste0(path_data,file_name_lsh_data)
 
@@ -47,7 +48,7 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
 
 #hospital_visits
 hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
-                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél`) %>% 
+                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`) %>% 
                   select(patient_id,unit_in,date_time_in,date_time_out,text_out,ventilator) %>%
                   mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
                   separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
@@ -166,15 +167,13 @@ dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
                                 date=hospital_visits_filtered$date_out[i]))
   }
   return(tmp)
-}) %>% bind_rows()
+}) %>% bind_rows() %>% group_by(.,patient_id,date) %>% summarize(state=tail(state,1)) %>% ungroup()
 
- 
+
+
 patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
-                        mutate(state=if_else(state_hospital!=state_home & !is.na(state_hospital),state_hospital,state_home)) %>%
+                        mutate(state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
                         select(-state_hospital,-state_home) %>%
-                        group_by(.,patient_id,date) %>%
-                        summarize(state=tail(state,1)) %>%
-                        ungroup() %>%
                         mutate(yesterday=date-1) %>% 
                         left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
                         filter(!is.na(state_tomorrow)) %>%
@@ -186,7 +185,11 @@ recovered_transitions <- mutate(patient_transitions,tomorrow=date+1) %>%
                           mutate(state_tomorrow=outcome) %>%
                           select(-tomorrow,-outcome)
 
-patient_transitions <- bind_rows(patient_transitions,recovered_transitions)
+patient_transitions <- left_join(patient_transitions,recovered_transitions,by=c('patient_id','date'),suffix=c('','_recovered')) %>%
+                          mutate(state=if_else(!is.na(state_recovered),state_recovered,state),
+                                state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
+                          select(patient_id,date,state,state_tomorrow)
+                        
 
 #Add worst case state to each patient
 #Find those who have at least one transition
