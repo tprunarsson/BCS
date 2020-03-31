@@ -6,11 +6,11 @@ library(tidyr)
 library(readr)
 
 today <- Sys.Date()
-date_last_known_state <- Sys.Date()-1
 
-
-#date on output files
+#date on input data and output files
 current_date=as.Date('2020-03-30','%Y-%m-%d')
+#we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
+date_last_known_state <- current_date-1
 
 path_to_root <- '~/projects/covid/BCS/'
 path_data <- paste0(path_to_root,'Data/')
@@ -112,7 +112,7 @@ interview_exta_first_date <- group_by(interview_extra,patient_id) %>%
 #find last date for each patient
 interview_last_date <- bind_rows(select(interview_first,patient_id,date_clinical_assessment),select(interview_follow_up,patient_id,date_clinical_assessment),
                                  select(interview_extra,patient_id,date_clinical_assessment)) %>%
-                        filter(date_clinical_assessment<=today) %>% # We have some future dates - check.
+                        filter(date_clinical_assessment<=current_date) %>% # We have some future dates - check.
                         group_by(.,patient_id) %>%
                         summarise(.,date_last_known=max(date_clinical_assessment,na.rm=TRUE)) %>%
                         ungroup()
@@ -141,10 +141,10 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
 
 #patient transitions.
 #Start by assuming everybody is at home from the time diagnosed to today
-#Note: patients diagnosed today have a known state today, but others do not. Applies both for dates_home and dates_hospital
+#Note: patients diagnosed on current_date have a known state on that date, but others do not. Applies both for dates_home and dates_hospital
 
 dates_home <- lapply(1:nrow(individs_extended),function(i){  
-    date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==today,today, date_last_known_state)
+    date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==current_date,current_date, date_last_known_state)
                 return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_home_latest_imputed,by=1))) 
               }) %>% 
               bind_rows() %>%
@@ -156,7 +156,7 @@ dates_home <- lapply(1:nrow(individs_extended),function(i){
 
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
-  date_out_imputed <- if_else(is.na(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==today,today,date_last_known_state),hospital_visits_filtered$date_out[i])
+  date_out_imputed <- if_else(is.na(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
   tmp <- tibble(patient_id=hospital_visits_filtered$patient_id[i],
                 state=hospital_visits_filtered$unit_in[i],
                 date=seq(hospital_visits_filtered$date_in[i],date_out_imputed,by=1))

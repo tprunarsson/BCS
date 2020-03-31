@@ -48,7 +48,7 @@ write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path
 
 #current state
 
-current_state <-  filter(patient_transitions_state_blocks,date==current_date) %>%
+current_state <-  filter(patient_transitions_state_blocks,date==date_last_known_state-1) %>%
     inner_join(.,select(patient_transitions_state_blocks_summary,patient_id,state_block_nr,state_block_nr_start),by=c('patient_id','state_block_nr')) %>%
     mutate(days_in_state=as.numeric(current_date-state_block_nr_start)) %>%
     inner_join(individs_extended,.,by='patient_id') %>%
@@ -64,7 +64,7 @@ state_blocks_with_age <- inner_join(select(individs_extended,patient_id,age_grou
                                            select(patient_transitions_state_blocks_summary,patient_id,state,censored,state_duration),
                                            by='patient_id')
 
-state_blocks_with_age_imputed <- tomas(state_blocks_with_age)
+state_blocks_with_age_imputed <- filter(state_blocks_with_age,censored==T)
 
 length_of_stay_by_age_simple <- group_by(state_blocks_with_age_imputed,state,age_group_simple,state_duration) %>%
                                 summarise(count=n()) %>%
