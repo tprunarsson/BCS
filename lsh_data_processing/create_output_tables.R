@@ -105,7 +105,7 @@ hi_predictions <- filter(hi_predictions_raw,name=='cases',type=='new',age=='tota
 
 
 #write
-write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-27','.csv'),sep=',',row.names=F,quote=F)
+write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-30','.csv'),sep=',',row.names=F,quote=F)
 
 #Create table of new hospital cases,new icu,out of hospital and out of icu per day
 finished_states <- inner_join(select(individs_extended,patient_id,age_group_std),
