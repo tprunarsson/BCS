@@ -8,7 +8,7 @@ library(readr)
 today <- Sys.Date()
 
 #date on input data and output files
-current_date=as.Date('2020-03-28','%Y-%m-%d')
+current_date=as.Date('2020-03-31','%Y-%m-%d')
 #we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
 date_last_known_state <- current_date-1
 
@@ -19,9 +19,9 @@ path_hi_predictions <- paste0(path_to_root,'lsh_data_processing/')
 path_to_output <- paste0(path_to_root,'Data/')
 
 
-file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
+#file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 #file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
-#file_name_lsh_data <- '20200331_0827_Covid-19_lsh_gogn.xlsx'
+file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.XLSX'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_predictions <- 'Iceland_Predictions_2020-03-30.csv'
 
@@ -33,6 +33,7 @@ interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl ú
 interview_first_raw <- read_excel(file_path_data,sheet = 'Fyrsta viðtal úr forms', skip=3)
 interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr forms Pivot', skip=1)
 NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
+interview_last_raw <- read_excel(file_path_data,sheet = 'Lokaviðtal-Spurning úr forms', skip=1)
 
 unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,unit_category_order=unit_category_order_simple)
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
@@ -49,7 +50,7 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
 
 #hospital_visits
 hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
-                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél`) %>% 
+                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`) %>% 
                   select(patient_id,unit_in,date_time_in,date_time_out,text_out,ventilator) %>%
                   mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
                   separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
@@ -72,6 +73,11 @@ interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,da
                         select(patient_id,date_clinical_assessment,clinical_assessment) %>%
                         mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_clinical_assessment),"%Y-%m-%d")) %>%
                         mutate(clinical_assessment=gsub('\\s.*','', clinical_assessment))
+
+interview_last <- rename(interview_last_raw,patient_id=`Person Key`,date_last_interview=`Dagsetning símtals`) %>%
+    select(patient_id,date_last_interview) %>%
+    mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_clinical_assessment),"%Y-%m-%d")) %>%
+    mutate(clinical_assessment=gsub('\\s.*','', clinical_assessment))
 
 interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_clinical_assessment=`Dags breytingar`,col_name=`Heiti dálks`,col_value=`Skráningar - breytingar.Skráð gildi`) %>% 
                     select(.,patient_id,date_time_clinical_assessment,col_name,col_value) %>%
