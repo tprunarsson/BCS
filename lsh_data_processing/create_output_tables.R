@@ -1,4 +1,5 @@
 source('covid19_lsh_data_preprocessing.R')
+
 #transition matrix
 
 states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
