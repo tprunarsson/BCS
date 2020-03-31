@@ -1,8 +1,9 @@
 library(ggplot2)
-
+current_date=as.Date('2020-03-30','%Y-%m-%d')
 path_data <-'covid_run_0_2020-03-30.csv'
 upper_run <- read.csv2(file = path_data, sep=",")
-upper_run$day = as.factor(median_run$day)
+upper_run <- mutate(upper_run,day=)
+upper_run$day = as.factor(upper_run$day)
 ggplot(upper_run, aes(x = day, y = home)) + geom_boxplot()
 ggplot(upper_run, aes(x = day, y = inpatient_ward)) + geom_boxplot()
 ggplot(upper_run, aes(x = day, y = intensive_care_unit)) + geom_boxplot()
