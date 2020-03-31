@@ -18,6 +18,7 @@ path_coding <- paste0(path_to_root,'lsh_data_processing/')
 path_hi_predictions <- paste0(path_to_root,'lsh_data_processing/')
 path_to_output <- paste0(path_to_root,'Data/')
 
+
 #file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 #file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
 file_name_lsh_data <- '20200331_0827_Covid-19_lsh_gogn.xlsx'
