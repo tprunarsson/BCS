@@ -18,8 +18,8 @@ path_coding <- paste0(path_to_root,'lsh_data_processing/')
 path_hi_predictions <- paste0(path_to_root,'lsh_data_processing/')
 path_to_output <- paste0(path_to_root,'Data/')
 
-#file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
-file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
+file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
+#file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_predictions <- 'Iceland_Predictions_2020-03-27.csv'
 
@@ -30,7 +30,7 @@ hospital_visits_raw <- read_excel(file_path_data,sheet ='Komur og innlagnir', sk
 interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl úr hóp', skip=3) 
 interview_first_raw <- read_excel(file_path_data,sheet = 'Fyrsta viðtal úr forms', skip=3)
 interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr forms Pivot', skip=1)
-NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS_score', skip=3)
+NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score', skip=3)
 
 unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,unit_category_order=unit_category_order_simple)
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
