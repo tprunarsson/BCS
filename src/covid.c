@@ -54,6 +54,24 @@ void clear_commas(char *buffer) {
   } while (idx != -1);
 }
 
+/*
+   convert string location to equivalent integer value
+*/
+int get_my_location(char *szlocation) {
+  int location;
+  if (0 == strcmp(szlocation,"home")) location = HOME;
+  else if (0 == strcmp(szlocation,"inpatient_ward")) location = INPATIENT_WARD;
+  else if (0 == strcmp(szlocation,"intensive_care_unit")) location = INTENSIVE_CARE_UNIT;
+  else if (0 == strcmp(szlocation,"death")) location = DEATH;
+  else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
+  else if (0 == strcmp(szlocation,"in_hospital_system")) location = 9; // WHAT THE HECK
+  else {
+    printf("error: unknown keyword (location) called %s", szlocation);
+    exit(1);
+  }
+  return(location);
+}
+
 /* 
   Read covid.hi.is predictions
 */
@@ -121,15 +139,7 @@ int readFirstCDF(char *fname) {
       agegroup = 1;
       over50++;
     }
-    if (0 == strcmp(szlocation,"home")) location = HOME;
-    else if (0 == strcmp(szlocation,"inpatient_ward")) location = INPATIENT_WARD;
-    else if (0 == strcmp(szlocation,"intensive_care_unit")) location = INTENSIVE_CARE_UNIT;
-    else if (0 == strcmp(szlocation,"death")) location = DEATH;
-    else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
-    else {
-      printf("error: unknown keyword (first) in %s called %s", fname, szlocation);
-      exit(1);
-    }
+    location = get_my_location(szlocation);
     firstLocCDF[agegroup][location] = firstLocCDF[agegroup][location] + 1.0;
   }
   for (i = 0; i < MAX_AGE_GROUPS; i++) {
@@ -189,15 +199,7 @@ int readLosP(char *fname) {
         printf("error: unknown keyword (age) in %s called %s\n", fname, szagegroup);
         exit(1);
       }
-    if (0 == strcmp(szlocation,"home")) location = HOME;
-    else if (0 == strcmp(szlocation,"inpatient_ward")) location = INPATIENT_WARD;
-    else if (0 == strcmp(szlocation,"intensive_care_unit")) location = INTENSIVE_CARE_UNIT;
-    else if (0 == strcmp(szlocation,"death")) location = DEATH;
-    else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
-    else {
-      printf("error: unknown keyword (location) in %s called %s", fname, szlocation);
-      exit(1);
-    }
+    location = get_my_location(szlocation);
     losCDF[agegroup][location][day] = (double)value;
   }
   for (i = 0; i < MAX_AGE_GROUPS; i++) {
@@ -292,10 +294,10 @@ double lengthOfStay(int location, int agegroup) {
 */
 int init_model(char *fname) {
   FILE *fid;
-  unsigned int id;
-  int day, dayinloc, location, age, agegroup, gender;
+  unsigned int id, count;
+  int day, dayinloc, location, age, agegroup, gender, worstlocation;
   double departureday;
-  char buffer[1024], szlocation[32], szgender[16];
+  char buffer[1024], szlocation[32], szgender[16], szworstlocation[32];
  
   fid = fopen(fname, "r");
   if (fid == NULL) {
@@ -306,20 +308,13 @@ int init_model(char *fname) {
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_commas(buffer);
-    sscanf(buffer, "%u %d %s %s %d %d", &id, &age, szgender, szlocation, &dayinloc, &day);
+    sscanf(buffer, "%u %d %s %s %d %d %s", &id, &age, szgender, szlocation, &dayinloc, &day, szworstlocation);
     if (age <= 50) 
       agegroup = 0;
     else
       agegroup = 1;
-    if (0 == strcmp(szlocation,"home")) location = HOME;
-    else if (0 == strcmp(szlocation,"inpatient_ward")) location = INPATIENT_WARD;
-    else if (0 == strcmp(szlocation,"intensive_care_unit")) location = INTENSIVE_CARE_UNIT;
-    else if (0 == strcmp(szlocation,"death")) location = DEATH;
-    else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
-    else {
-      printf("error: unknown keyword (location) in %s called %s", fname, szlocation);
-      exit(1);
-    }
+    location = get_my_location(szlocation);
+  //  worstlocation = get_my_location(szworstlocation);
     if (0 == strcmp(szgender, "Karl")) gender = 2;
     else if (0 == strcmp(szgender, "Kona")) gender = 1;
     else {
@@ -331,11 +326,18 @@ int init_model(char *fname) {
     transfer[ATTR_GENDER] = (double)gender;
     transfer[ATTR_DAYSINLOC] = (double)dayinloc;
     transfer[ATTR_LOCATION] = (double)location;
+   // transfer[ATTR_LOCATION+10] = (double)worstlocation;
     transfer[ATTR_PERSON] = (double)id;
     departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
+    count = 0;
     while (departureday < 0) {
       departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
+      count++;
+      if (count > 100)
+        break;
     }
+    if (departureday < 0)
+      departureday = MAX_SIM_TIME;
     departureday = sim_time + departureday;
     transfer[ATTR_DEPARTDAY] = (double)departureday;
     list_file (INCREASING, location);

@@ -1,4 +1,4 @@
 make
-./covid $1 ../data/current_state_2020-03-28.csv ../data/length_of_stay_2020-03-28.csv ../data/first_state_2020-03-28.csv ../data/hi_predictions_2020-03-27.csv ../data/transition_matrix_under_50_2020-03-28.csv ../data/transition_matrix_over_50_2020-03-28.csv > trace.txt
+./covid $1 ../Data/current_state_2020-03-30.csv ../Data/length_of_stay_2020-03-30.csv ../Data/first_state_2020-03-30.csv ../Data/hi_predictions_2020-03-30.csv ../Data/transition_matrix_under_50_2020-03-30.csv ../Data/transition_matrix_over_50_2020-03-30.csv > trace.txt
 cat covid.out
 
