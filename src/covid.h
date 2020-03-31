@@ -5,7 +5,7 @@
 
 #define MAX_AGE_GROUPS       2
 #define MAX_LOS_DAYS        60
-#define MAX_SIM_TIME         7
+#define MAX_SIM_TIME        14
 
 #define EVENT_ARRIVAL        1
 #define EVENT_DEPARTURE      2
