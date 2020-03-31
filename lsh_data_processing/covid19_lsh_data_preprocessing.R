@@ -25,12 +25,12 @@ file_path_predictions <- 'Iceland_Predictions_2020-03-27.csv'
 
 file_path_data <- paste0(path_data,file_name_lsh_data)
 
-individs_raw <- read_excel(file_path_data,sheet = 1, skip=3)
-hospital_visits_raw <- read_excel(file_path_data,sheet =2, skip=3)
-interview_extra_raw <- read_excel(file_path_data,sheet = 3, skip=3) 
-interview_first_raw <- read_excel(file_path_data,sheet = 4, skip=3)
-interview_follow_up_raw <- read_excel(file_path_data,sheet = 5, skip=1)
-NEWS_score_raw <- read_excel(file_path_data,sheet = 6, skip=3)
+individs_raw <- read_excel(file_path_data,sheet = 'Einstaklingar', skip=3)
+hospital_visits_raw <- read_excel(file_path_data,sheet ='Komur og innlagnir', skip=3)
+interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl úr hóp', skip=3) 
+interview_first_raw <- read_excel(file_path_data,sheet = 'Fyrsta viðtal úr forms', skip=3)
+interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr forms Pivot', skip=1)
+NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS_score_raw', skip=3)
 
 unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,unit_category_order=unit_category_order_simple)
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
