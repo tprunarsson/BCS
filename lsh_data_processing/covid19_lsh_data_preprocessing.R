@@ -50,8 +50,8 @@ hi_predictions_raw <- read_csv(file_path_predictions)
 individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, sex=`Yfirfl. kyns`,zip_code=`Póstnúmer`,
                    covid_group_raw=`Heiti sjúklingahóps`) %>% 
                     left_join(.,select(covid_groups,covid_group_raw,covid_group),by='covid_group_raw') %>%
-                    group_by(.,patient_id,zip_code,age,sex) %>%
-                    summarize(.,covid_group=if_else(any(grepl('recovered',covid_group)),'recovered','infected')) %>%
+                    group_by(.,patient_id) %>%
+                    summarize(.,zip_code=min(zip_code),age=min(age),sex=min(sex),covid_group=if_else(any(grepl('recovered',covid_group)),'recovered','infected')) %>%
                     ungroup()
 
 #hospital_visits
@@ -64,7 +64,8 @@ hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`
                   mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital,date_time_in)) %>%
                   separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
                   separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
-                  mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>% 
+                  mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
+                  filter(date_in<=date_last_known_state) %>%
                   select(-time_in,-time_out) %>% 
                   mutate(ventilator=!is.na(ventilator)) 
 
@@ -73,6 +74,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                           priority=`Forgangur`, clinical_assessment=`Klínískt mat - flokkun`,date_clinical_assessment=`Síma eftirfylgd hefst`) %>% 
                     select(.,patient_id,date_first_symptoms,date_diagnosis,priority,date_clinical_assessment,clinical_assessment) %>%
                     mutate_at(.,vars(matches('date')),~as.Date(gsub('\\s.*','',.),"%Y-%m-%d")) %>%
+                    filter(date_clinical_assessment<=date_last_known_state) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
                     group_by(.,patient_id) %>%
                     summarize_all(.,~min(.,na.rm=TRUE)) %>%
@@ -81,10 +83,12 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
 interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,date_clinical_assessment=`Dagsetning símtals`,clinical_assessment=`Klínískt mat`) %>%
                         select(patient_id,date_clinical_assessment,clinical_assessment) %>%
                         mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_clinical_assessment),"%Y-%m-%d")) %>%
+                        filter(date_clinical_assessment<=date_last_known_state) %>%
                         mutate(clinical_assessment=gsub('\\s.*','', clinical_assessment))
-#date_clinical_assessment is the last interview by a physician
+#date_clinical_assessment is the last interview by a physician. Remove scheduled future phone calls
 interview_last <- rename(interview_last_raw,patient_id=`Person Key`,date_clinical_assessment=`Dagsetning símtals`) %>%
                   mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_clinical_assessment),"%Y-%m-%d")) %>%
+                  filter(date_clinical_assessment<=date_last_known_state) %>%
                   select(patient_id,date_clinical_assessment) 
     
 
@@ -96,6 +100,8 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     ungroup(.) %>%
                     spread(col_name,col_value) %>% 
                     rename(clinical_assessment=`Klínískt daglegt mat`, priority=`Áhættuflokkur`) %>%
+                    filter(!is.na(clinical_assessment) | !is.na(priority)) %>%
+                    filter(date_clinical_assessment<=date_last_known_state) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
                     select(patient_id,priority, date_clinical_assessment,clinical_assessment)
 
@@ -126,11 +132,13 @@ interview_exta_first_date <- group_by(interview_extra,patient_id) %>%
 
 #find last date for each patient
 interview_last_date <- bind_rows(select(interview_first,patient_id,date_clinical_assessment),select(interview_follow_up,patient_id,date_clinical_assessment),
-                                 select(interview_extra,patient_id,date_clinical_assessment),interview_last) %>%
+                                 select(interview_extra,patient_id,date_clinical_assessment)) %>%
                         filter(date_clinical_assessment<=current_date) %>% # We have some future dates - check.
                         group_by(.,patient_id) %>%
                         summarise(.,date_last_known=max(date_clinical_assessment,na.rm=TRUE)) %>%
-                        ungroup()
+                        ungroup() %>% 
+                        left_join(.,interview_last,by='patient_id') %>% 
+                        mutate(date_last_known=if_else(is.finite(date_clinical_assessment),date_clinical_assessment,date_last_known))
                         
 
 #Add information about first diagnosis, first symptoms, and priority to individs

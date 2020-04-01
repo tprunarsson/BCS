@@ -54,7 +54,7 @@ current_state <-  filter(patient_transitions_state_blocks,date==date_last_known_
                     mutate(days_in_state=if_else(state==state_tomorrow,as.numeric(current_date-state_block_nr_start),1)) %>%
                     inner_join(individs_extended,.,by='patient_id') %>%
                     mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
-                    select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,outcome)
+                    select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
 
 current_state_newly_diagnosed <- anti_join(individs_extended,select(current_state,patient_id),by='patient_id') %>%
     filter(.,outcome=='in_hospital_system') %>%
@@ -67,7 +67,7 @@ current_state_newly_diagnosed <- anti_join(individs_extended,select(current_stat
     inner_join(individs_extended,.,by='patient_id') %>%
     mutate(.,days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
     mutate(.,days_in_state=days_from_diagnosis) %>%
-    select(.,patient_id,age,sex,state,days_in_state,days_from_diagnosis)
+    select(.,patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
 
 current_state <- bind_rows(current_state,current_state_newly_diagnosed)
 
