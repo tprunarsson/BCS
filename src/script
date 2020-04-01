@@ -1,4 +1,7 @@
+#/sbin/bash
+## usage: bash script 2 2020-04-01 ../Data/
 make
-./covid $1 ../Data/current_state_2020-03-30.csv ../Data/length_of_stay_2020-03-30.csv ../Data/first_state_2020-03-30.csv ../Data/hi_predictions_2020-03-30.csv ../Data/transition_matrix_under_50_2020-03-30.csv ../Data/transition_matrix_over_50_2020-03-30.csv > trace.txt
-cat covid.out
+./covid $1 $2 $3
+echo $2
+#cat covid.out
 
