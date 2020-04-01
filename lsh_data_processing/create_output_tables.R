@@ -142,3 +142,58 @@ group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('inten
     ungroup() %>% left_join(select(individs_extended,patient_id,age_group_std),.,by='patient_id') %>%
     group_by(age_group_std) %>% summarise(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>% 
     ungroup() %>% arrange(age_group_std) %>% write.table(paste0('../output/hospital_and_icu_distr_',current_date,'.csv'),row.names=F,quote=F,sep=',')
+
+#table for emergency room,outpatient clinic visited by id and day
+#Note edge case for id 100672
+window_size <- 7
+nr_at_home_per_day <- group_by(patient_transitions,date) %>% summarise(nr_at_home=sum(state=='home'))
+emergency_room_visits_per_day <- filter(hospital_visits,unit_category_all=='emergency_room') %>%
+    left_join(.,select(individs_extended,patient_id,date_diagnosis),by='patient_id') %>%
+    mutate(emergency_room_type=if_else(date_diagnosis == date_in,'new_infection','other')) %>%
+    distinct(patient_id,date_in,emergency_room_type) %>%
+    select(patient_id,date_in,emergency_room_type) %>%
+    arrange(patient_id,date_in) %>%
+    group_by(.,date_in,emergency_room_type) %>%
+    summarise(nr_visits=n()) %>% ungroup() %>%
+    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
+    mutate(prop_visits=nr_visits/nr_at_home)
+
+
+prop_emergency_room_last_week <- filter(emergency_room_visits_per_day,date_in>=current_date-window_size) %>%
+    group_by(.,emergency_room_type) %>%
+    summarise(prop_visits_last_week=sum(prop_visits)/window_size) 
+
+outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
+    select(patient_id,date_in) %>%
+    arrange(patient_id,date_in) %>%
+    group_by(.,date_in) %>%
+    summarise(nr_visits=n()) %>% ungroup() %>%
+    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
+    mutate(prop_visits=nr_visits/nr_at_home)
+
+prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day,date_in>=current_date-window_size) %>%
+    summarise(prop_visits_last_week=sum(prop_visits)/window_size)
+
+#get nr of individuals in each state per date
+
+state_newly_diagnosed <- anti_join(individs_extended,select(patient_transitions,patient_id),by='patient_id') %>%
+    filter(.,outcome=='in_hospital_system') %>%
+    mutate(.,state='home') %>%
+    left_join(.,select(hospital_visits_filtered,patient_id,unit_in,date_time_in),by='patient_id') %>%
+    mutate(state=if_else(is.na(unit_in),state,unit_in)) %>%
+    group_by(.,patient_id) %>% arrange(date_time_in) %>%
+    summarize(.,date=min(date_diagnosis,na.rm=T),state=tail(state,1)) %>%
+    ungroup()
+
+state_date_last_known <- filter(patient_transitions,date==(date_last_known_state-1)) %>%
+    mutate(.,state=state_tomorrow,date=date+1) %>%
+    filter(state!='recovered') %>%
+    select(.,patient_id,date,state) %>%
+    bind_rows(.,state_newly_diagnosed)
+
+current_state_per_date <- select(patient_transitions,-state_tomorrow) %>%
+    bind_rows(.,state_date_last_known) %>%
+    group_by(.,date,state) %>%
+    summarise(count=n())
+write.table(current_state_per_date,paste0('../output/states_in_hospital_system_num_per_date_',current_date,'.csv'),row.names=F,quote=F,sep=',')
+
