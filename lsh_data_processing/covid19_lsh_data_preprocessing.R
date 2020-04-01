@@ -54,21 +54,6 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
                     summarize(.,zip_code=min(zip_code),age=min(age),sex=min(sex),covid_group=if_else(any(grepl('recovered',covid_group)),'recovered','infected')) %>%
                     ungroup()
 
-#hospital_visits
-hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
-                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
-                  select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital,ventilator) %>%
-                  mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
-                  inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
-                  filter(!(unit_category_all=='inpatient_ward_geriatric' & is.na(date_diagnosis_hospital))) %>%
-                  mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital,date_time_in)) %>%
-                  separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
-                  separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
-                  mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
-                  filter(date_in<=date_last_known_state) %>%
-                  select(-time_in,-time_out) %>% 
-                  mutate(ventilator=!is.na(ventilator)) 
-
 #forms data
 interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first_symptoms=`Upphafsdagur einkenna`, date_diagnosis=`Dagsetning greiningar`,
                           priority=`Forgangur`, clinical_assessment=`Klínískt mat - flokkun`,date_clinical_assessment=`Síma eftirfylgd hefst`) %>% 
@@ -104,6 +89,22 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     filter(date_clinical_assessment<=date_last_known_state) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
                     select(patient_id,priority, date_clinical_assessment,clinical_assessment)
+
+#hospital_visits
+hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
+                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
+  select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital,ventilator) %>%
+  mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
+  inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
+  filter(!(unit_category_all=='inpatient_ward_geriatric' & is.na(date_diagnosis_hospital))) %>%
+  mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital,date_time_in)) %>%
+  filter(!(unit_category_all %in% c('maternity_clinic','endoscopy_clinic','inpatient_ward_maternity'))) %>%
+  separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
+  separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
+  mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
+  filter(date_in<=date_last_known_state) %>%
+  select(-time_in,-time_out) %>% 
+  mutate(ventilator=!is.na(ventilator)) 
 
 #create some help tables
 
