@@ -56,8 +56,9 @@ hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`
                           text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
                   select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital,ventilator) %>%
                   mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
-                  filter(unit_in=='Öldrunarlækningadeild A (Lk-K1)')
-                  mutate(date_time_in=if_else(unit_in=='Öldrunarlækningadeild A (Lk-K1)',date_diagnosis_hospital,date_time_in)) %>%
+                  inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
+                  filter(!(unit_category_all=='inpatient_ward_geriatric' & is.na(date_diagnosis_hospital))) %>%
+                  mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital,date_time_in)) %>%
                   separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
                   separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
                   mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>% 
@@ -102,12 +103,10 @@ hospital_visit_first_date <- group_by(hospital_visits,patient_id) %>%
                               ungroup()
 # fix to remove redundancies due to simple classification
 #filter out units that are not predicted and relabel the units in the terms to be predicted.Also relabel text_out
-hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
-                            filter(!(unit_category_all) %in% c('emergency_room','outpatient_clinic')) %>% 
-                            select(-unit_category_all) %>%
-                            inner_join(.,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
+hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
+                            filter(unit_category!='home') %>%
                             mutate(unit_in=unit_category) %>%
-                            select(-unit_category) %>%
+                            select(-unit_category)  %>%
                             inner_join(.,select(text_out_categories,text_out_category_raw,text_out_category),by=c('text_out'='text_out_category_raw')) %>%
                             mutate(.,text_out=text_out_category) %>%
                             select(.,-text_out_category) %>%
