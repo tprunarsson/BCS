@@ -72,7 +72,7 @@ current_state_newly_diagnosed <- anti_join(individs_extended,select(current_stat
 current_state <- bind_rows(current_state,current_state_newly_diagnosed)
 
 
-write.table(current_state,file=paste0(path_to_output,current_date,'_current_state_','.csv'),sep=',',row.names=F,quote=F)
+write.table(current_state,file=paste0(path_to_output,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
 
 #length of stay by age 
 
