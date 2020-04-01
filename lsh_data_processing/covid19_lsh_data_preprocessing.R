@@ -52,9 +52,10 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
 
 #hospital_visits
 hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
-                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`) %>% 
-                  select(patient_id,unit_in,date_time_in,date_time_out,text_out,ventilator) %>%
+                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
+                  select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital,ventilator) %>%
                   mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
+                  mutate(date_time_in=if_else(unit_in=='Öldrunarlækningadeild A (Lk-K1)',date_diagnosis_hospital,date_time_in)) %>%
                   separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
                   separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
                   mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>% 
@@ -167,7 +168,7 @@ dates_home <- lapply(1:nrow(individs_extended),function(i){
 
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
-  date_out_imputed <- if_else(is.na(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
+  date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
   tmp <- tibble(patient_id=hospital_visits_filtered$patient_id[i],
                 state=hospital_visits_filtered$unit_in[i],
                 date=seq(hospital_visits_filtered$date_in[i],date_out_imputed,by=1))
