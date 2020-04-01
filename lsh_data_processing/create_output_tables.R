@@ -19,7 +19,7 @@ patient_transition_counts_all <- group_by(patient_transitions,state,state_tomorr
     mutate(count=if_else(is.na(count),0,count))
 patient_transition_counts_matrix_all <- matrix(patient_transition_counts_all$count,ncol=length(states),nrow=length(states))
 
-write.table(patient_transition_counts_matrix_all,file=paste0(path_to_output,'transition_matrix_',current_date,'.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
+write.table(patient_transition_counts_matrix_all,file=paste0(path_to_output,current_date,'_transition_matrix','.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
 
 #simple age groups
 age_group_simple=c('0-50','51+')
@@ -42,8 +42,8 @@ patient_transition_counts_matrix_age_simple_over_50 <- filter(patient_transition
     unlist() %>% 
     matrix(.,ncol=length(states),nrow=length(states))
 
-write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_to_output,'transition_matrix_under_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
-write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_to_output,'transition_matrix_over_50_',current_date,'.csv'),sep=',',row.names=F,col.names=states,quote=F)
+write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_to_output,current_date,'_transition_matrix_under_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
+write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_to_output,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
 
 
 #current state
@@ -72,7 +72,7 @@ current_state_newly_diagnosed <- anti_join(individs_extended,select(current_stat
 current_state <- bind_rows(current_state,current_state_newly_diagnosed)
 
 
-write.table(current_state,file=paste0(path_to_output,'current_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+write.table(current_state,file=paste0(path_to_output,current_date,'_current_state_','.csv'),sep=',',row.names=F,quote=F)
 
 #length of stay by age 
 
@@ -86,7 +86,7 @@ length_of_stay_by_age_simple <- group_by(state_blocks_with_age_imputed,state,age
                                 summarise(count=n()) %>%
                                 arrange(state,age_group_simple)
 
-write.table(length_of_stay_by_age_simple,file=paste0(path_to_output,'length_of_stay_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+write.table(length_of_stay_by_age_simple,file=paste0(path_to_output,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
 
 #first state of all patients that have been diagnosed
 
@@ -97,7 +97,7 @@ first_state <- group_by(hospital_visits_filtered,patient_id) %>%
     select(age,sex,initial_state)
 
 
-write.table(first_state,file=paste0(path_to_output,'first_state_',current_date,'.csv'),sep=',',row.names=F,quote=F)
+write.table(first_state,file=paste0(path_to_output,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
 
 #get predictions from covid hi model
 
@@ -106,7 +106,7 @@ hi_predictions <- filter(hi_predictions_raw,name=='cases',type=='new',age=='tota
 
 
 #write
-write.table(hi_predictions,file=paste0(path_to_output,'hi_predictions_','2020-03-30','.csv'),sep=',',row.names=F,quote=F)
+write.table(hi_predictions,file=paste0(path_to_output,prediction_date,'_hi_predictions','.csv'),sep=',',row.names=F,quote=F)
 
 #Create table of new hospital cases,new icu,out of hospital and out of icu per day
 finished_states <- inner_join(select(individs_extended,patient_id,age_group_std),

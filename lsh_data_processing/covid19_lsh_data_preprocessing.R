@@ -9,6 +9,9 @@ today <- Sys.Date()
 
 #date on input data and output files
 current_date=as.Date('2020-04-01','%Y-%m-%d')
+#date of prediction by covid.hi.is
+prediction_date=as.Date('2020-03-30','%Y-%m-%d')
+
 #we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
 date_last_known_state <- current_date-1
 
