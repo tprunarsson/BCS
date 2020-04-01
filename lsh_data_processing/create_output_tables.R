@@ -70,9 +70,9 @@ current_state_newly_diagnosed <- anti_join(individs_extended,select(current_stat
     select(.,patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
 
 current_state <- bind_rows(current_state,current_state_newly_diagnosed)
+current_state_write <- filter(current_state, !(days_from_diagnosis > 14 & state == 'home') )
 
-
-write.table(current_state,file=paste0(path_to_output,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
+write.table(current_state_write,file=paste0(path_to_output,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
 
 #length of stay by age 
 
