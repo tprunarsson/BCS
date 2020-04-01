@@ -268,3 +268,9 @@ patient_transitions_state_blocks_summary <- group_by(patient_transitions_state_b
   mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+if_else(state!=state_next,1,2)) %>%
   ungroup()
 
+
+
+
+
+
+
