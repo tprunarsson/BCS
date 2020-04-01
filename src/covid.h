@@ -1,11 +1,14 @@
+#define VERSION     "1-April-2020"
+
 #define MAXINFECTED 65536 /* estimated MAX value infected! */
+#define MAX_INFECTED_PER_DAY 8192 /* estimated MAX value infected! */
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define MAX_AGE_GROUPS       2
 #define MAX_LOS_DAYS        60
-#define MAX_SIM_TIME        14
+#define MAX_SIM_TIME        28
 
 #define EVENT_ARRIVAL        1
 #define EVENT_DEPARTURE      2
