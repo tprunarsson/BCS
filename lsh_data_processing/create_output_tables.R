@@ -80,7 +80,8 @@ state_blocks_with_age <- inner_join(select(individs_extended,patient_id,age_grou
                                            select(patient_transitions_state_blocks_summary,patient_id,state,censored,state_duration),
                                            by='patient_id')
 
-state_blocks_with_age_imputed <- filter(state_blocks_with_age,censored==T)
+#state_blocks_with_age_imputed <- filter(state_blocks_with_age,censored==T)
+source('imputed.R')
 
 length_of_stay_by_age_simple <- group_by(state_blocks_with_age_imputed,state,age_group_simple,state_duration) %>%
                                 summarise(count=n()) %>%
