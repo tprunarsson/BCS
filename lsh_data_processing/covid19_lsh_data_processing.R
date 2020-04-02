@@ -4,7 +4,7 @@ library(readxl)
 library(dplyr)
 library(tidyr)
 library(readr)
-source('test_covid19_lsh_data_preprocessing.R')
+source('test_covid19_lsh_data_processing.R')
 source('impute_length_of_stay.R')
 write_tables_for_simulation=TRUE
 
@@ -164,6 +164,7 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       select(-outcome_tmp) %>%
                       left_join(.,interview_last_date,by='patient_id') %>%
                       mutate(.,date_outcome=pmin(date_outcome_tmp,if_else(covid_group=='recovered',date_last_known,NULL),na.rm=TRUE)) %>%
+                      filter(if_else(is.finite(date_outcome) & outcome=='recovered',(date_outcome-date_diagnosis)>0,TRUE)) %>%
                       mutate(.,age_group_std=as.character(cut(age,breaks=c(-Inf,seq(10,80,by=10),Inf),labels=c('0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80+'),right=FALSE)),
                              age_group_simple=as.character(cut(age,breaks=c(-Inf,50,Inf),labels=c('0-50','51+'),right=TRUE))) %>%
                       select(.,patient_id,zip_code,age,age_group_std,age_group_simple,sex,priority,date_first_symptoms,date_diagnosis,outcome,date_outcome)
@@ -402,27 +403,26 @@ for (i in 1:length(dates)) {
 }
 
 
-
 ############### ----- Write tables to disk ----- ############################
-if(write_tables_to_disk){
+if(write_tables_for_simulation){
   write.table(patient_transition_counts_matrix_all,file=paste0(path_tables,current_date,'_transition_matrix','.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
   write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_tables,current_date,'_transition_matrix_under_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(current_state_write,file=paste0(path_data,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state,file=paste0(path_data,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
-  write.table(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F,sep=',')
+  write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
 }
 
 ############################## ------ Create tables for stats group ----- ##############################
 
-path_tables='../output_stats_group/'
+path_stats_tables='../output_stats_group/'
 #Create table of new hospital cases,new icu,out of hospital and out of icu per day
 finished_states <- inner_join(select(individs_extended,patient_id,age_group_std),
                               select(patient_transitions_state_blocks_summary,-censored,-state_duration),
                               by='patient_id')%>%
   filter(state!=state_next) %>%
-  mutate(date=state_block_nr_end+1) %>% 
+  mutate(date=state_block_nr_end+1) %>%
   select(patient_id,date,age_group_std,state,state_next)
 
 first_states_hospitals <- inner_join(select(individs_extended,patient_id,age_group_std),
@@ -444,11 +444,15 @@ states_by_date_and_age_std <- bind_rows(first_states_hospitals,finished_states) 
     state_next=='death' ~ 'fj_andlata'
   )) %>% rename(agegroup='age_group_std') %>% select(date,agegroup,variable,value)
 
-write.table(states_by_date_and_age_std,paste0('../output/events_per_date_and_age_',current_date,'.csv'),sep=',')
+write.table(states_by_date_and_age_std,paste0(path_stats_tables,current_date,'_events_per_date_and_age.csv'),sep=',')
 
 #hospital and icu distributions for Brynjólfur
 group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('intensive_care_unit',unit_in))) %>%
   ungroup() %>% left_join(select(individs_extended,patient_id,age_group_std),.,by='patient_id') %>%
-  group_by(age_group_std) %>% summarise(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>% 
-  ungroup() %>% arrange(age_group_std) %>% write.table(paste0('../output/hospital_and_icu_distr_',current_date,'.csv'),row.names=F,quote=F,sep=',')
+  group_by(age_group_std) %>% summarise(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>%
+  ungroup() %>% arrange(age_group_std)
+write.table(paste0(path_stats_tables,current_date,'_hospital_and_icu_distr.csv'),row.names=F,quote=F,sep=',')
 
+#extract length of hopspital stays including icu and icu times censored and uncensored
+previous_hospital_stays <- filter(patient_transitions_state_blocks_summary,state!='home',state_block)
+ 
