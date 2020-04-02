@@ -1,4 +1,4 @@
-library(ggplot2)
+
 directsearch <- function(x,y) {
   maxvalue = -Inf;
   for (meanlog in seq(0,5,0.01)) {
@@ -28,7 +28,7 @@ fitlognormal <- function(df, thestate) {
   return(theta)
 }
 
-impude_lognormal <- function(df, thestate, theta) {
+impute_lognormal <- function(df, thestate, theta) {
   idx <- which(df$state == thestate & df$censored == TRUE)
   for (i in idx) {
     z <- ceiling(rlnorm(1000,theta[1],theta[2]));
@@ -39,7 +39,7 @@ impude_lognormal <- function(df, thestate, theta) {
   return(df)
 }
 
-impude_empirical <- function(df, thestate) {
+impute_empirical <- function(df, thestate) {
   idx <- which(df$state == thestate & df$censored == TRUE)
   duration_completed <- filter(df, state == thestate & censored == FALSE)$state_duration
   for (i in idx) {
@@ -54,16 +54,5 @@ impude_empirical <- function(df, thestate) {
   }
   return(df)
 }
-
-thetaWard = fitlognormal(state_blocks_with_age, "inpatient_ward")
-thetaICU = fitlognormal(state_blocks_with_age, "intensive_care_unit")
-
-state_blocks_with_age_imputed <- state_blocks_with_age
-state_blocks_with_age_imputed <- impude_empirical(state_blocks_with_age_imputed, "home")
-state_blocks_with_age_imputed <- impude_empirical(state_blocks_with_age_imputed, "inpatient_ward")
-state_blocks_with_age_imputed <- impude_lognormal(state_blocks_with_age_imputed, "intensive_care_unit", thetaICU)
-
-
-
 
   
