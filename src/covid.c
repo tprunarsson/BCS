@@ -449,7 +449,8 @@ void report(FILE *fid, int day, int append) {
 int main(int argc, char *argv[]) {
  
   int listid, i, j, n;
-  char szDate[12], fname[1024], path[512];
+  char szDate[12], fname[1024];
+  char path[512], path_input[512], path_output[512], path_lsh_data[512];
 //  int predMedian[MAX_SIM_TIME], predUpper[MAX_SIM_TIME];
   FILE *statfid;
 
@@ -465,17 +466,20 @@ int main(int argc, char *argv[]) {
     strcat(path, "./");
   if (argc > 1)
     strcat(path, argv[2]);
+  sprintf(path_input, "%s/input/", path);
+  sprintf(path_lsh_data,"%s/lsh_data/", path);
+  sprintf(path_output,"%s/output/", path);
  
   /* get the date for the simulation run */
   sprintf(szDate,"%s", argv[1]);
 
   /* The file covid.out is used to report on the setting used for the run */
-  sprintf(fname, "%s%s_covid.out", path, szDate);
+  sprintf(fname, "%s%s_covid.out", path_output, szDate);
   outfile = fopen (fname, "w");
   
   /* Generate output run file name and pointer */
-  sprintf(fname, "%s%s_covid_simulation.csv",path, szDate);
-  printf(" reading files from %s%s*.csv\n writing result in: %s\n and run data into: %s%s_covid.out\n",path, szDate, fname, path, szDate);
+  sprintf(fname, "%s%s_covid_simulation.csv",path_output, szDate);
+  printf(" reading files from %s%s*.csv\n reading files from %s%s*.csv\n writing result in: %s\n and run data into: %s%s_covid.out\n",path_input, szDate, path_lsh_data, szDate, fname, path_output, szDate);
   statfid = fopen (fname, "w");
 
   /* Initialize simlib */
@@ -490,15 +494,15 @@ int main(int argc, char *argv[]) {
     list_rank[listid] = ATTR_DEPARTDAY;
 
   /* read the length of stay data */
-  sprintf(fname, "%s%s_length_of_stay.csv", path, szDate);
+  sprintf(fname, "%s%s_length_of_stay.csv", path_lsh_data, szDate);
   readLosP(fname);
   
   /* load first location for new persons arrivals */
-  sprintf(fname, "%s%s_first_state.csv", path, szDate);
+  sprintf(fname, "%s%s_first_state.csv", path_lsh_data, szDate);
   readFirstCDF(fname);
   
   /* load posterior predicted values on current date and day number */
-  sprintf(fname, "%s%s_iceland_posterior.csv", path, szDate);
+  sprintf(fname, "%s%s_iceland_posterior.csv", path_input, szDate);
   fprintf(outfile,"CDFposterior[%s] = \n", szDate);
   for (i = 0; i < MAX_SIM_TIME; i++) {
     n = readHIposteriors(fname, szDate, i, CDFposterior[i]);
@@ -509,15 +513,15 @@ int main(int argc, char *argv[]) {
   }
   
   /* Read the transition probability matrix */
-  sprintf(fname, "%s%s_transition_matrix_under_50.csv", path, szDate);
+  sprintf(fname, "%s%s_transition_matrix_under_50.csv", path_input, szDate);
   readTransitionP(fname, 0);
-  sprintf(fname, "%s%s_transition_matrix_over_50.csv", path, szDate);
+  sprintf(fname, "%s%s_transition_matrix_over_50.csv", path_input, szDate);
   readTransitionP(fname, 1);
 
   report(statfid,0,0); /* write header in output stats file */
   for (repeat = 0; repeat < 300; repeat++) {
     /* Initialize the model and fire up departure event for thise in system */
-    sprintf(fname, "%s%s_current_state.csv", path, szDate);
+    sprintf(fname, "%s%s_current_state.csv", path_lsh_data, szDate);
     init_model(fname);
     numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
     /* Stop the simulation once the wall clock has reached MAX_SIM_TIME days */
@@ -527,7 +531,7 @@ int main(int argc, char *argv[]) {
       switch (next_event_type) {
         case EVENT_ARRIVAL:
           i = discrete_empirical(CDFposterior[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_AGE);    
-          arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
+          //arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
           event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
           /* Write out numbers in each location and zero daily counters */
           report(statfid,(int)floor(sim_time),1);
