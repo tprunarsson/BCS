@@ -42,6 +42,7 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 covid_groups <- read_excel(file_path_coding,sheet = 1)
 unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,unit_category_order=unit_category_order_simple)
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
+sheet_names <- read_excel(file_path_coding,sheet = 5)
 
 test_lsh_data_file()
 

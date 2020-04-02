@@ -15,19 +15,19 @@ library(dplyr)
 ```
 
 ```{r preprocessing, include=FALSE}
-current_date=as.Date('2020-04-01','%Y-%m-%d')
-path_data_posterior_prob <-'2020-04-01_covid_run_2.csv'
+current_date=as.Date('2020-04-02','%Y-%m-%d')
+path_data_simulation <-'2020-04-02_covid_simulation.csv'
 states_in_order <- c('home','inpatient_ward','intensive_care_unit','death','recovered')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla','Andlát','Batnað')
 
-median_run <- read_csv(file = path_data_posterior_prob) %>%
+simulation <- read_csv(file = path_data_simulation) %>%
     mutate(.,date=as.factor(current_date+day)) %>%
     gather(.,key='state',value='count',-date,-day) %>%
     mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
 #Dates from when the data was retrieved
-fjoldi_smita_dags <- '30-03-2020'
-soguleg_gogn_dags <- '31-03-2020'
+fjoldi_smita_dags <- '02-04-2020'
+soguleg_gogn_dags <- '02-04-2020'
 ```
 
 
@@ -43,7 +43,7 @@ $~$
 ### Heimaeinangrun
 
 ```{r heimaeinangrun, echo=FALSE, fig.align='center'}
-ggplot(median_run[median_run$state=="Heimaeinangrun",], aes(x = date, y = count)) + 
+ggplot(simulation[simulation$state=="Heimaeinangrun",], aes(x = date, y = count)) + 
     geom_boxplot(col='blue4') +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.background = element_rect(fill='white',colour='black'),
@@ -57,11 +57,11 @@ ggplot(median_run[median_run$state=="Heimaeinangrun",], aes(x = date, y = count)
 ### Legudeildir
 
 ```{r legudeildir, echo=FALSE, fig.align='center'}
-median_run_legudeild <- median_run[median_run$state=="Legudeild",]
+simulation_legudeild <- simulation[simulation$state=="Legudeild",]
 #Compute medians to display on plot
-medians <- aggregate(median_run_legudeild$count, list(median_run_legudeild$date), median)
+medians <- aggregate(simulation_legudeild$count, list(simulation_legudeild$date), median)
 
-ggplot(median_run_legudeild, aes(x = date, y = count)) + 
+ggplot(simulation_legudeild, aes(x = date, y = count)) + 
     geom_boxplot(col='blue4') +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.background = element_rect(fill='white',colour='black'),
@@ -77,11 +77,11 @@ ggplot(median_run_legudeild, aes(x = date, y = count)) +
 ### Gjörgæsla
 
 ```{r gjorgaesla, echo=FALSE, fig.align='center'}
-median_run_gjorgaesla <- median_run[median_run$state=="Gjörgæsla",]
+simulation_gjorgaesla <- simulation[simulation_gjorgaesla$state=="Gjörgæsla",]
 #Compute medians to display on plot
-medians <- aggregate(median_run_gjorgaesla$count, list(median_run_gjorgaesla$date), median)
+medians <- aggregate(simulation_gjorgaesla$count, list(simulation_gjorgaesla$date), median)
 
-ggplot(median_run_gjorgaesla, aes(x = date, y = count)) + 
+ggplot(simulation_gjorgaesla, aes(x = date, y = count)) + 
     geom_boxplot(col='blue4') +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.background = element_rect(fill='white',colour='black'),
