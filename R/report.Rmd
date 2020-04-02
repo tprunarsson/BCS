@@ -1,7 +1,9 @@
 ---
-title: <center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>
-output: html_document
-date: <center> <h4> `r format(Sys.time(), '%d-%m-%Y')` </h4></center>
+title: "<center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>"
+output:
+  pdf_document: default
+  html_document: default
+date: "<center> <h4> `r format(Sys.time(), '%d-%m-%Y')` </h4></center>"
 ---
 
 ```{r packages, warning=FALSE, error=FALSE, include=FALSE}
@@ -66,7 +68,7 @@ ggplot(median_run_legudeild, aes(x = date, y = count)) +
           panel.grid.major = element_line(colour='gray95'),
           panel.grid.minor = element_line(colour='gray95')) + 
     #Display medians
-    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=3, vjust=1.1) +
+    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
     xlab('Dagsetning') + 
     ylab('Fjöldi') +
     ggtitle('Fjöldi smitaðra einstaklinga á legudeild á hverjum degi')
@@ -86,7 +88,7 @@ ggplot(median_run_gjorgaesla, aes(x = date, y = count)) +
           panel.grid.major = element_line(colour='gray95'),
           panel.grid.minor = element_line(colour='gray95')) + 
     #Display medians
-    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=3, vjust=1.1) +
+    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
     xlab('Dagsetning') + 
     ylab('Fjöldi') +
     ggtitle('Fjöldi smitaðra einstaklinga á gjörgæslu á hverjum degi')
