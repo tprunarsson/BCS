@@ -494,7 +494,7 @@ int main(int argc, char *argv[]) {
     list_rank[listid] = ATTR_DEPARTDAY;
 
   /* read the length of stay data */
-  sprintf(fname, "%s%s_length_of_stay.csv", path_lsh_data, szDate);
+  sprintf(fname, "%s%s_length_of_stay.csv", path_input, szDate);
   readLosP(fname);
   
   /* load first location for new persons arrivals */
@@ -531,7 +531,7 @@ int main(int argc, char *argv[]) {
       switch (next_event_type) {
         case EVENT_ARRIVAL:
           i = discrete_empirical(CDFposterior[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_AGE);    
-          //arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
+          arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
           event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
           /* Write out numbers in each location and zero daily counters */
           report(statfid,(int)floor(sim_time),1);
