@@ -17,7 +17,7 @@ prediction_date=as.Date('2020-04-02','%Y-%m-%d')
 date_last_known_state <- current_date-1
 
 #Assuming working directory is lsh_data_processing in github repo
-path_data <- '~/projects/covid/BCS/Data/'
+path_data <- '~/projects/covid/BCS/lsh_data/'
 path_tables='../input/'
 
 #file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
