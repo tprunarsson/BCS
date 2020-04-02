@@ -42,6 +42,7 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 covid_groups <- read_excel(file_path_coding,sheet = 1)
 unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,unit_category_order=unit_category_order_simple)
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
+sheet_names <- read_excel(file_path_coding,sheet = 5)
 
 test_lsh_data_file()
 
@@ -454,5 +455,5 @@ group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('inten
 write.table(paste0(path_stats_tables,current_date,'_hospital_and_icu_distr.csv'),row.names=F,quote=F,sep=',')
 
 #extract length of hopspital stays including icu and icu times censored and uncensored
-#previous_hospital_stays <- filter(patient_transitions_state_blocks_summary,state!='home',state_block)
+previous_hospital_stays <- filter(patient_transitions_state_blocks_summary,state!='home')
  
