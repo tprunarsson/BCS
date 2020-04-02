@@ -454,5 +454,5 @@ group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('inten
 write.table(paste0(path_stats_tables,current_date,'_hospital_and_icu_distr.csv'),row.names=F,quote=F,sep=',')
 
 #extract length of hopspital stays including icu and icu times censored and uncensored
-previous_hospital_stays <- filter(patient_transitions_state_blocks_summary,state!='home',state_block)
+#previous_hospital_stays <- filter(patient_transitions_state_blocks_summary,state!='home',state_block)
  
