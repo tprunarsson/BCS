@@ -1,25 +1,4 @@
 source('covid19_lsh_data_preprocessing.R')
-state_newly_diagnosed <- anti_join(individs_extended,select(patient_transitions,patient_id),by='patient_id') %>%
-    filter(.,outcome=='in_hospital_system') %>%
-    mutate(.,state='home') %>%
-    left_join(.,select(hospital_visits_filtered,patient_id,unit_in,date_time_in),by='patient_id') %>%
-    mutate(state=if_else(is.na(unit_in),state,unit_in)) %>%
-    group_by(.,patient_id) %>% arrange(date_time_in) %>%
-    summarize(.,date=min(date_diagnosis,na.rm=T),state=tail(state,1)) %>%
-    ungroup()
-
-state_date_last_known <- filter(patient_transitions,date==(date_last_known_state-1)) %>%
-    mutate(.,state=state_tomorrow,date=date+1) %>%
-    filter(state!='recovered') %>%
-    select(.,patient_id,date,state) %>%
-    bind_rows(.,state_newly_diagnosed)
-
-current_state_per_date <- select(patient_transitions,-state_tomorrow) %>%
-    bind_rows(.,state_date_last_known) %>%
-    group_by(.,date,state) %>%
-    summarise(count=n()) 
-write.table(paste0('../output/states_in_hospital_system_num_per_date_',current_date,'.csv'),row.names=F,quote=F,sep=',')
-
 #table for emergency room,outpatient clinic visited by id and day
 #Note edge case for id 100672
 #get nr of individuals in each state per date
