@@ -8,7 +8,7 @@ library(readr)
 today <- Sys.Date()
 
 #date on input data and output files
-current_date=as.Date('2020-04-01','%Y-%m-%d')
+current_date=as.Date('2020-04-02','%Y-%m-%d')
 #date of prediction by covid.hi.is
 prediction_date=as.Date('2020-03-30','%Y-%m-%d')
 
@@ -25,7 +25,8 @@ path_to_output <- paste0(path_to_root,'Data/')
 #file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 #file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
 #file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+#file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_predictions <- 'Iceland_Predictions_2020-03-30.csv'
 
