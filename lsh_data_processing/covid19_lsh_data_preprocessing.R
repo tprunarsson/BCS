@@ -10,17 +10,14 @@ today <- Sys.Date()
 #date on input data and output files
 current_date=as.Date('2020-04-02','%Y-%m-%d')
 #date of prediction by covid.hi.is
-prediction_date=as.Date('2020-03-30','%Y-%m-%d')
+prediction_date=as.Date('2020-04-02','%Y-%m-%d')
 
 #we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
 date_last_known_state <- current_date-1
 
-path_to_root <- '~/projects/covid/BCS/'
-path_data <- paste0(path_to_root,'Data/')
-path_coding <- paste0(path_to_root,'lsh_data_processing/')
-path_hi_predictions <- paste0(path_to_root,'lsh_data_processing/')
-path_to_output <- paste0(path_to_root,'Data/')
-
+#Assuming working directory is lsh_data_processing in github repo
+path_data <- '~/projects/covid/BCS/Data/'
+path_tables='../input/'
 
 #file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 #file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
@@ -28,8 +25,6 @@ path_to_output <- paste0(path_to_root,'Data/')
 #file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
-file_path_predictions <- 'Iceland_Predictions_2020-03-30.csv'
-
 file_path_data <- paste0(path_data,file_name_lsh_data)
 
 individs_raw <- read_excel(file_path_data,sheet = 'Einstaklingar', skip=3)
@@ -268,10 +263,3 @@ patient_transitions_state_blocks_summary <- group_by(patient_transitions_state_b
   mutate(censored=(state==state_next)) %>%
   mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+if_else(state!=state_next,1,2)) %>%
   ungroup()
-
-
-
-
-
-
-
