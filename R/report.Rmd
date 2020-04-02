@@ -13,20 +13,19 @@ library(dplyr)
 ```
 
 ```{r preprocessing, include=FALSE}
-current_date=as.Date('2020-03-30','%Y-%m-%d')
-path_data_upper <-'covid_run_0_2020-03-30.csv'
-path_data_median <-'covid_run_1_2020-03-30.csv'
+current_date=as.Date('2020-04-01','%Y-%m-%d')
+path_data_posterior_prob <-'2020-04-01_covid_run_2.csv'
 states_in_order <- c('home','inpatient_ward','intensive_care_unit','death','recovered')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla','Andlát','Batnað')
 
-median_run <- read_csv(file = path_data_median) %>%
+median_run <- read_csv(file = path_data_posterior_prob) %>%
     mutate(.,date=as.factor(current_date+day)) %>%
     gather(.,key='state',value='count',-date,-day) %>%
     mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
 #Dates from when the data was retrieved
 fjoldi_smita_dags <- '30-03-2020'
-soguleg_gogn_dags <- '30-03-2020'
+soguleg_gogn_dags <- '31-03-2020'
 ```
 
 
@@ -34,8 +33,8 @@ $~$
 
 Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu tvær vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
 
-Spá um fjölda smita er frá `r fjoldi_smita_dags`. <br />
-Söguleg gögn frá Landspítala eru frá `r soguleg_gogn_dags`.
+Spá um fjölda smita er frá `r fjoldi_smita_dags`.<br />
+Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.
 
 $~$
 
@@ -50,7 +49,7 @@ ggplot(median_run[median_run$state=="Heimaeinangrun",], aes(x = date, y = count)
           panel.grid.minor = element_line(colour='gray95')) + 
     xlab('Dagsetning') + 
     ylab('Fjöldi') +
-    ggtitle('Fjöldi smitaðra einstaklinga í heimaeingrun á hverjum degi')
+    ggtitle('Fjöldi smitaðra einstaklinga í heimaeinangrun á hverjum degi')
 ```
 
 ### Legudeildir
@@ -93,4 +92,4 @@ ggplot(median_run_gjorgaesla, aes(x = date, y = count)) +
     ggtitle('Fjöldi smitaðra einstaklinga á gjörgæslu á hverjum degi')
 ```
 
-
+$~$
