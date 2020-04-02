@@ -5,7 +5,6 @@
   version:  01/04/2020
  */
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -65,7 +64,6 @@ int get_my_location(char *szlocation) {
   else if (0 == strcmp(szlocation,"intensive_care_unit")) location = INTENSIVE_CARE_UNIT;
   else if (0 == strcmp(szlocation,"death")) location = DEATH;
   else if (0 == strcmp(szlocation,"recovered")) location = RECOVERED;
-//  else if (0 == strcmp(szlocation,"in_hospital_system")) location = 9; // WHAT THE HECK
   else {
     printf("error: unknown keyword (location) called %s", szlocation);
     exit(1);
@@ -74,46 +72,13 @@ int get_my_location(char *szlocation) {
 }
 
 /* 
-  Read covid.hi.is predictions
-*/
-int readHIpredictions(char *fname, char *szDate, int day, int *median, int *upper) {
-  FILE *fid;
-  char sztmp[64];
-  char buffer[2048];
-  int tmpday = -10000, tmpmedian, tmpupper;
-  *median = 0; *upper = 0;
-  fid = fopen(fname, "r");
-  if (fid == NULL) {
-    printf("fatal: could not open covid.hi.is predictions data file %s\n", fname);
-    exit(1);
-  }
-  if (NULL == fgets(buffer, 1024, fid)) /* remove the header! */
-    return 1;
-  while (NULL != fgets(buffer, 1024, fid)) {
-    tmpday++;
-    clear_symbol(buffer,',');
-    sscanf(buffer, "%s %d %d", sztmp, &tmpmedian, &tmpupper);
-    if (0 == strcmp(sztmp, szDate)) {
-      tmpday = 0;
-    }
-    if (tmpday == day) {
-      *median = tmpmedian;
-      *upper = tmpupper;
-      break;
-    }
-  }
-  return 0;
-}
-
-/* 
   Read covid.hi.is posterior predictions for give day (MAX_SIM_TIME, )
 */
-
 int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
   FILE *fid;
   char sztmp[64];
   char buffer[8192];
-  int numdays = 0, tmpday = -10000;
+  int numdays = 0, tmpday = -100000;
   char *token;
   int i;
 
