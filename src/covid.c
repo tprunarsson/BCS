@@ -449,8 +449,8 @@ void report(FILE *fid, int day, int append) {
 int main(int argc, char *argv[]) {
  
   int listid, i, j, n;
-  char szDate[12], fname[1024];
-  char path[512], path_input[512], path_output[512], path_lsh_data[512];
+  char szDate[12], fname[2048];
+  char path[512], path_input[1024], path_output[1024], path_lsh_data[1024];
 //  int predMedian[MAX_SIM_TIME], predUpper[MAX_SIM_TIME];
   FILE *statfid;
 
