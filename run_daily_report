@@ -14,9 +14,14 @@ while getopts ":c:p:d:" opt; do
 done
 
 cd lsh_data_processing
+echo "---------Running data processing---------"
 Rscript covid19_lsh_data_processing.R -c "$current_date" -p "$prediction_date" -d "$path_to_lsh_data"
 cd ../src
 make
+echo "---------Running simulation---------"
 ./covid "$current_date" ..
 cd ../report
-Rscript -e 'args <- commandArgs(TRUE);Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/MacOS/pandoc"); rmarkdown::render("report.Rmd", "html_document",output_file=paste0("../daily_report/",args[1],"-Flæði COVID-19 sjúklinga LSH.html"))' "$current_date"
+echo "---------Knitting report---------"
+Rscript -e 'args <- commandArgs(TRUE);current_date <- as.Date(args[1]);Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/MacOS/pandoc"); rmarkdown::render("report.Rmd", "html_document",output_file=paste0("../daily_report/",args[1],"-Flæði COVID-19 sjúklinga LSH.html"))' "$current_date"
+
+
