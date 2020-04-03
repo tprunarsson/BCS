@@ -56,7 +56,22 @@ test_cleaning <- function(){
 }
 
 test_data_processing <- function(){
-    # 
+    # Check information available in forms
+  
+    #date of diagnosis
+    num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
+    sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
+    
+    #clinical assessment
+    num_with_clinical_assessment <- left_join(individs,interview_follow_up,by='patient_id') %>% filter(is.finite(date_clinical_assessment)) %>% distinct(patient_id) %>% summarize(n()) %>% unlist()
+    sprintf("Number of individs missing clinical assessment in forms: %.0f (%.1f%%)", nrow(individs)-num_with_clinical_assessment,100*(nrow(individs)-num_with_clinical_assessment)/nrow(individs))
+    
+    #recovered with a final interview
+    num_recovered_with_last_interview <- left_join(individs,interview_last, by='patient_id') %>% filter(covid_group=='recovered' & is.finite(date_clinical_assessment)) %>% summarize(n()) %>% unlist()
+    num_recovered <- filter(individs,covid_group=='recovered') %>% summarize(n()) %>% unlist()
+    sprintf("Number of recovered individs missing date of last interview in forms: %.0f (%.1f%%)", num_recovered-num_recovered_with_last_interview,100*(num_recovered-num_recovered_with_last_interview)/num_recovered)
+   
+     # 
     # cmp_vectors(patient_transitions$patient_id,individs_extended[individs_extended$date_diagnosis<=date_last_known_state,'patient_id',drop=T])
     # #check if there are recovered patients were date of recovery is less than two weeks from diagnosis
     # recovered_too_soon <- filter(individs_extended,if_else(!is.na(date_outcome),outcome=='recovered' & (date_outcome-date_diagnosis) < 14,FALSE))
