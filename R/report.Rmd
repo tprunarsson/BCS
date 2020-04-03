@@ -1,5 +1,5 @@
 ```{r, include=FALSE}
-current_date=as.Date('2020-04-02','%Y-%m-%d')
+current_date=as.Date('2020-04-03','%Y-%m-%d')
 ```
 
 
@@ -20,7 +20,7 @@ library(dplyr)
 ```
 
 ```{r preprocessing, include=FALSE}
-path_data_simulation <-'../output/2020-04-02_covid_simulation.csv'
+path_data_simulation <- paste0('../output/',current_date,'_covid_simulation.csv')
 states_in_order <- c('home','inpatient_ward','intensive_care_unit','death','recovered')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla','Andlát','Batnað')
 
@@ -31,13 +31,13 @@ simulation <- read_csv(file = path_data_simulation) %>%
 
 #Dates from when the data was retrieved
 fjoldi_smita_dags <- '02-04-2020'
-soguleg_gogn_dags <- '01-04-2020'
+soguleg_gogn_dags <- current_date-1
 ```
 
 
 $~$
 
-Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu tvær vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
+Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
 
 Spá um fjölda smita er frá `r fjoldi_smita_dags`.<br />
 Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.
