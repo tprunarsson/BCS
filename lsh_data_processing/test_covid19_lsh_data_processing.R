@@ -47,6 +47,7 @@ test_lsh_data_file <- function(){
         warning('BCS:New COVID19 groups have been added to the LSH data file')
         do.call(cat,c(setdiff(distinct_cg_data,distinct_cg_coding),sep='\n'))
     }
+    return('Success')
 }
 
 test_cleaning <- function(){
