@@ -18,5 +18,5 @@ Rscript covid19_lsh_data_processing.R -c "$current_date" -p "$prediction_date" -
 cd ../src
 make
 ./covid "$current_date" ..
-cd ../R
+cd ../report
 Rscript -e 'args <- commandArgs(TRUE);Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/MacOS/pandoc"); rmarkdown::render("report.Rmd", "html_document",output_file=paste0("../daily_report/",args[1],"-Flæði COVID-19 sjúklinga LSH.html"))' "$current_date"
