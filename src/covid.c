@@ -353,7 +353,6 @@ int init_model(char *fname) {
     event_schedule(departureday, EVENT_DEPARTURE);
   }
   fclose(fid);
-  event_schedule(0, EVENT_ARRIVAL); /* schedule also new arrivals */
   return 0;
 }
 /*
@@ -463,9 +462,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   if (argc < 2)
-    sprintf(path, "./");
+    strcpy(path, "./");
   if (argc > 1)
-    sprintf(path, argv[2]);
+    strcpy(path, argv[2]);
   sprintf(path_input, "%s/input/", path);
   sprintf(path_lsh_data,"%s/lsh_data/", path);
   sprintf(path_output,"%s/output/", path);
@@ -523,6 +522,7 @@ int main(int argc, char *argv[]) {
     /* Initialize the model and fire up departure event for thise in system */
     sprintf(fname, "%s%s_current_state.csv", path_lsh_data, szDate);
     init_model(fname);
+    event_schedule(0, EVENT_ARRIVAL); /* schedule also new arrivals */
     numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
     /* Stop the simulation once the wall clock has reached MAX_SIM_TIME days */
     while ((list_size[LIST_EVENT] != 0) && (sim_time <= MAX_SIM_TIME)) {
@@ -546,6 +546,7 @@ int main(int argc, char *argv[]) {
     }
     reset_simlib(); /* empty all lists, ready for re-run */
   }
+  /* should tidy up simlib memory here! */
   fclose(outfile);
   fclose(statfid);
   return 0;
