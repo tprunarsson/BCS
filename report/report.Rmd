@@ -1,0 +1,104 @@
+```{r, include=FALSE}
+current_date=as.Date('2020-04-03','%Y-%m-%d')
+```
+
+
+---
+title: "<center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>"
+output:
+  html_document: default
+  pdf_document: default
+date: "<center> <h4> `r format(current_date, '%d-%m-%Y')` </h4></center>"
+---
+
+```{r packages, warning=FALSE, error=FALSE, include=FALSE}
+#Packages
+library(ggplot2)
+library(readr)
+library(tidyr)
+library(dplyr)
+```
+
+```{r preprocessing, include=FALSE}
+path_data_simulation <- paste0('../output/',current_date,'_covid_simulation.csv')
+states_in_order <- c('home','inpatient_ward','intensive_care_unit','death','recovered')
+states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla','Andlát','Batnað')
+
+simulation <- read_csv(file = path_data_simulation) %>%
+    mutate(.,date=as.factor(current_date+day)) %>%
+    gather(.,key='state',value='count',-date,-day) %>%
+    mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
+
+#Dates from when the data was retrieved
+fjoldi_smita_dags <- '02-04-2020'
+soguleg_gogn_dags <- current_date-1
+```
+
+
+$~$
+
+Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
+
+Spá um fjölda smita er frá `r fjoldi_smita_dags`.<br />
+Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.
+
+$~$
+
+### Heimaeinangrun
+
+```{r heimaeinangrun, echo=FALSE, fig.align='center'}
+ggplot(simulation[simulation$state=="Heimaeinangrun",], aes(x = date, y = count)) + 
+    geom_boxplot(col='blue4') +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+          panel.background = element_rect(fill='white',colour='black'),
+          panel.grid.major = element_line(colour='gray95'),
+          panel.grid.minor = element_line(colour='gray95')) +
+    ylim(0,1300) +
+    xlab('Dagsetning') + 
+    ylab('Fjöldi') +
+    ggtitle('Fjöldi smitaðra einstaklinga í heimaeinangrun á hverjum degi')
+```
+
+### Legudeildir
+
+```{r legudeildir, echo=FALSE, fig.align='center'}
+simulation_legudeild <- simulation[simulation$state=="Legudeild",]
+#Compute medians to display on plot
+medians <- aggregate(simulation_legudeild$count, list(simulation_legudeild$date), median)
+
+ggplot(simulation_legudeild, aes(x = date, y = count)) + 
+    geom_boxplot(col='blue4') +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+          panel.background = element_rect(fill='white',colour='black'),
+          panel.grid.major = element_line(colour='gray95'),
+          panel.grid.minor = element_line(colour='gray95')) + 
+    #Display medians
+    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
+    ylim(0,100)+
+    xlab('Dagsetning') + 
+    ylab('Fjöldi') +
+    ggtitle('Fjöldi smitaðra einstaklinga á legudeild á hverjum degi')
+```
+
+### Gjörgæsla
+
+```{r gjorgaesla, echo=FALSE, fig.align='center'}
+simulation_gjorgaesla <- simulation[simulation$state=="Gjörgæsla",]
+#Compute medians to display on plot
+medians <- aggregate(simulation_gjorgaesla$count, list(simulation_gjorgaesla$date), median)
+
+ggplot(simulation_gjorgaesla, aes(x = date, y = count)) + 
+    geom_boxplot(col='blue4') +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+          panel.background = element_rect(fill='white',colour='black'),
+          panel.grid.major = element_line(colour='gray95'),
+          panel.grid.minor = element_line(colour='gray95')) + 
+    #Display medians
+    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
+    ylim(0,50) +
+    xlab('Dagsetning') + 
+    ylab('Fjöldi') +
+    ggtitle('Fjöldi smitaðra einstaklinga á gjörgæslu á hverjum degi')
+```
+
+$~$
