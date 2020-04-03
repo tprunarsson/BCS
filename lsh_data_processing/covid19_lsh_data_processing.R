@@ -24,7 +24,8 @@ path_tables='../input/'
 #file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
 #file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+#file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_data,file_name_lsh_data)
 
@@ -362,7 +363,9 @@ current_state_newly_diagnosed <- anti_join(individs_extended,select(current_stat
   select(.,patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
 
 current_state <- bind_rows(current_state,current_state_newly_diagnosed)
-current_state_write <- filter(current_state, !(days_from_diagnosis > 14 & state == 'home') )
+current_state_write <- filter(current_state, !(days_from_diagnosis > 14 & state == 'home'))
+#current_state_write <- filter(current_state, !(days_from_diagnosis > 14 & state == 'home'))
+#current_state_write <- bind_rows(current_state_write,anti_join(current_state,current_state_write,'patient_id') %>% slice(1:80))
 
 ############## ----- Length of stay distribution by state and age ----- ############## 
 

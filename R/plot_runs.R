@@ -1,7 +1,7 @@
 library(ggplot2)
 library(readr)
-current_date=as.Date('2020-03-30','%Y-%m-%d')
-path_data_upper <-'covid_run_0_2020-03-30.csv'
+current_date=as.Date('2020-04-02','%Y-%m-%d')
+path_data_upper <- '../output/2020-04-02_covid_simulation.csv'
 states_in_order <- c('home','inpatient_ward','intensive_care_unit','death','recovered')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla','Andlát','Batnað')
 upper_run <- read_csv(file = path_data_upper) %>%
