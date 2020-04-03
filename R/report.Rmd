@@ -1,9 +1,14 @@
+```{r, include=FALSE}
+current_date=as.Date('2020-04-02','%Y-%m-%d')
+```
+
+
 ---
 title: "<center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>"
 output:
-  pdf_document: default
   html_document: default
-date: "<center> <h4> `r format(Sys.time(), '%d-%m-%Y')` </h4></center>"
+  pdf_document: default
+date: "<center> <h4> `r format(current_date, '%d-%m-%Y')` </h4></center>"
 ---
 
 ```{r packages, warning=FALSE, error=FALSE, include=FALSE}
@@ -15,7 +20,6 @@ library(dplyr)
 ```
 
 ```{r preprocessing, include=FALSE}
-current_date=as.Date('2020-04-02','%Y-%m-%d')
 path_data_simulation <-'../output/2020-04-02_covid_simulation.csv'
 states_in_order <- c('home','inpatient_ward','intensive_care_unit','death','recovered')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla','Andlát','Batnað')
@@ -27,7 +31,7 @@ simulation <- read_csv(file = path_data_simulation) %>%
 
 #Dates from when the data was retrieved
 fjoldi_smita_dags <- '02-04-2020'
-soguleg_gogn_dags <- '02-04-2020'
+soguleg_gogn_dags <- '01-04-2020'
 ```
 
 
@@ -77,7 +81,7 @@ ggplot(simulation_legudeild, aes(x = date, y = count)) +
 ### Gjörgæsla
 
 ```{r gjorgaesla, echo=FALSE, fig.align='center'}
-simulation_gjorgaesla <- simulation[simulation_gjorgaesla$state=="Gjörgæsla",]
+simulation_gjorgaesla <- simulation[simulation$state=="Gjörgæsla",]
 #Compute medians to display on plot
 medians <- aggregate(simulation_gjorgaesla$count, list(simulation_gjorgaesla$date), median)
 
