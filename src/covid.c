@@ -342,7 +342,7 @@ int init_model(char *fname) {
       departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
       count++;
       if (count > 100) {
-        departureday = (double)dayinloc + 1.0; /* give up and use the one more day approach */
+        departureday = 1.0; /* give up and use the one more day approach */
         break;
       }
     }
@@ -361,8 +361,8 @@ int init_model(char *fname) {
   newly infected should be based on a prediction model, we use covid.hi.is
 */
 void arrive(int n) {
-  int i, day, dayinloc, location, agegroup, gender;
-  double departureday, u;
+  int i, day, location, agegroup, gender;
+  double departureday, los, u;
 
   for (i = 0; i < n; i++) {
     u = urand (STREAM_AGE);
@@ -370,17 +370,17 @@ void arrive(int n) {
     day = sim_time; /* new arrivals today, that is sim_time wall-clock */
     u = urand (STREAM_AGE);
     gender = (u < 0.5) + 1; /* TODO: for now assume 50/50 arrivals, not used anyway! */
-    dayinloc = 0; /* "fresh" arrivals */
     /* we need a strategy for selecting which location we enter */
     location = discrete_empirical(firstLocCDF[agegroup], RECOVERED-HOME+1, STREAM_AGE);
+    los = lengthOfStay(location, agegroup);
     transfer[ATTR_PERSON] = 0.0;
     transfer[ATTR_AGEGROUP] = (double)agegroup;
     transfer[ATTR_DAYS] = (double)day;
     transfer[ATTR_GENDER] = (double)gender;
-    transfer[ATTR_DAYSINLOC] = (double)dayinloc;
+    transfer[ATTR_DAYSINLOC] = los;
     transfer[ATTR_LOCATION] = (double)location;
-    departureday = sim_time + lengthOfStay(location, agegroup);
-    transfer[ATTR_DEPARTDAY] = (double)departureday;
+    departureday = sim_time + los;
+    transfer[ATTR_DEPARTDAY] = departureday;
     list_file (INCREASING, location);
     transfer[ATTR_LOCATION] = (double)location; /* must be repeated since transfer is new */
     event_schedule(departureday, EVENT_DEPARTURE);
@@ -393,7 +393,7 @@ void depart(void) {
   int location, newlocation;
   int day, agegroup, gender;
   unsigned int id;
-  double departureday;
+  double departureday, los;
   int n = RECOVERED - HOME + 1;
   
   location = (int)transfer[ATTR_LOCATION]; /* location was in EVENT_LIST's transfer */
@@ -417,9 +417,11 @@ void depart(void) {
   else if (newlocation == DEATH)
     numDeath++;
   else {
-    departureday = sim_time + lengthOfStay(newlocation, agegroup);
-    transfer[ATTR_DEPARTDAY] = (double)departureday;
+    los = lengthOfStay(newlocation, agegroup);
+    departureday = sim_time + los;
+    transfer[ATTR_DEPARTDAY] = departureday;
     transfer[ATTR_LOCATION] = (double)newlocation;
+    transfer[ATTR_DAYSINLOC] += los;
   //  transfer[newlocation+10] = transfer[newlocation+10] + 1; /* DEBUG: NOTE increase MAX_ATTR trace where this individual has been before */
     list_file (INCREASING, newlocation);
     transfer[ATTR_LOCATION] = (double)newlocation; /* must be repeated since transfer is allocated again */
