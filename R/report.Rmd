@@ -1,5 +1,5 @@
 ```{r, include=FALSE}
-current_date=as.Date('2020-04-03','%Y-%m-%d')
+current_date=as.Date('2020-04-01','%Y-%m-%d')
 ```
 
 
@@ -52,7 +52,8 @@ ggplot(simulation[simulation$state=="Heimaeinangrun",], aes(x = date, y = count)
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.background = element_rect(fill='white',colour='black'),
           panel.grid.major = element_line(colour='gray95'),
-          panel.grid.minor = element_line(colour='gray95')) + 
+          panel.grid.minor = element_line(colour='gray95')) +
+    ylim(0,1300) +
     xlab('Dagsetning') + 
     ylab('Fjöldi') +
     ggtitle('Fjöldi smitaðra einstaklinga í heimaeinangrun á hverjum degi')
@@ -73,6 +74,7 @@ ggplot(simulation_legudeild, aes(x = date, y = count)) +
           panel.grid.minor = element_line(colour='gray95')) + 
     #Display medians
     geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
+    ylim(0,100)+
     xlab('Dagsetning') + 
     ylab('Fjöldi') +
     ggtitle('Fjöldi smitaðra einstaklinga á legudeild á hverjum degi')
@@ -93,6 +95,7 @@ ggplot(simulation_gjorgaesla, aes(x = date, y = count)) +
           panel.grid.minor = element_line(colour='gray95')) + 
     #Display medians
     geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
+    ylim(0,50) +
     xlab('Dagsetning') + 
     ylab('Fjöldi') +
     ggtitle('Fjöldi smitaðra einstaklinga á gjörgæslu á hverjum degi')
