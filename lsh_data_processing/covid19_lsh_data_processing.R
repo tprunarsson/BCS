@@ -1,24 +1,65 @@
+#!/usr/bin/env Rscript
 Sys.setlocale("LC_ALL","IS_is")
-
+library(optparse)
 library(readxl)
 library(dplyr)
 library(tidyr)
 library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('impute_length_of_stay.R')
-write_tables_for_simulation=TRUE
 
-today <- Sys.Date()
-#date on input data and output files
-current_date=as.Date('2020-04-02','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-03','%Y-%m-%d')
+prediction_date_tmp <- as.Date('2020-04-02','%Y-%m-%d')
+path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
+write_tables_for_simulation_tmp <- FALSE
+
+option_list <-  list(
+  make_option(c("-c", "--current_date"), type="character", default=NULL, 
+              help="current date of data being used", metavar="character"),
+  make_option(c("-p", "--prediction_date"), type="character", default=NULL, 
+              help="date of prediction from covid.hi.is", metavar="character"),
+  make_option(c("-d", "--path_to_lsh_data"), type="character", default=path_to_lsh_data_tmp, 
+              help="path to data from LSH", metavar="character")
+) 
+
+opt_parser <-  OptionParser(option_list=option_list);
+opt <-  parse_args(opt_parser);
+
+if(is.null(opt[['current_date']])){
+  current_date <- current_date_tmp 
+  warning(paste0('You did not provide a current date. ',current_date,' will be used'))
+}else{
+  current_date <- as.Date(as.character(opt['current_date']),'%Y-%m-%d')
+}
+
+if(is.null(opt[['prediction_date']])){
+  prediction_date <- prediction_date_tmp 
+  warning(paste0('You did not provide a prediction date. ',prediction_date,' will be used'))
+}else{
+  prediction_date <- as.Date(as.character(opt['prediction_date']),'%Y-%m-%d')
+}
+
+if(opt[['path_to_lsh_data']]==path_to_lsh_data_tmp){
+  path_to_lsh_data <- path_to_lsh_data_tmp
+}else{
+  path_to_lsh_data <- opt[['path_to_lsh_data']]
+}
+
+if(length(opt)>2){
+  write_tables_for_simulation <- TRUE
+}else{
+  write_tables_for_simulation <- write_tables_for_simulation_tmp
+}
+
 #date of prediction by covid.hi.is
-prediction_date=as.Date('2020-04-02','%Y-%m-%d')
+
+
 #we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
 date_last_known_state <- current_date-1
 
 #Assuming working directory is lsh_data_processing in github repo
-path_data <- '~/projects/covid/BCS/lsh_data/'
 path_tables='../input/'
+path_sensitive_tables='../lsh_data'
 
 #file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
 #file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
@@ -27,7 +68,7 @@ path_tables='../input/'
 #file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
-file_path_data <- paste0(path_data,file_name_lsh_data)
+file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 
 ################## ----- Read LSH data and coding data ----- ########################################
 
@@ -185,7 +226,6 @@ dates_home <- lapply(1:nrow(individs_extended),function(i){
               filter(!is.finite(date_outcome) | date<=date_outcome) %>%
               select(-date_outcome) %>%
               ungroup()
-
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
   date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
@@ -412,9 +452,9 @@ if(write_tables_for_simulation){
   write.table(patient_transition_counts_matrix_all,file=paste0(path_tables,current_date,'_transition_matrix','.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
   write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_tables,current_date,'_transition_matrix_under_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
-  write.table(current_state_write,file=paste0(path_data,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
+  write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state,file=paste0(path_data,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
 }
 
