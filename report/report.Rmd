@@ -1,13 +1,6 @@
-```{r, include=FALSE}
-current_date=as.Date('2020-04-03','%Y-%m-%d')
-```
-
-
 ---
 title: "<center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>"
-output:
-  html_document: default
-  pdf_document: default
+output: html_document
 date: "<center> <h4> `r format(current_date, '%d-%m-%Y')` </h4></center>"
 ---
 
@@ -30,8 +23,9 @@ simulation <- read_csv(file = path_data_simulation) %>%
     mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
 #Dates from when the data was retrieved
-fjoldi_smita_dags <- '02-04-2020'
-soguleg_gogn_dags <- current_date-1
+#current_date and prediction_date pass as arguements in bash script
+fjoldi_smita_dags <- format(prediction_date, '%d-%m-%Y')
+soguleg_gogn_dags <- format(current_date-1, '%d-%m-%Y')
 ```
 
 
