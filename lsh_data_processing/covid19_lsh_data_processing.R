@@ -66,8 +66,8 @@ path_sensitive_tables='../lsh_data/'
 #file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+#file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 
@@ -85,7 +85,8 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 covid_groups <- read_excel(file_path_coding,sheet = 1)
 unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,unit_category_order=unit_category_order_simple)
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
-sheet_names <- read_excel(file_path_coding,sheet = 5,trim_ws = FALSE)
+clinical_assessment_categories <- read_excel(file_path_coding,sheet = 5) %>% mutate(clinical_assessment_category=clinical_assessment_category_simple)
+sheet_names <- read_excel(file_path_coding,sheet = 6,trim_ws = FALSE)
 
 test_lsh_data_file()
 
@@ -114,7 +115,8 @@ interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,da
                         mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_clinical_assessment),"%Y-%m-%d")) %>%
                         filter(is.finite(date_clinical_assessment)) %>%
                         filter(date_clinical_assessment<=date_last_known_state) %>%
-                        mutate(clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>% 
+                        mutate(clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
+                        left_join(clinical_assessment_categories,by=c('clinical_assessment'))
                         group_by(patient_id,date_clinical_assessment) %>%
                         summarise(clinical_assessment=min(clinical_assessment,na.rm=T))
                         
@@ -267,8 +269,19 @@ patient_transitions <- left_join(patient_transitions,recovered_transitions,by=c(
                                 state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
                           select(patient_id,date,state,state_tomorrow)
                         
-dates_clinical_assessment <- bind_rows(select(interview_first,patient_id,date_clinical_assessment),select(interview_follow_up,patient_id,date_clinical_assessment),
-                                       select(interview_extra,patient_id,date_clinical_assessment))
+dates_clinical_assessment <- bind_rows(select(interview_extra,patient_id,date_clinical_assessment,clinical_assessment),
+                                       interview_follow_up,
+                                       select(interview_first,patient_id,date_clinical_assessment,clinical_assessment),
+                                       .id='source') %>%
+                                rename(confidence=source) %>%
+                                arrange(patient_id,date_clinical_assessment) %>%
+                                left_join(clinical_assessment_categories,by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
+                                filter(!is.na(clinical_assessment_category_simple)) %>%
+                                filter(clinical_assessment_category_simple!='unknown') %>%
+                                group_by(patient_id,date_clinical_assessment,confidence)  
+                                
+                                
+                                summarise(clinical_assessment=clinical_assessment[which.max(confidence)])        
 #Add worst case state to each patient
 #Find those who have at least one transition
 state_worst_case <- inner_join(distinct(patient_transitions,patient_id,state),unit_categories,by=c('state'='unit_category')) %>%
