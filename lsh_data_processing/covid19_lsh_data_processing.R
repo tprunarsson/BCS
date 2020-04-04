@@ -66,8 +66,8 @@ path_sensitive_tables='../lsh_data/'
 #file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+#file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 
@@ -85,7 +85,7 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 covid_groups <- read_excel(file_path_coding,sheet = 1)
 unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,unit_category_order=unit_category_order_simple)
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
-sheet_names <- read_excel(file_path_coding,sheet = 5,trim_ws = FALSE)
+sheet_names <- read_excel(file_path_coding,sheet = 6,trim_ws = FALSE)
 
 test_lsh_data_file()
 
