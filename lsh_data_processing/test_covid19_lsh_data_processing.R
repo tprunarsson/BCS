@@ -1,7 +1,56 @@
-cmp_vectors <- function(x1,x2){
-    return(all(sort(unique(x1))==sort(unique(x2))))
+############ ------------- Help functions ########################
+write_data_health_info <- function(){
+    #date of diagnosis
+    num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
+    date_diagnosis_info <- sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
+    
+    #clinical assessment
+    num_with_clinical_assessment <- left_join(individs,interview_follow_up,by='patient_id') %>% filter(is.finite(date_clinical_assessment)) %>% distinct(patient_id) %>% summarize(n()) %>% unlist()
+    clinical_assessment_info=sprintf("Number of individs missing clinical assessment in forms: %.0f (%.1f%%)", nrow(individs)-num_with_clinical_assessment,100*(nrow(individs)-num_with_clinical_assessment)/nrow(individs))
+    
+    #recovered with a final interview
+    num_recovered_with_last_interview <- left_join(individs,interview_last, by='patient_id') %>% filter(covid_group=='recovered' & is.finite(date_clinical_assessment)) %>% summarize(n()) %>% unlist()
+    num_recovered <- filter(individs,covid_group=='recovered') %>% summarize(n()) %>% unlist()
+    recovered_info <- sprintf("Number of recovered individs missing date of last interview in forms: %.0f (%.1f%%)", num_recovered-num_recovered_with_last_interview,100*(num_recovered-num_recovered_with_last_interview)/num_recovered)
+    output_string <- cat('Data health information:','\n\t-',date_diagnosis_info,'\n\t-',clinical_assessment_info,'\n\t-',recovered_info,'\n')
+    return(output_string)
 }
 
+test_unique_id_date <- function(dat){
+    return(nrow(distinct(dat,patient_id,date))==nrow(dat))
+}
+
+test_interview_unique_id_date <- function(dat){
+    return(nrow(distinct(dat,patient_id,date_clinical_assessment))==nrow(dat))
+}
+
+test_unique_id <- function(dat){
+    return(nrow(distinct(dat,patient_id))==nrow(dat))
+}
+
+test_transition_matrices <- function(){
+    #test if transitions from home to recovered are as many as recovered in individs_extended
+    return((filter(patient_transition_counts_all,state=='home',state_tomorrow=='recovered') %>% ungroup() %>% select(count) %>% unlist() %>%unname())==nrow(filter(individs_extended,outcome=='recovered')))
+}
+
+
+test_current_state <- function(){
+    return(nrow(current_state)==nrow(filter(individs_extended,outcome=='in_hospital_system')))
+}
+
+test_length_of_stay <- function(){
+    
+}
+
+test_first_state <- function(){
+    
+}
+
+test_posterior_predictive_distr <- function(){
+    
+}
+
+################ ---- Test functions ---- ##################
 
 test_lsh_data_file <- function(){
     #Check if new sheets or changes to sheet names
@@ -51,56 +100,35 @@ test_lsh_data_file <- function(){
 }
 
 test_cleaning <- function(){
-    cmp_vectors(individs$patient_id,individs_raw$`Person Key`)
-    #test if 
+    # compare individs$patient_id and individs_raw$`Person Key`
+    # ...
+    return('Success')
 }
 
 test_data_processing <- function(){
-    # Check information available in forms
-  
-    #date of diagnosis
-    num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
-    sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
-    
-    #clinical assessment
-    num_with_clinical_assessment <- left_join(individs,interview_follow_up,by='patient_id') %>% filter(is.finite(date_clinical_assessment)) %>% distinct(patient_id) %>% summarize(n()) %>% unlist()
-    sprintf("Number of individs missing clinical assessment in forms: %.0f (%.1f%%)", nrow(individs)-num_with_clinical_assessment,100*(nrow(individs)-num_with_clinical_assessment)/nrow(individs))
-    
-    #recovered with a final interview
-    num_recovered_with_last_interview <- left_join(individs,interview_last, by='patient_id') %>% filter(covid_group=='recovered' & is.finite(date_clinical_assessment)) %>% summarize(n()) %>% unlist()
-    num_recovered <- filter(individs,covid_group=='recovered') %>% summarize(n()) %>% unlist()
-    sprintf("Number of recovered individs missing date of last interview in forms: %.0f (%.1f%%)", num_recovered-num_recovered_with_last_interview,100*(num_recovered-num_recovered_with_last_interview)/num_recovered)
-   
-     # 
-    # cmp_vectors(patient_transitions$patient_id,individs_extended[individs_extended$date_diagnosis<=date_last_known_state,'patient_id',drop=T])
-    # #check if there are recovered patients were date of recovery is less than two weeks from diagnosis
-    # recovered_too_soon <- filter(individs_extended,if_else(!is.na(date_outcome),outcome=='recovered' & (date_outcome-date_diagnosis) < 14,FALSE))
-    # if(nrow(recovered_too_soon)!=0){
-    #     
-    # }
+    #Write out data health information
+    invisible(write_data_health_info())
+    #check uniqueness of various tables
+    test_unique_id(interview_first)
+    test_unique_id(interview_last)
+    test_interview_unique_id_date(interview_follow_up)
+    test_interview_unique_id_date(interview_extra)
+    test_unique_id(individs_extended)
+    test_unique_id_date(dates_home)
+    test_unique_id_date(dates_hospital)
+    test_unique_id_date(recovered_transitions)
+    test_unique_id_date(patient_transitions)
+    #check if state worst in individs_extended is correct
+    return('Success')
 }
 
-test_transition_matrices <- function(){
-    
+test_tables_for_simulation <- function(){
+    #test output tables
+    test_transition_matrices()
+    test_current_state()
+    test_length_of_stay()
+    test_first_state()
+    test_posterior_predictive_distr()
+    return('Success')
 }
 
-test_current_state <- function(){
-    # if(nrow(filter(individs_extended,outcome=='in_hospital_system'))!=nrow(current_state)){
-    #     warning('')
-    # }
-    # all(sort(unique(patient_transitions$patient_id))==sort(unique(current_state$patient_id)))
-}
-
-test_length_of_stay <- function(){
-    
-}
-
-test_first_state <- function(){
-    
-}
-
-test_posterior_predictive_distr <- function(){
-    
-}
-
-#check if state worst is correct
