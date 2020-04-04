@@ -267,7 +267,8 @@ patient_transitions <- left_join(patient_transitions,recovered_transitions,by=c(
                                 state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
                           select(patient_id,date,state,state_tomorrow)
                         
-
+dates_clinical_assessment <- bind_rows(select(interview_first,patient_id,date_clinical_assessment),select(interview_follow_up,patient_id,date_clinical_assessment),
+                                       select(interview_extra,patient_id,date_clinical_assessment))
 #Add worst case state to each patient
 #Find those who have at least one transition
 state_worst_case <- inner_join(distinct(patient_transitions,patient_id,state),unit_categories,by=c('state'='unit_category')) %>%
