@@ -13,13 +13,16 @@ simulation <- read_csv(file_path_simulation) %>%
               gather(.,key='state',value='count',-date,-day) %>%
               mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
-    
+
+
 summary_all <- group_by(simulation,date,state) %>% summarize(median=round(median(count)),
                                               quantile25=round(quantile(count,probs=0.25)),
                                               quantile75=round(quantile(count,probs=0.75)),
                                               quanitle95=round(quantile(count,probs=0.95)))
 
-summary_hospital <- filter(summary_all,state=='inpatient_ward' | state=='intensive_care_unit' )
+summary_hospital <- filter(summary_all,state=='Legudeild' | state=='Gjörgæsla' )
 
-write.table(summary_hospital,file_path_summary_hospital,sep=',',row.names=F,col.names=states,quote=F)
-write.table(summary_hospital_all,file_path_summary_hospital_all,sep=',',row.names=F,col.names=states,quote=F)
+# NOTE: Need to change order before writing to file
+
+write.table(summary_hospital,file_path_summary_hospital,sep=',',row.names=F,quote=F)
+#write.table(summary_hospital_all,file_path_summary_hospital_all,sep=',',row.names=F,quote=F)
