@@ -456,6 +456,7 @@ if(write_tables_for_simulation){
   write.table(length_of_stay_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
+  write.table(current_state_per_date, file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=F,quote=F)
 }
 
 ############################## ------ Create tables for stats group ----- ##############################
