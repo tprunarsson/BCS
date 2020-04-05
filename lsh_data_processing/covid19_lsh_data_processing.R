@@ -66,8 +66,8 @@ path_sensitive_tables='../lsh_data/'
 #file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+#file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 
@@ -310,13 +310,21 @@ recovered_transitions <- mutate(patient_transitions,tomorrow=date+1) %>%
 patient_transitions <- left_join(patient_transitions,recovered_transitions,by=c('patient_id','date'),suffix=c('','_recovered')) %>%
                           mutate(state=if_else(!is.na(state_recovered),state_recovered,state),
                                 state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
+                          group_by(patient_transitions,patient_id) %>%
+                          mutate(state_block_nr=get_state_block_numbers(state)) %>%
+                          ungroup() %>%
                           select(patient_id,date,state,state_tomorrow)
 
-impute_severity <- function(severity_vec){
+impute_severity <- function(state,severity_vec){
   output_vec <- vector('character',length = length(severity_vec))
   if(length(severity_vec)>0){
     if(is.na(severity_vec[1])){
-      output_vec[1] <- 'green'
+      if(state=='home'){
+        output_vec[1] <- 'green'
+      }else{
+        output_vec[1] <- 'red'
+      }
+      
     }else{
       output_vec[1] <- severity_vec[1]
     }
@@ -333,18 +341,44 @@ impute_severity <- function(severity_vec){
     }
   }
   return(output_vec)
-}        
+}
+
+#identify and sequencially number blocks of states for each patient_id 
+get_state_block_numbers <- function(state_vec){
+  state_nr=1
+  state_block_numbers <- c()
+  
+  if(length(state_vec)==0){
+    return(state_block_numbers)
+  }
+  
+  state_block_numbers[1]=state_nr=1
+  
+  if(length(state_vec)==1){
+    return(state_block_numbers)
+  }
+  for(i in 2:length(state_vec)){
+    if(state_vec[i]!=state_vec[i-1]){
+      state_nr <- state_nr+1
+    }
+    state_block_numbers[i] <- state_nr
+  }
+  return(state_block_numbers)
+}
 #no score for ICU in data - use NEWS score instead
 patient_transitions_extended <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
-                                mutate(state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
+                                mutate(.,state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
                                 left_join(.,dates_clinical_assessment,by=c('patient_id','date')) %>%
                                 left_join(.,NEWS_score,by=c('patient_id','date')) %>%
-                                mutate(severity=case_when(state=='home' ~ clinical_assessment,
+                                left_join(.,select(hospital_visits_filtered,patient_id),c('patient_id')) %>%
+                                mutate(.,severity=case_when(state=='home' ~ clinical_assessment,
                                                           state=='inpatient_ward' ~ NEWS_score,
                                                           state=='intensive_care_unit' ~ NEWS_score)) %>%
-                                arrange(patient_id,date) %>%
-                                group_by(patient_id,date) %>%
-                                mutate(severity=impute_severity(severity)) %>%
+                                arrange(.,patient_id,date) %>%
+                                group_by(.,patient_id) %>%
+                                mutate(.,state_block_nr=get_state_block_numbers(state)) %>%
+                                group_by(.,patient_id,state_block_nr)%>%
+                                mutate(severity=impute_severity(min(state),severity)) %>%
                                 ungroup() %>%
                                 mutate(state=paste0(state,'_',severity)) %>%
                                 select(patient_id,date,state) %>%
@@ -377,30 +411,6 @@ state_worst_case_special <- anti_join(select(individs_extended,patient_id),state
 state_worst_case <- bind_rows(state_worst_case,state_worst_case_special)
 
 individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
-
-
-#identify and sequencially number blocks of states for each patient_id 
-get_state_block_numbers <- function(state_vec){
-  state_nr=1
-  state_block_numbers <- c()
-  
-  if(length(state_vec)==0){
-    return(state_block_numbers)
-  }
-  
-  state_block_numbers[1]=state_nr=1
-  
-  if(length(state_vec)==1){
-    return(state_block_numbers)
-  }
-  for(i in 2:length(state_vec)){
-    if(state_vec[i]!=state_vec[i-1]){
-      state_nr <- state_nr+1
-    }
-    state_block_numbers[i] <- state_nr
-  }
-  return(state_block_numbers)
-}
 
 patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
   mutate(state_block_nr=get_state_block_numbers(state))
