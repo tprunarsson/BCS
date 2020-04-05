@@ -10,7 +10,6 @@
 #define MAX_AGE_GROUPS       2
 #define MAX_LOS_DAYS        60
 #define MAX_SIM_TIME        28
-#define MAX_HOME4LSH        24
 
 #define EVENT_ARRIVAL        1
 #define EVENT_DEPARTURE      2
