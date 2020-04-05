@@ -1,7 +1,7 @@
 /*
-  COVID-19  Population-Quarantine-Isolation-(pre)-Ward-ICU-(ventilator) 
-            Discrete Event Simulator 
-  author:   tpr@hi.is        
+  COVID-19  Population-Quarantine-Isolation-(pre)-Ward-ICU-(ventilator)
+            Discrete Event Simulator
+  author:   tpr@hi.is
   version:  01/04/2020
  */
 
@@ -24,7 +24,7 @@ double losCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1][MAX_LOS_DAYS];
 double firstLocCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1];
 double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 
-/* The different locations used */ 
+/* The different locations used */
 char *szLocations[RECOVERED-HOME+1] = {"HOME","INPATIENT_WARD","INTENSIVE_CARE_UNIT","DEATH","RECOVERED"};
 
 double ProbUnder50; /* this is computed by the function readFirstCDF */
@@ -44,7 +44,7 @@ int get_index(char* string, char c) {
 }
 int clear_symbol(char *buffer, char s) {
   int idx, i = 0;
-  do { 
+  do {
     idx = get_index(buffer, s);
     if (idx >= 0) {
       buffer[idx] =  ' ';
@@ -71,7 +71,7 @@ int get_my_location(char *szlocation) {
   return(location);
 }
 
-/* 
+/*
   Read covid.hi.is posterior predictions for give day (MAX_SIM_TIME, )
 */
 int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
@@ -90,12 +90,12 @@ int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
   if (NULL == fgets(buffer, 8192, fid)) /* remove the header! */
     return -1;
   numdays = clear_symbol(buffer,',');
-  
+
   while (NULL != fgets(buffer, 8192, fid)) {
     tmpday++;
     token = strtok(buffer, ",");
     sprintf(sztmp, "%s", token);
-   
+
     if (0 == strcmp(sztmp, szDate)) {
       tmpday = 0;
     }
@@ -107,14 +107,14 @@ int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
     }
   }
   if (tmpday < 0) {
-    printf("error: did not find poterior day %d starting from date %s\n", day, szDate); 
+    printf("error: did not find poterior day %d starting from date %s\n", day, szDate);
     exit(1);
   }
   return numdays;
 }
 
 /*
-  Computes the CDF for the different locations 
+  Computes the CDF for the different locations
 */
 int readFirstCDF(char *fname) {
   FILE *fid;
@@ -123,7 +123,7 @@ int readFirstCDF(char *fname) {
   int n = (RECOVERED - HOME + 1);
   double sum;
   char buffer[1024], szgender[128], szlocation[128];
- 
+
   /* zero the losCDF */
   for (i = 0; i < MAX_AGE_GROUPS; i++)
     for (j = 0; j < n; j++)
@@ -182,7 +182,7 @@ int readLosP(char *fname) {
   int n = (RECOVERED - HOME + 1);
   double sum;
   char buffer[1024], szlocation[128], szagegroup[128];
- 
+
   /* zero the losCDF */
   for (i = 0; i < MAX_AGE_GROUPS; i++)
     for (j = 0; j < n; j++)
@@ -242,7 +242,7 @@ int readTransitionP(char *fname, int agegroup) {
   int n = (RECOVERED - HOME + 1);
   double P[RECOVERED-HOME+1][RECOVERED-HOME+1], sum;
   char buffer[1024];
- 
+
   fid = fopen(fname, "r");
   if (fid == NULL) {
     printf("fatal: could not open transition probability file %s\n", fname);
@@ -280,7 +280,7 @@ int readTransitionP(char *fname, int agegroup) {
       fprintf(outfile, "%.4g ", CDF[agegroup][i][j]);
     fprintf(outfile, "\n");
   }
-  
+
   fclose(fid);
   return 0;
 }
@@ -306,7 +306,7 @@ int init_model(char *fname) {
   int day, dayinloc, location, age, agegroup, gender;
   double departureday;
   char buffer[1024], szlocation[32], szgender[16], szworstlocation[32];
- 
+
   fid = fopen(fname, "r");
   if (fid == NULL) {
     printf("fatal: could not open file %s\n", fname);
@@ -317,7 +317,7 @@ int init_model(char *fname) {
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_symbol(buffer,',');
     sscanf(buffer, "%u %d %s %s %d %d %s", &id, &age, szgender, szlocation, &dayinloc, &day, szworstlocation);
-    if (age <= 50) 
+    if (age <= 50)
       agegroup = 0;
     else
       agegroup = 1;
@@ -366,7 +366,7 @@ void arrive(int n) {
 
   for (i = 0; i < n; i++) {
     u = urand (STREAM_AGE);
-    agegroup = (u <= ProbUnder50);
+    agegroup = (u > ProbUnder50);
     day = sim_time; /* new arrivals today, that is sim_time wall-clock */
     u = urand (STREAM_AGE);
     gender = (u < 0.5) + 1; /* TODO: for now assume 50/50 arrivals, not used anyway! */
@@ -395,10 +395,10 @@ void depart(void) {
   unsigned int id;
   double departureday, los;
   int n = RECOVERED - HOME + 1;
-  
+
   location = (int)transfer[ATTR_LOCATION]; /* location was in EVENT_LIST's transfer */
   list_remove (FIRST, location); /* now all the properties of this person is in transfer */
-  
+
   agegroup = (int)transfer[ATTR_AGEGROUP];
   day = (int)transfer[ATTR_DAYS];
   gender = (int)transfer[ATTR_GENDER];
@@ -412,7 +412,7 @@ void depart(void) {
   /* in the future we may want to route undividual patients, then tracing may be useful */
   //if (repeat == 0)
   //  printf("trace[%d]: Person-%d is leaving %s for %s on day %.2g\n", repeat, id, szLocations[location], szLocations[newlocation], sim_time);
-  if (newlocation == RECOVERED) 
+  if (newlocation == RECOVERED)
     numRecovered++;
   else if (newlocation == DEATH)
     numDeath++;
@@ -442,13 +442,13 @@ void report(FILE *fid, int day, int append) {
    }
 }
 
-/* 
+/*
   The discrete event simulator is a simple Arrival and Departure system.
-  A list is maintained for each location in order to collect statistics 
+  A list is maintained for each location in order to collect statistics
   about the location for each day and about each individual infected.
  */
 int main(int argc, char *argv[]) {
- 
+
   int listid, i, j, n;
   char szDate[12], fname[8192];
   char path[1023], path_input[2048], path_output[2048], path_lsh_data[2048];
@@ -470,14 +470,14 @@ int main(int argc, char *argv[]) {
   sprintf(path_input, "%s/input/", path);
   sprintf(path_lsh_data,"%s/lsh_data/", path);
   sprintf(path_output,"%s/output/", path);
- 
+
   /* get the date for the simulation run */
   sprintf(szDate,"%s", argv[1]);
 
   /* The file covid.out is used to report on the setting used for the run */
   sprintf(fname, "%s%s_covid.out", path_output, szDate);
   outfile = fopen (fname, "w");
-  
+
   /* Generate output run file name and pointer */
   sprintf(fname, "%s%s_covid_simulation.csv",path_output, szDate);
   printf(" reading files from %s%s*.csv\n reading files from %s%s*.csv\n writing result in: %s\n and run data into: %s%s_covid.out\n",path_input, szDate, path_lsh_data, szDate, fname, path_output, szDate);
@@ -489,7 +489,7 @@ int main(int argc, char *argv[]) {
   /* Initialize rndlib */
   init_twister();
 
-  /* Initialize a list for each location from HOMELOC..RECOLOC 
+  /* Initialize a list for each location from HOMELOC..RECOLOC
      The list is ranked exactly the same way as the event list INCREASING */
   for (listid = HOME; listid <= RECOVERED; listid++)
     list_rank[listid] = ATTR_DEPARTDAY;
@@ -497,11 +497,11 @@ int main(int argc, char *argv[]) {
   /* read the length of stay data */
   sprintf(fname, "%s%s_length_of_stay.csv", path_input, szDate);
   readLosP(fname);
-  
+
   /* load first location for new persons arrivals */
   sprintf(fname, "%s%s_first_state.csv", path_lsh_data, szDate);
   readFirstCDF(fname);
-  
+
   /* load posterior predicted values on current date and day number */
   sprintf(fname, "%s%s_iceland_posterior.csv", path_input, szDate);
   fprintf(outfile,"CDFposterior[%s] = \n", szDate);
@@ -512,7 +512,7 @@ int main(int argc, char *argv[]) {
       fprintf(outfile,",%.4g", CDFposterior[i][j]);
     fprintf(outfile, "\n");
   }
-  
+
   /* Read the transition probability matrix */
   sprintf(fname, "%s%s_transition_matrix_under_50.csv", path_input, szDate);
   readTransitionP(fname, 0);
@@ -532,8 +532,8 @@ int main(int argc, char *argv[]) {
       timing();
       switch (next_event_type) {
         case EVENT_ARRIVAL:
-          i = discrete_empirical(CDFposterior[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_AGE);    
-          arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
+          i = discrete_empirical(CDFposterior[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_AGE);
+          arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */
           event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
           /* Write out numbers in each location and zero daily counters */
           report(statfid,(int)floor(sim_time),1);
