@@ -2,7 +2,7 @@
   COVID-19  Population-Quarantine-Isolation-(pre)-Ward-ICU-(ventilator) 
             Discrete Event Simulator 
   author:   tpr@hi.is        
-  version:  01/04/2020
+  version:  05/04/2020 (Sunday Release)
  */
 
 #include <stdio.h>
@@ -23,7 +23,6 @@ double CDF[MAX_AGE_GROUPS][RECOVERED-HOME+1][RECOVERED-HOME+1];
 double losCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1][MAX_LOS_DAYS];
 double firstLocCDF[MAX_AGE_GROUPS][RECOVERED-HOME+1];
 double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
-double CDFhome4lsh[MAX_HOME4LSH];
 
 /* The different locations used */ 
 char *szLocations[RECOVERED-HOME+1] = {"HOME","INPATIENT_WARD","INTENSIVE_CARE_UNIT","DEATH","RECOVERED"};
@@ -34,7 +33,7 @@ int numDeath;
 int repeat;
 int PatientId;
 
-FILE *infile, *outfile; /* global file pointers for report writing */
+FILE *outfile; /* global file pointers for report writing */
 
 /* for a workaround with the .csv files, get rid of the commas! */
 int get_index(char* string, char c) {
@@ -295,7 +294,7 @@ double lengthOfStay(int location, int agegroup, int newlocation) {
   if ((location == HOME) && ((newlocation == INTENSIVE_CARE_UNIT) || (newlocation == INTENSIVE_CARE_UNIT))) {
     los = discrete_empirical(losCDF[agegroup][newlocation], MAX_LOS_DAYS, STREAM_LOS) + 1.0; 
     while (los > 14)
-      los = (double) discrete_empirical(CDFhome4lsh, MAX_HOME4LSH, STREAM_LOS);
+      los = (double) discrete_empirical(losCDF[agegroup][newlocation], MAX_HOME4LSH, STREAM_LOS);
   }
   else
     los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
