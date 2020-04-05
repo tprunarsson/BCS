@@ -157,6 +157,8 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     filter(!is.na(clinical_assessment) | !is.na(priority)) %>%
                     filter(date_clinical_assessment<=date_last_known_state) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
+                    left_join(.,priority_categories,by=c('priority'='priority_category_raw')) %>%
+                    mutate(.,priority=priority_category) %>%
                     left_join(.,clinical_assessment_categories,by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
                     mutate(.,clinical_assessment=clinical_assessment_category) %>%
                     group_by(.,patient_id,date_clinical_assessment) %>%
@@ -387,7 +389,7 @@ patient_transitions_extended <- right_join(dates_hospital,dates_home,by=c('patie
                                 filter(!is.na(state_tomorrow)) %>%
                                 select(-yesterday,-date_tomorrow) %>%
                                 left_join(recovered_transitions,by=c('patient_id','date'),suffix=c('','_recovered')) %>%
-                                mutate(state=if_else(!is.na(state_recovered),state_recovered,state),
+                                mutate(state=if_else(!is.na(state_recovered),paste0(state_recovered,'_',gsub('.*_','',state)),state),
                                        state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
                                 select(patient_id,date,state,state_tomorrow)
 
