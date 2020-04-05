@@ -366,7 +366,7 @@ void arrive(int n) {
 
   for (i = 0; i < n; i++) {
     u = urand (STREAM_AGE);
-    agegroup = (u > ProbUnder50);
+    agegroup = (u <= ProbUnder50);
     day = sim_time; /* new arrivals today, that is sim_time wall-clock */
     u = urand (STREAM_AGE);
     gender = (u < 0.5) + 1; /* TODO: for now assume 50/50 arrivals, not used anyway! */
