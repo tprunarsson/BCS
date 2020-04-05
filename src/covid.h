@@ -1,4 +1,4 @@
-#define VERSION     "1-April-2020"
+#define VERSION     "5-April-2020 (Sunday Release)"
 
 #define MAXINFECTED 65536 /* estimated MAX value infected! */
 #define MAX_INFECTED_PER_DAY 8192 /* estimated MAX value infected! */
@@ -20,16 +20,14 @@
 
 #define ATTR_AGEGROUP       2 /* index in transfer for this attribute */
 #define ATTR_DAYSDIAG       3 
-#define ATTR_GENDER         4
-#define ATTR_DAYSINLOC      5
-#define ATTR_LOCATION       6
-#define ATTR_DEPARTDAY      7
-#define ATTR_PERSON         8
-#define ATTR_NEXTLOCATION   9
-#define ATTR_LASTWORSTLOC  10
+#define ATTR_DAYSINLOC      4
+#define ATTR_LOCATION       5
+#define ATTR_DEPARTDAY      6
+#define ATTR_PERSON         7
+#define ATTR_NEXTLOCATION   8
+#define ATTR_LASTWORSTLOC   9
 
-// home,emergency_room,outpatient_clinic,inpatient_ward,intensive_care_unit,death,recovered
-
+/* home,emergency_room,outpatient_clinic,inpatient_ward,intensive_care_unit,death,recovered */
 #define HOME                0
 #define INPATIENT_WARD      1
 #define INTENSIVE_CARE_UNIT 2
