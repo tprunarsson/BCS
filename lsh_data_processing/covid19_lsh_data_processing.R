@@ -8,8 +8,8 @@ library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('impute_length_of_stay.R')
 
-current_date_tmp <- as.Date('2020-04-04','%Y-%m-%d')
-prediction_date_tmp <- as.Date('2020-04-02','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-05','%Y-%m-%d')
+prediction_date_tmp <- as.Date('2020-04-04','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- FALSE
 
@@ -61,13 +61,7 @@ date_last_known_state <- current_date-1
 path_tables='../input/'
 path_sensitive_tables='../lsh_data/'
 
-#file_name_lsh_data <- '03282020 Covid-19__test_fyrir_spálíkan_dags_28.XLSX'
-#file_name_lsh_data <- 'Covid-19__test_fyrir_spálíkan_dags_30_03_2020.XLSX'
-#file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- paste0(current_date,'_lsh_covid_data.xlsx')
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 
