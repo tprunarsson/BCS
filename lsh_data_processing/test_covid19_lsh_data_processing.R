@@ -4,6 +4,8 @@ write_data_health_info <- function(){
     num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
     date_diagnosis_info <- sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
     
+    patients_hospital <- distinct(hospital_visits_filtered,patient_id)
+    
     #clinical assessment
     num_with_clinical_assessment <- left_join(individs,interview_follow_up,by='patient_id') %>% filter(is.finite(date_clinical_assessment)) %>% distinct(patient_id) %>% summarize(n()) %>% unlist()
     clinical_assessment_info=sprintf("Number of individs missing clinical assessment in forms: %.0f (%.1f%%)", nrow(individs)-num_with_clinical_assessment,100*(nrow(individs)-num_with_clinical_assessment)/nrow(individs))
@@ -35,6 +37,7 @@ test_transition_matrices <- function(){
 
 
 test_current_state <- function(){
+    #test if number in current state is the same as registred in hospital system in indvidis_extended
     return(nrow(current_state)==nrow(filter(individs_extended,outcome=='in_hospital_system')))
 }
 
@@ -49,6 +52,7 @@ test_first_state <- function(){
 test_posterior_predictive_distr <- function(){
     
 }
+
 
 ################ ---- Test functions ---- ##################
 
@@ -71,8 +75,7 @@ test_lsh_data_file <- function(){
     distinct_uc_data <- distinct(rename(hospital_visits_raw, unit_category_raw=`Deild Heiti`),unit_category_raw) %>% filter(!is.na(unit_category_raw))
     distinct_uc_coding <- distinct(unit_categories,unit_category_raw)
 
-    if ((distinct_uc_data %>% summarize(n()) %>% unlist()) >
-        (distinct_uc_coding %>% summarize(n()) %>% unlist())) {
+    if (nrow(setdiff(distinct_uc_data,distinct_uc_coding)>0)) {
         warning('BCS:New unit categories have been added to the LSH data file')
         do.call(cat,c(setdiff(distinct_uc_data,distinct_uc_coding),sep='\n'))
     }
@@ -81,8 +84,7 @@ test_lsh_data_file <- function(){
     distinct_toc_data <- distinct(rename(hospital_visits_raw, text_out_category_raw=`Heiti afdrifa`),text_out_category_raw) %>% filter(!is.na(text_out_category_raw))
     distinct_toc_coding <- distinct(text_out_categories,text_out_category_raw)
 
-    if ((distinct_toc_data %>% summarize(n()) %>% unlist()) >
-        (distinct_toc_coding %>% summarize(n()) %>% unlist())) {
+    if (nrow(setdiff(distinct_toc_data,distinct_toc_coding))>0) {
         warning('BCS:New text out categories have been added to the LSH data file')
         do.call(cat,c(setdiff(distinct_toc_data,distinct_toc_coding),sep='\n'))
     }
@@ -91,12 +93,11 @@ test_lsh_data_file <- function(){
     distinct_cg_data <- distinct(rename(individs_raw, covid_group_raw=`Heiti sjúklingahóps`),covid_group_raw) %>% filter(!is.na(covid_group_raw))
     distinct_cg_coding <- distinct(covid_groups,covid_group_raw)
 
-    if ((distinct_cg_data %>% summarize(n()) %>% unlist()) >
-        (distinct_cg_coding %>% summarize(n()) %>% unlist())) {
+    if (nrow(setdiff(distinct_cg_data,distinct_cg_coding))>0) {
         warning('BCS:New COVID19 groups have been added to the LSH data file')
         do.call(cat,c(setdiff(distinct_cg_data,distinct_cg_coding),sep='\n'))
     }
-    return('Success')
+    return('Finished testing data files')
 }
 
 test_cleaning <- function(){
@@ -106,7 +107,8 @@ test_cleaning <- function(){
 }
 
 test_data_processing <- function(){
-    #Write out data health information
+ 
+     #Write out data health information
     invisible(write_data_health_info())
     #check uniqueness of various tables
     test_unique_id(interview_first)
@@ -119,7 +121,7 @@ test_data_processing <- function(){
     test_unique_id_date(recovered_transitions)
     test_unique_id_date(patient_transitions)
     #check if state worst in individs_extended is correct
-    return('Success')
+    return('Finished testing data processing')
 }
 
 test_tables_for_simulation <- function(){
