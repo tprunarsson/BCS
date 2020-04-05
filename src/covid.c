@@ -31,7 +31,7 @@ double ProbUnder50; /* this is computed by the function readFirstCDF */
 int numRecovered;
 int numDeath;
 int repeat;
-int PatientId;
+int PatientId; /*??*/
 
 FILE *outfile; /* global file pointers for report writing */
 
@@ -75,7 +75,7 @@ int get_my_location(char *szlocation) {
 /* 
   Read covid.hi.is posterior predictions for give day (MAX_SIM_TIME, )
 */
-int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
+int readHIposteriors(char *fname, char *szDate, int day, double *dbl) { /* TODO name change */
   FILE *fid;
   char sztmp[64];
   char buffer[8192];
@@ -105,6 +105,7 @@ int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
         token = strtok(NULL, ",");
         sscanf(token, "%lg", &dbl[i] );
       }
+      break;
     }
   }
   if (tmpday < 0) {
@@ -175,7 +176,6 @@ int readFirstCDF(char *fname) {
   return 0;
 }
 
-
 int readLosP(char *fname) {
   FILE *fid;
   int agegroup, day, location, value;
@@ -237,9 +237,11 @@ int readLosP(char *fname) {
   return 0;
 }
 
+/* Reading number between states */
+
 int readTransitionP(char *fname, int agegroup) {
   FILE *fid;
-  int i, j, ret;
+  int i, j;
   int n = (RECOVERED - HOME + 1);
   double P[RECOVERED - HOME + 1][RECOVERED - HOME + 1], sum;
   char buffer[1024];
@@ -253,9 +255,9 @@ int readTransitionP(char *fname, int agegroup) {
     return 1;
   for (i = 0; i < n; i++) {
     for (j = 0; j < n-1; j++) {
-      ret = fscanf(fid, "%lg,", &P[i][j]);
+      fscanf(fid, "%lg,", &P[i][j]);
     }
-    ret = fscanf(fid, "%lg", &P[i][j]);
+    fscanf(fid, "%lg", &P[i][j]);
     sum = 0.0;
     for (j = 0; j < n; j++) {
       if (i != j)
@@ -289,12 +291,13 @@ int readTransitionP(char *fname, int agegroup) {
   A randomly sampled length of stay for the different locations based on an empirical distribution
   defined by the CDF (see function in rndlib.c, note it returns integers 0,1,2,3 and so we add 1.0)
 */
-double lengthOfStay(int location, int agegroup, int newlocation) {
+double lengthOfStay(int location, int agegroup, int newlocation, int days_from_diagnosis) {
   double los;
-  if ((location == HOME) && ((newlocation == INTENSIVE_CARE_UNIT) || (newlocation == INTENSIVE_CARE_UNIT))) {
-    los = discrete_empirical(losCDF[agegroup][newlocation], MAX_LOS_DAYS, STREAM_LOS) + 1.0; 
-    while (los > 14)
-      los = (double) discrete_empirical(losCDF[agegroup][newlocation], MAX_HOME4LSH, STREAM_LOS);
+ 
+  if ((location == HOME) && (newlocation == RECOVERED)) {
+    los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0; 
+    while ((days_from_diagnosis+los) < 14)
+      los = (double) discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS);
   }
   else
     los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
@@ -303,17 +306,14 @@ double lengthOfStay(int location, int agegroup, int newlocation) {
 
 /*
    Routing heuristic, TODO: check that location != newlocation
+
+  note we dont wanto to go to recovered if days_from_diagnosis < 14
+
 */
-int where_to_next(int agegroup, int location, int daysinloc, int lastworst) {
+int where_to_next(int agegroup, int location, int days_from_diagnosis, int lastworst) {
   int newlocation;
   int n = RECOVERED - HOME + 1;
 
-  if ((daysinloc > 21) && (location == HOME))
-    return RECOVERED;
-
-  if ((location ==  HOME) && (lastworst == INTENSIVE_CARE_UNIT))
-    return RECOVERED;
-  
   newlocation = discrete_empirical(CDF[agegroup][location], n, STREAM_AGE);
   while ((newlocation == INTENSIVE_CARE_UNIT) && (lastworst == INTENSIVE_CARE_UNIT))
     newlocation = discrete_empirical(CDF[agegroup][location], n, STREAM_AGE);
@@ -354,18 +354,18 @@ int init_model(char *fname) {
     transfer[ATTR_LOCATION] = (double)location;
     transfer[ATTR_LASTWORSTLOC] = (double)worstlocation;
     transfer[ATTR_PERSON] = (double)id;
+    newlocation = where_to_next(agegroup, location, days_from_diagnosis, worstlocation);
     /* where should we go next? */
-    los = lengthOfStay(location, agegroup, newlocation) - (double)dayinloc;
+    los = lengthOfStay(location, agegroup, newlocation, days_from_diagnosis) - (double)dayinloc;
     count = 0;
     while (los < 0) {
-      los = lengthOfStay(location, agegroup, newlocation) - (double)dayinloc;
+      los = lengthOfStay(location, agegroup, newlocation, days_from_diagnosis) - (double)dayinloc;
       count++;
       if (count > 100) {
-        los = 0; /* give up and use the current day to depart from this location */
+        los = 0.0001;
         break;
       }
     }
-    newlocation = where_to_next(agegroup, location, los+days_from_diagnosis, worstlocation);
     departureday = sim_time + los;
     transfer[ATTR_DAYSDIAG] += los;
     transfer[ATTR_NEXTLOCATION] = (double)newlocation;
@@ -383,17 +383,16 @@ int init_model(char *fname) {
   newly infected should be based on a prediction model, we use covid.hi.is
 */
 void arrive(int n) {
-  int i, day, location, newlocation, agegroup;
+  int i, location, newlocation, agegroup;
   double departureday, los, u;
 
   for (i = 0; i < n; i++) {
     u = urand (STREAM_AGE);
     agegroup = (u > ProbUnder50);
-    day = sim_time; /* new arrivals today, that is sim_time wall-clock */
     /* we need a strategy for selecting which location we enter */
     location = discrete_empirical(firstLocCDF[agegroup], RECOVERED-HOME+1, STREAM_AGE);
-    newlocation = where_to_next(agegroup, location, 0, 0); /* fresh arrival */
-    los = lengthOfStay(location, agegroup, newlocation);
+    newlocation = where_to_next(agegroup, location, 0, location); /* fresh arrival */
+    los = lengthOfStay(location, agegroup, newlocation, 0);
     transfer[ATTR_PERSON] = PatientId++;
     transfer[ATTR_AGEGROUP] = (double)agegroup;
     transfer[ATTR_DAYSDIAG] += los;
@@ -401,7 +400,7 @@ void arrive(int n) {
     transfer[ATTR_LOCATION] = (double)location;
     transfer[ATTR_NEXTLOCATION] = (double)newlocation;
     transfer[ATTR_LASTWORSTLOC] = (double)location;
-    departureday = sim_time + los;
+    departureday = floor(sim_time) + los;
     transfer[ATTR_DEPARTDAY] = departureday;
     if (repeat == 0)
       printf("trace[%d]: Person-%d is entering for %s on day %.2g (worst location is %s, days_from_diagnosis = %.2g)\n", repeat, (int)transfer[ATTR_PERSON], szLocations[location], sim_time, szLocations[location], transfer[ATTR_DAYSDIAG]);
@@ -437,9 +436,9 @@ void depart(void) {
   else if (newlocation == DEATH)
     numDeath++;
   else {
-    worstlocation = MAX(newlocation, worstlocation);
+    worstlocation = MAX(newlocation, worstlocation); /* ICU with highest value */
     newnewlocation = where_to_next(agegroup, newlocation, days_from_diagnosis, worstlocation );
-    los = lengthOfStay(newlocation, agegroup, newnewlocation);
+    los = lengthOfStay(newlocation, agegroup, newnewlocation, days_from_diagnosis);
     if (repeat == 0)
       printf("[trace-x]: plan to stay here for %.0g days\n", los);
     departureday = sim_time + los;
@@ -553,7 +552,7 @@ int main(int argc, char *argv[]) {
     init_model(fname);
     event_schedule(0, EVENT_ARRIVAL); /* schedule also new arrivals */
     numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
-    PatientId = 0;
+    PatientId = 0; /* why is this here */
     /* Stop the simulation once the wall clock has reached MAX_SIM_TIME days */
     while ((list_size[LIST_EVENT] != 0) && (sim_time <= MAX_SIM_TIME)) {
     /* Determine the next event. */
@@ -562,7 +561,7 @@ int main(int argc, char *argv[]) {
         case EVENT_ARRIVAL:
           i = discrete_empirical(CDFposterior[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_AGE);    
           arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
-          event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
+          event_schedule(sim_time + 1.00001, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
           /* Write out numbers in each location and zero daily counters */
           report(statfid,(int)floor(sim_time),1);
           numRecovered = 0; numDeath = 0; /* reset global counter for devovered and death */
