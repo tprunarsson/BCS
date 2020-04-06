@@ -8,8 +8,8 @@ library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('impute_length_of_stay.R')
 
-current_date_tmp <- as.Date('2020-04-05','%Y-%m-%d')
-prediction_date_tmp <- as.Date('2020-04-04','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-06','%Y-%m-%d')
+prediction_date_tmp <- as.Date('2020-04-05','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- FALSE
 
@@ -81,7 +81,7 @@ unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_catego
 text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
 sheet_names <- read_excel(file_path_coding,sheet = 6,trim_ws = FALSE)
 
-test_lsh_data_file()
+#test_lsh_data_file()
 
 ################## ----- Cleaning ----- ##############################################################
 
@@ -340,45 +340,6 @@ test_data_processing()
 
 ############################## ------ Create input for simulation ----- ##############################
 
-############### ---- Transition matrices ---- ###################################
-states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
-  arrange(unit_category_order) %>%
-  select(unit_category) %>%
-  unlist() %>%
-  unname()
-states_end <- c('death','recovered')
-states <- c(states_active,states_end)
-
-#all age groups
-state_transitions_all <- expand.grid(states,states,stringsAsFactors = FALSE) %>%
-  rename(state=Var1,state_tomorrow=Var2) %>%
-  as_tibble()
-patient_transition_counts_all <- group_by(patient_transitions,state,state_tomorrow) %>% summarise(count=as.numeric(n())) %>% 
-  right_join(.,state_transitions_all,by=c('state','state_tomorrow')) %>%
-  mutate(count=if_else(is.na(count),0,count))
-patient_transition_counts_matrix_all <- matrix(patient_transition_counts_all$count,ncol=length(states),nrow=length(states))
-
-#simple age groups
-age_group_simple=c('0-50','51+')
-state_transitions_age_simple <- expand.grid(age_group_simple,states,states,stringsAsFactors = FALSE) %>%
-  rename(age_group_simple=Var1,state=Var2,state_tomorrow=Var3) %>%
-  as_tibble()
-patient_transition_counts_age_simple <- inner_join(select(individs_extended,patient_id,age_group_simple),patient_transitions,by='patient_id') %>%
-  group_by(.,age_group_simple,state,state_tomorrow) %>%
-  summarize(count=as.numeric(n())) %>%
-  group_by(age_group_simple) %>%
-  right_join(.,state_transitions_age_simple,by=c('age_group_simple','state','state_tomorrow')) %>%
-  mutate(count=if_else(is.na(count),0,count)) %>%
-  ungroup()
-
-patient_transition_counts_matrix_age_simple_under_50 <- filter(patient_transition_counts_age_simple,age_group_simple=='0-50') %>% 
-  select(count) %>% unlist() %>% 
-  matrix(.,ncol=length(states),nrow=length(states))
-patient_transition_counts_matrix_age_simple_over_50 <- filter(patient_transition_counts_age_simple,age_group_simple=='51+') %>% 
-  select(count) %>% 
-  unlist() %>% 
-  matrix(.,ncol=length(states),nrow=length(states))
-
 ############### ---- Current state of patients in hospital system ---- ###################################
 
 current_state <-  filter(patient_transitions_state_blocks,date==date_last_known_state-1) %>%
@@ -406,6 +367,57 @@ current_state <- bind_rows(current_state,current_state_newly_diagnosed)
 current_state_write <- filter(current_state, !(days_from_diagnosis > 14 & state == 'home'))
 #current_state_write <- filter(current_state, !(days_from_diagnosis > 14 & state == 'home'))
 #current_state_write <- bind_rows(current_state_write,anti_join(current_state,current_state_write,'patient_id') %>% slice(1:80))
+
+
+############### ---- Transition matrices ---- ###################################
+states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
+  arrange(unit_category_order) %>%
+  select(unit_category) %>%
+  unlist() %>%
+  unname()
+states_end <- c('death','recovered')
+states <- c(states_active,states_end)
+recovered_imputed <- anti_join(current_state,current_state_write) %>%
+                    select(patient_id,state) %>%
+                    mutate(date=current_date,state_tomorrow='recovered') %>%
+                    select(patient_id,date,state,state_tomorrow)
+#all age groups
+state_transitions_all <- expand.grid(states,states,stringsAsFactors = FALSE) %>%
+  rename(state=Var1,state_tomorrow=Var2) %>%
+  as_tibble()
+patient_transition_counts_all <- bind_rows(patient_transitions,recovered_imputed) %>%
+  group_by(state,state_tomorrow) %>%
+  summarise(count=as.numeric(n())) %>% 
+  right_join(.,state_transitions_all,by=c('state','state_tomorrow')) %>%
+  mutate(count=if_else(is.na(count),0,count)) 
+patient_transition_counts_matrix_all <- matrix(patient_transition_counts_all$count,ncol=length(states),nrow=length(states))
+
+recovered_imputed_by_age <- anti_join(current_state,current_state_write) %>%
+  inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
+  mutate(date=current_date,state_tomorrow='recovered') %>%
+  select(patient_id,age_group_simple,date,state,state_tomorrow)
+#simple age groups
+age_group_simple=c('0-50','51+')
+state_transitions_age_simple <- expand.grid(age_group_simple,states,states,stringsAsFactors = FALSE) %>%
+  rename(age_group_simple=Var1,state=Var2,state_tomorrow=Var3) %>%
+  as_tibble()
+patient_transition_counts_age_simple <- inner_join(select(individs_extended,patient_id,age_group_simple),patient_transitions,by='patient_id') %>%
+  bind_rows(.,recovered_imputed_by_age) %>%
+  group_by(.,age_group_simple,state,state_tomorrow) %>%
+  summarize(count=as.numeric(n())) %>%
+  group_by(age_group_simple) %>%
+  right_join(.,state_transitions_age_simple,by=c('age_group_simple','state','state_tomorrow')) %>%
+  mutate(count=if_else(is.na(count),0,count)) %>%
+  ungroup()
+
+patient_transition_counts_matrix_age_simple_under_50 <- filter(patient_transition_counts_age_simple,age_group_simple=='0-50') %>% 
+  select(count) %>% unlist() %>% 
+  matrix(.,ncol=length(states),nrow=length(states))
+patient_transition_counts_matrix_age_simple_over_50 <- filter(patient_transition_counts_age_simple,age_group_simple=='51+') %>% 
+  select(count) %>% 
+  unlist() %>% 
+  matrix(.,ncol=length(states),nrow=length(states))
+
 
 ############## ----- Length of stay distribution by state and age ----- ############## 
 
