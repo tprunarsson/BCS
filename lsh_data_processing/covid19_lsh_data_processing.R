@@ -6,6 +6,7 @@ library(dplyr)
 library(tidyr)
 library(readr)
 source('test_covid19_lsh_data_processing.R')
+source('create_input_for_simulation.R')
 source('impute_length_of_stay.R')
 
 current_date_tmp <- as.Date('2020-04-04','%Y-%m-%d')
@@ -123,29 +124,27 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                                     #date_clinical_assessment=if(!any(is.finite(clinical_assessment))) NA else date_clinical_assessment[which.max(clinical_assessment_category_order)],
                                     priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_category_order)],
                                     clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)],
-                                    comorbidities_raw=if(!is.na(comorbidities_raw)) paste(comorbidities_raw[!is.na(comorbidities_raw)],collapse="; ") else NA_character_ #So as to not lose data we paste together the raw comorbidities of duplictes. Deal with duplicated comorbidities below.
+                                    comorbidities_raw=if(any(!is.na(comorbidities_raw))) paste(comorbidities_raw[!is.na(comorbidities_raw)],collapse="; ") else NA_character_ #So as to not lose data we paste together the raw comorbidities of duplictes. Deal with duplicated comorbidities below.
                               ) %>%
-                    filter(if_else(is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>%
+                    filter(.,if_else(is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>%
                     ungroup()%>%
                     separate(comorbidities_raw,into = paste("comorbidity",c(1:10)),sep="; ") %>% #Adding comorbidities
                     gather(key="comorb_number",value="comorbidity",matches("comorbidity")) %>%
-                    distinct(patient_id,comorbidity,.keep_all=T)%>%
-                    filter(!is.na(comorbidity)) %>%
+                    distinct(patient_id,comorbidity,.keep_all=T) %>%
+                    arrange(comorb_number) %>%
+                    filter(!is.na(comorbidity) | !duplicated(patient_id)) %>%
                     left_join(comorbidities_categories,by=c("comorbidity"="comorbidities_raw"))%>%
                     mutate(comorbidity=paste("comorb_",comorbidities_names,sep=""))%>%
                     group_by(patient_id)%>%
-                    mutate(n_comorbidity=sum(as.numeric(comorbidities_included)))%>%
+                    mutate(n_comorbidity=sum(comorbidities_included,na.rm=T))%>%
                     ungroup() %>%
                     select(-comorbidities_included,-comorbidities_names)%>%
-                    right_join(pivot_wider(.,id_cols="patient_id",names_from = "comorbidity",values_from="comorbidity"),by="patient_id") %>%
-                    select(-comorb_number,-comorbidity) %>%
+                    pivot_wider(.,id_cols=c("patient_id","date_first_symptoms","date_diagnosis","date_clinical_assessment","priority","clinical_assessment","n_comorbidity"),
+                                names_from = "comorbidity",values_from="comorbidity") %>%
+                    select(.,-comorb_NA) %>%
                     mutate_at(vars(matches('comorb_')),~!is.na(.))
                     
 
-#Comorbs no longer of use
-rm(comorbs)
-  
-  
 
 
 
@@ -408,19 +407,20 @@ patient_transitions_extended <- right_join(dates_hospital,dates_home,by=c('patie
                                 group_by(.,patient_id,state_block_nr)%>%
                                 mutate(severity=impute_severity(min(state),severity)) %>%
                                 ungroup() %>%
-                                mutate(state=paste0(state,'_',severity)) %>%
-                                select(patient_id,date,state) %>%
+                                #mutate(state=paste0(state,'_',severity)) %>%
+                                select(patient_id,date,state,severity) %>%
                                 mutate(yesterday=date-1) %>% 
                                 left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
                                 filter(!is.na(state_tomorrow)) %>%
                                 select(-yesterday,-date_tomorrow) %>%
                                 left_join(recovered_transitions,by=c('patient_id','date'),suffix=c('','_recovered')) %>%
-                                mutate(state=if_else(!is.na(state_recovered),paste0(state_recovered,'_',gsub('.*_','',state)),state),
-                                       state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
+                                mutate(state=if_else(!is.na(state_recovered),state_recovered,state),
+                                       state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow),
+                                       severity_tomorrow=if_else(!is.na(state_recovered),NA_character_,severity_tomorrow)) %>%
                                 group_by(.,patient_id) %>%
                                 mutate(state_block_nr=get_state_block_numbers(state)) %>%
                                 ungroup() %>%
-                                select(patient_id,date,state,state_tomorrow,state_block_nr)
+                                select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow,state_block_nr)
 
 
 #Add worst case state to each patient
