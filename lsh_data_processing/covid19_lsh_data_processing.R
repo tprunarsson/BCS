@@ -12,6 +12,7 @@ current_date_tmp <- as.Date('2020-04-06','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-05','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- FALSE
+save_additional_data_tmp <- FALSE
 
 option_list <-  list(
   make_option(c("-c", "--current_date"), type="character", default=NULL, 
@@ -47,8 +48,10 @@ if(opt[['path_to_lsh_data']]==path_to_lsh_data_tmp){
 
 if(length(opt)>2){
   write_tables_for_simulation <- TRUE
+  save_additional_data <- TRUE
 }else{
   write_tables_for_simulation <- write_tables_for_simulation_tmp
+  save_additional_data <- save_additional_data_tmp
 }
 
 #date of prediction by covid.hi.is
@@ -150,6 +153,11 @@ hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`
                     filter(date_in<=date_last_known_state) %>%
                     select(-time_in,-time_out) %>% 
                     mutate(ventilator=!is.na(ventilator))
+
+#When running the bash script
+if (save_additional_data){
+  save(hospital_visits, file = paste0(path_sensitive_tables, "hospital_visits.RData"))
+}
 
 test_cleaning()
 
@@ -335,6 +343,11 @@ current_state_per_date <- select(patient_transitions,-state_tomorrow) %>%
   bind_rows(.,state_date_last_known) %>%
   group_by(.,date,state) %>%
   summarise(count=n())
+
+#When running the bash script
+if (save_additional_data){
+  save(current_state_per_date, file = paste0(path_sensitive_tables, "current_state_per_date.RData"))
+}
 
 test_data_processing()
 
