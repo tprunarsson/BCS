@@ -53,6 +53,12 @@ test_posterior_predictive_distr <- function(){
     
 }
 
+display_warning_if_items_not_found <- function(items,text){
+  if (nrow(items)>0) {
+    warning(text)
+    do.call(cat,c(items,sep='\n'))
+  }
+}
 
 ################ ---- Test functions ---- ##################
 
@@ -74,29 +80,24 @@ test_lsh_data_file <- function(){
     #Check if new unit categories
     distinct_uc_data <- distinct(rename(hospital_visits_raw, unit_category_raw=`Deild Heiti`),unit_category_raw) %>% filter(!is.na(unit_category_raw))
     distinct_uc_coding <- distinct(unit_categories,unit_category_raw)
-
-    if (nrow(setdiff(distinct_uc_data,distinct_uc_coding)>0)) {
-        warning('BCS:New unit categories have been added to the LSH data file')
-        do.call(cat,c(setdiff(distinct_uc_data,distinct_uc_coding),sep='\n'))
-    }
+    not_found_in_data <- setdiff(distinct_uc_data,distinct_uc_coding)
+    warning_text <- 'BCS:New unit categories have been added to the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
 
     #Check if new text out categories
     distinct_toc_data <- distinct(rename(hospital_visits_raw, text_out_category_raw=`Heiti afdrifa`),text_out_category_raw) %>% filter(!is.na(text_out_category_raw))
     distinct_toc_coding <- distinct(text_out_categories,text_out_category_raw)
-
-    if (nrow(setdiff(distinct_toc_data,distinct_toc_coding))>0) {
-        warning('BCS:New text out categories have been added to the LSH data file')
-        do.call(cat,c(setdiff(distinct_toc_data,distinct_toc_coding),sep='\n'))
-    }
+    not_found_in_data <- setdiff(distinct_toc_data,distinct_toc_coding)
+    warning_text <- 'BCS:New text out categories have been added to the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
 
     #Check if new Covid groups
     distinct_cg_data <- distinct(rename(individs_raw, covid_group_raw=`Heiti sjúklingahóps`),covid_group_raw) %>% filter(!is.na(covid_group_raw))
     distinct_cg_coding <- distinct(covid_groups,covid_group_raw)
-
-    if (nrow(setdiff(distinct_cg_data,distinct_cg_coding))>0) {
-        warning('BCS:New COVID19 groups have been added to the LSH data file')
-        do.call(cat,c(setdiff(distinct_cg_data,distinct_cg_coding),sep='\n'))
-    }
+    not_found_in_data <- setdiff(distinct_cg_data,distinct_cg_coding)
+    warning_text <- 'BCS:New COVID19 groups have been added to the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
+    
     return('Finished testing data files')
 }
 
