@@ -100,6 +100,31 @@ test_lsh_data_file <- function(){
     return('Finished testing data files')
 }
 
+test_new_sequences <- function(){
+  allsequences = NULL
+  for (p in unique(patient_transitions$patient_id)) {
+    trans <- subset(patient_transitions,p==patient_transitions$patient_id)
+    trans <- trans[order(trans$date,trans$state_tomorrow),]
+    n = nrow(trans)
+    if (n > 1) {
+      idx = trans$state_tomorrow[1:n-1]!=trans$state_tomorrow[2:n]
+      if (sum(idx, na.rm = T) >= 1) {
+        sequence = trans$state_tomorrow[idx]
+        if (sequence[length(sequence)] != trans$state_tomorrow[n])
+          sequence = c(sequence,trans$state_tomorrow[n])
+        allsequences = c(allsequences, paste(sequence, collapse = "->"))
+      }
+    }
+  }
+  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% summarize(count=n())
+  
+  # Reading same information from patient_transitions_state_blocks_summary
+  # dat2 <- patient_transitions_state_blocks_summary %>% group_by(patient_id) %>% 
+  #         summarise(state_trajectory=ifelse(sum(censored)==0,paste0(c(state,tail(state_next,1)),collapse='->'),
+  #                                           paste0(state,collapse='->'))) %>% group_by(state_trajectory) %>% 
+  #         summarise(count=n())
+}
+
 test_cleaning <- function(){
     # compare individs$patient_id and individs_raw$`Person Key`
     # ...
