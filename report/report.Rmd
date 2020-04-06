@@ -65,12 +65,12 @@ quantiles_outp <- group_by(outpatient_clinic_sim_visits, date) %>%
 
 $~$
 
-Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á göngudeild, legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
-Komur á göngudeild eru áætlaðar út frá spáðum fjölda í heimaeinangrun og hlutfalli þeirra sjúklinga sem voru í heimaeinangrun hverju sinni og komu á göngudeild síðustu vikuna.
+Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á Covid göngudeild, legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
+Komur á göngudeild eru áætlaðar út frá spáðum fjölda í heimaeinangrun og hlutfalli þeirra sem voru í heimaeinangrun í síðustu viku og komu á göngudeild.
 
-Spá um fjölda smita er frá `r fjoldi_smita_dags`.<br />
+Spá um fjölda greindra smita er frá `r fjoldi_smita_dags`.<br />
 Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.<br />
-Hlutfall sjúklinga í heimaeinangrun sem komu á göngudeild frá og með `r format(date_for_calculation, "%d-%m-%Y")` er `r round(prop_visits_last_week, 3)`.
+Hlutfall sjúklinga í heimaeinangrun sem komu á göngudeild frá og með `r format(date_for_calculation, "%d-%m-%Y")` til og með `r format(current_date-1, "%d-%m-%Y")` er `r round(prop_visits_last_week, 3)*100`%.
 
 $~$
 
@@ -90,7 +90,7 @@ quantiles %>%
           legend.title = element_blank(),
           plot.title = element_text(hjust = 0.5)) +
     geom_text(aes(label = median), vjust=2, size = 3) +
-    geom_text(aes(y = quantile975, label = median), vjust=-1.3, size = 3) +
+    geom_text(aes(y = quantile975, label = quantile975), vjust=-1.3, size = 3) +
     ylim(0,1300) +
     xlab('Dagsetning') + 
     scale_x_date(date_breaks = "day", date_labels = "%m-%d", expand = c(0,0.5)) +
@@ -98,7 +98,7 @@ quantiles %>%
     ggtitle('Fjöldi smitaðra einstaklinga í heimaeinangrun á hverjum degi')
 ```
 
-### Göngudeild
+### Covid göngudeild
 
 ```{r, echo=FALSE, fig.align="center"}
 quantiles_outp %>%
@@ -118,9 +118,8 @@ quantiles_outp %>%
     scale_x_date(date_breaks = "day", date_labels = "%m-%d", expand = c(0,0.5)) +
     ylab('Fjöldi') +
     ylim(0,20) +
-    ggtitle('Fjöldi koma á göngudeild á hverjum degi')
+    ggtitle('Fjöldi smitaðra einstaklinga sem koma á göngudeild á hverjum degi')
 ```
-
 
 ### Legudeildir
 
