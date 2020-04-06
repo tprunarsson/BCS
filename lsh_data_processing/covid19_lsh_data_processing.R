@@ -66,8 +66,8 @@ path_sensitive_tables='../lsh_data/'
 #file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+#file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 
@@ -92,6 +92,9 @@ priority_categories <- read_excel(file_path_coding,sheet = 7) %>% mutate(priorit
                                                                           priority_category_order=priority_category_order_simple)
 sheet_names <- read_excel(file_path_coding,sheet = 6,trim_ws = FALSE)
 
+comorbidities_categories <- read_excel(file_path_coding,sheet = 8) %>%
+  arrange(comorbidities_raw)
+
 test_lsh_data_file()
 
 ################## ----- Cleaning ----- ##############################################################
@@ -105,8 +108,8 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
 
 #forms data
 interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first_symptoms=`Upphafsdagur einkenna`, date_diagnosis=`Dagsetning greiningar`,
-                          priority=`Forgangur`, clinical_assessment=`Klínískt mat - flokkun`,date_clinical_assessment=`Síma eftirfylgd hefst`) %>% 
-                    select(.,patient_id,date_first_symptoms,date_diagnosis,priority,date_clinical_assessment,clinical_assessment) %>%
+                          priority=`Forgangur`, clinical_assessment=`Klínískt mat - flokkun`,date_clinical_assessment=`Síma eftirfylgd hefst`,comorbidities_raw=`Sjúkdómar`) %>% 
+                    select(.,patient_id,date_first_symptoms,date_diagnosis,priority,date_clinical_assessment,clinical_assessment,comorbidities_raw) %>%
                     mutate_at(.,vars(matches('date')),~as.Date(gsub('\\s.*','',.),"%Y-%m-%d")) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
                     left_join(.,priority_categories,by=c('priority'='priority_category_raw')) %>%
@@ -119,10 +122,33 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                                     date_clinical_assessment=min(date_clinical_assessment,na.rm=TRUE),
                                     #date_clinical_assessment=if(!any(is.finite(clinical_assessment))) NA else date_clinical_assessment[which.max(clinical_assessment_category_order)],
                                     priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_category_order)],
-                                    clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)]
+                                    clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)],
+                                    comorbidities_raw=if(!is.na(comorbidities_raw)) paste(comorbidities_raw[!is.na(comorbidities_raw)],collapse="; ") else NA_character_ #So as to not lose data we paste together the raw comorbidities of duplictes. Deal with duplicated comorbidities below.
                               ) %>%
                     filter(if_else(is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>%
-                    ungroup()
+                    ungroup()%>%
+                    separate(comorbidities_raw,into = paste("comorbidity",c(1:10)),sep="; ") %>% #Adding comorbidities
+                    gather(key="comorb_number",value="comorbidity",matches("comorbidity")) %>%
+                    distinct(patient_id,comorbidity,.keep_all=T)%>%
+                    filter(!is.na(comorbidity)) %>%
+                    left_join(comorbidities_categories,by=c("comorbidity"="comorbidities_raw"))%>%
+                    mutate(comorbidity=paste("comorb_",comorbidities_names,sep=""))%>%
+                    group_by(patient_id)%>%
+                    mutate(n_comorbidity=sum(as.numeric(comorbidities_included)))%>%
+                    ungroup() %>%
+                    select(-comorbidities_included,-comorbidities_names)%>%
+                    right_join(pivot_wider(.,id_cols="patient_id",names_from = "comorbidity",values_from="comorbidity"),by="patient_id") %>%
+                    select(-comorb_number,-comorbidity) %>%
+                    mutate_at(vars(matches('comorb_')),~!is.na(.))
+                    
+
+#Comorbs no longer of use
+rm(comorbs)
+  
+  
+
+
+
 #note, min clinical assessment chosen for each date. TODO: get time stamps of interviews
 interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,date_clinical_assessment=`Dagsetning símtals`,clinical_assessment=`Klínískt mat`) %>%
                         select(patient_id,date_clinical_assessment,clinical_assessment) %>%
@@ -230,7 +256,7 @@ interview_last_date <- bind_rows(select(interview_first,patient_id,date_clinical
                         ungroup() %>% 
                         left_join(.,interview_last,by='patient_id') %>% 
                         mutate(date_last_known=if_else(is.finite(date_clinical_assessment),date_clinical_assessment,date_last_known))
-                        
+                      
 
 #Add information about first diagnosis, first symptoms, and priority to individs
 #First diagnosis is found by extracting the minimum date from hospital visits, interview extra and interview_first 
@@ -251,8 +277,8 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       mutate(.,date_outcome=pmin(date_outcome_tmp,if_else(covid_group=='recovered',date_last_known,NULL),na.rm=TRUE)) %>%
                       filter(if_else(is.finite(date_outcome) & outcome=='recovered',(date_outcome-date_diagnosis)>0,TRUE)) %>%
                       mutate(.,age_group_std=as.character(cut(age,breaks=c(-Inf,seq(10,80,by=10),Inf),labels=c('0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80+'),right=FALSE)),
-                             age_group_simple=as.character(cut(age,breaks=c(-Inf,50,Inf),labels=c('0-50','51+'),right=TRUE))) %>%
-                      select(.,patient_id,zip_code,age,age_group_std,age_group_simple,sex,priority,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+                             age_group_simple=as.character(cut(age,breaks=c(-Inf,50,Inf),labels=c('0-50','51+'),right=TRUE)))%>%
+                      select(.,patient_id,zip_code,age,age_group_std,age_group_simple,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
 
 #patient transitions.
 #Start by assuming everybody is at home from the time diagnosed to today
