@@ -321,27 +321,27 @@ dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
 }) %>% bind_rows() %>% group_by(.,patient_id,date) %>% summarize(state=tail(state,1)) %>% ungroup()
 
 
-patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
-                        mutate(state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
-                        select(-state_hospital,-state_home) %>%
-                        mutate(yesterday=date-1) %>% 
-                        left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
-                        filter(!is.na(state_tomorrow)) %>%
-                        select(-yesterday,-date_tomorrow)
-
-recovered_transitions <- mutate(patient_transitions,tomorrow=date+1) %>%
-                          right_join(., select(individs_extended, patient_id, outcome, date_outcome), by=c('patient_id','tomorrow'='date_outcome')) %>%
-                          filter(outcome=='recovered',!is.na(state)) %>%
-                          mutate(state_tomorrow=outcome) %>%
-                          select(-tomorrow,-outcome)
-
-patient_transitions <- left_join(patient_transitions,recovered_transitions,by=c('patient_id','date'),suffix=c('','_recovered')) %>%
-                          mutate(state=if_else(!is.na(state_recovered),state_recovered,state),
-                                state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
-                          group_by(.,patient_id) %>%
-                          mutate(state_block_nr=get_state_block_numbers(state)) %>%
-                          ungroup() %>%
-                          select(patient_id,date,state,state_tomorrow,state_block_nr)
+# patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
+#                         mutate(state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
+#                         select(-state_hospital,-state_home) %>%
+#                         mutate(yesterday=date-1) %>% 
+#                         left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
+#                         filter(!is.na(state_tomorrow)) %>%
+#                         select(-yesterday,-date_tomorrow)
+# 
+# recovered_transitions <- mutate(patient_transitions,tomorrow=date+1) %>%
+#                           right_join(., select(individs_extended, patient_id, outcome, date_outcome), by=c('patient_id','tomorrow'='date_outcome')) %>%
+#                           filter(outcome=='recovered',!is.na(state)) %>%
+#                           mutate(state_tomorrow=outcome) %>%
+#                           select(-tomorrow,-outcome)
+# 
+# patient_transitions <- left_join(patient_transitions,recovered_transitions,by=c('patient_id','date'),suffix=c('','_recovered')) %>%
+#                           mutate(state=if_else(!is.na(state_recovered),state_recovered,state),
+#                                 state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow)) %>%
+#                           group_by(.,patient_id) %>%
+#                           mutate(state_block_nr=get_state_block_numbers(state)) %>%
+#                           ungroup() %>%
+#                           select(patient_id,date,state,state_tomorrow,state_block_nr)
 
 impute_severity <- function(state,severity_vec){
   output_vec <- vector('character',length = length(severity_vec))
@@ -394,11 +394,10 @@ get_state_block_numbers <- function(state_vec){
   return(state_block_numbers)
 }
 #no score for ICU in data - use NEWS score instead
-patient_transitions_extended <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
+patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
                                 mutate(.,state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
                                 left_join(.,dates_clinical_assessment,by=c('patient_id','date')) %>%
                                 left_join(.,NEWS_score,by=c('patient_id','date')) %>%
-                                left_join(.,select(hospital_visits_filtered,patient_id),c('patient_id')) %>%
                                 mutate(.,severity=case_when(state=='home' ~ clinical_assessment,
                                                           state=='inpatient_ward' ~ NEWS_score,
                                                           state=='intensive_care_unit' ~ NEWS_score)) %>%
@@ -412,12 +411,11 @@ patient_transitions_extended <- right_join(dates_hospital,dates_home,by=c('patie
                                 select(patient_id,date,state,severity) %>%
                                 mutate(yesterday=date-1) %>% 
                                 left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
-                                filter(!is.na(state_tomorrow)) %>%
-                                select(-yesterday,-date_tomorrow) %>%
-                                left_join(recovered_transitions,by=c('patient_id','date'),suffix=c('','_recovered')) %>%
-                                mutate(state=if_else(!is.na(state_recovered),state_recovered,state),
-                                       state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow),
-                                       severity_tomorrow=if_else(!is.na(state_recovered),NA_character_,severity_tomorrow)) %>%
+                                left_join(select(individs_extended,patient_id,outcome,date_outcome),by='patient_id') %>%
+                                filter(!(is.na(state_tomorrow) & outcome!='in_hospital_system')) %>%
+                                mutate(state_tomorrow=if_else(outcome=='recovered' & date_tomorrow==date_outcome,'recovered',state_tomorrow),
+                                      severity_tomorrow=if_else(outcome %in% c('death','recovered') & date_tomorrow==date_outcome,NA_character_,severity_tomorrow)) %>%
+                                select(-yesterday,-date_tomorrow,-outcome,-date_outcome) %>%
                                 group_by(.,patient_id) %>%
                                 mutate(state_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
                                 ungroup() %>%
@@ -426,28 +424,32 @@ patient_transitions_extended <- right_join(dates_hospital,dates_home,by=c('patie
 
 #Add worst case state to each patient
 #Find those who have at least one transition
-state_worst_case <- inner_join(distinct(patient_transitions,patient_id,state),unit_categories,by=c('state'='unit_category')) %>%
-                    group_by(.,patient_id) %>%
-                    summarize(.,state_worst=state[which.max(unit_category_order)]) %>%
+state_worst_case <- inner_join(patient_transitions,distinct(unit_categories,unit_category,.keep_all = T),by=c('state'='unit_category')) %>%
+                    inner_join(.,distinct(clinical_assessment_categories,clinical_assessment_category,.keep_all = T),by=c('severity'='clinical_assessment_category')) %>%
+                    group_by(.,patient_id,state,unit_category_order) %>%
+                    summarize(.,severity_worst=severity[which.max(clinical_assessment_category_order)]) %>%
+                    group_by(patient_id) %>%
+                    summarize(.,state_worst=state[which.max(unit_category_order)],state_worst_severity=severity_worst[which.max(unit_category_order)]) %>%
                     ungroup()
-#Find those who have no transition i.e. were diagnosed on date_state_last_known
-state_worst_case_special <- anti_join(select(individs_extended,patient_id),state_worst_case,by='patient_id') %>%
-                            mutate(.,state_worst='home') %>%
-                            left_join(.,select(hospital_visits_filtered,patient_id,unit_in),by='patient_id') %>%
-                            mutate(state_worst=if_else(is.na(unit_in),state_worst,unit_in)) %>%
-                            left_join(.,unit_categories,by=c('state_worst'='unit_category')) %>%
-                            group_by(.,patient_id) %>%
-                            summarize(.,state_worst=state_worst[which.max(unit_category_order)]) %>%
-                            ungroup()
-
-state_worst_case <- bind_rows(state_worst_case,state_worst_case_special)
-
 individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
+#Find those who have no transition i.e. were diagnosed on date_state_last_known
+# state_worst_case_special <- anti_join(select(individs_extended,patient_id),state_worst_case,by='patient_id') %>%
+#                             mutate(.,state_worst='home') %>%
+#                             left_join(.,select(hospital_visits_filtered,patient_id,unit_in),by='patient_id') %>%
+#                             mutate(state_worst=if_else(is.na(unit_in),state_worst,unit_in)) %>%
+#                             left_join(.,unit_categories,by=c('state_worst'='unit_category')) %>%
+#                             group_by(.,patient_id) %>%
+#                             summarize(.,state_worst=state_worst[which.max(unit_category_order)]) %>%
+#                             ungroup()
+
+#state_worst_case <- bind_rows(state_worst_case,state_worst_case_special)
+
+
 
 #summarise state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
-patient_transitions_state_blocks <- group_by(patient_transitions,patient_id,state_block_nr) %>% arrange(.,date) %>% 
-  summarize(state=min(state,na.rm=TRUE),state_block_nr_start=min(date),state_block_nr_end=max(date),state_next=tail(state_tomorrow,1)) %>%
-  mutate(censored=(state==state_next)) %>%
+patient_transitions_state_blocks <- group_by(patient_transitions,patient_id,state_block_nr,state,severity) %>% arrange(.,date) %>% 
+  summarize(state_block_nr_start=min(date),state_block_nr_end=max(date),state_next=state_tomorrow[which.max(date)],severity_next=severity_tomorrow[which.max(date)]) %>%
+  mutate(censored=(is.na(state_next))) %>%
   mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+if_else(state!=state_next,1,2)) %>%
   ungroup()
 #summarise state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
