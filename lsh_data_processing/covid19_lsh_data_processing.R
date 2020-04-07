@@ -67,8 +67,8 @@ path_sensitive_tables='../lsh_data/'
 #file_name_lsh_data <- '20200331_1243_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200401_0921_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 #file_name_lsh_data <- '20200402_0857_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
-#file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+#file_name_lsh_data <- '20200403_0841_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
+file_name_lsh_data <- '20200404_0718_Covid-19_lsh_gogn_dags_31_03_2020.xlsx'
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 
@@ -141,7 +141,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                     select(-comorbidities_included,-comorbidities_names)%>%
                     pivot_wider(.,id_cols=c("patient_id","date_first_symptoms","date_diagnosis","date_clinical_assessment","priority","clinical_assessment","n_comorbidity"),
                                 names_from = "comorbidity",values_from="comorbidity") %>%
-                    select(.,-comorb_NA) %>%
+                    select(.,-comorb_NA,-comorb_healthy) %>%
                     mutate_at(vars(matches('comorb_')),~!is.na(.))
                     
 
@@ -284,8 +284,8 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
 #Note: patients diagnosed on current_date have a known state on that date, but others do not. Applies both for dates_home and dates_hospital
 
 dates_home <- lapply(1:nrow(individs_extended),function(i){  
-    date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==current_date,current_date, date_last_known_state)
-                return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_home_latest_imputed,by=1))) 
+    #date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==current_date,current_date, date_last_known_state)
+                return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_last_known_state,by=1))) 
               }) %>% 
               bind_rows() %>%
               left_join(.,select(individs_extended,patient_id,date_outcome),by='patient_id') %>%
@@ -307,7 +307,8 @@ dates_clinical_assessment <- bind_rows(select(interview_extra,patient_id,date_cl
                               rename(date=date_clinical_assessment)
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
-  date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
+  #date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
+  date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),date_last_known_state,hospital_visits_filtered$date_out[i])
   tmp <- tibble(patient_id=hospital_visits_filtered$patient_id[i],
                 state=hospital_visits_filtered$unit_in[i],
                 date=seq(hospital_visits_filtered$date_in[i],date_out_imputed,by=1))
@@ -418,7 +419,7 @@ patient_transitions_extended <- right_join(dates_hospital,dates_home,by=c('patie
                                        state_tomorrow=if_else(!is.na(state_recovered),state_tomorrow_recovered,state_tomorrow),
                                        severity_tomorrow=if_else(!is.na(state_recovered),NA_character_,severity_tomorrow)) %>%
                                 group_by(.,patient_id) %>%
-                                mutate(state_block_nr=get_state_block_numbers(state)) %>%
+                                mutate(state_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
                                 ungroup() %>%
                                 select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow,state_block_nr)
 
