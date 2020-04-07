@@ -8,8 +8,8 @@ library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('impute_length_of_stay.R')
 
-current_date_tmp <- as.Date('2020-04-06','%Y-%m-%d')
-prediction_date_tmp <- as.Date('2020-04-05','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-07','%Y-%m-%d')
+prediction_date_tmp <- as.Date('2020-04-06','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- FALSE
 save_additional_data_tmp <- FALSE
@@ -103,7 +103,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
                     group_by(.,patient_id) %>%
                     summarize_all(.,~min(.,na.rm=TRUE)) %>%
-                    filter(if_else(!is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>%
+                    filter(if_else(is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>%
                     ungroup()
 #note, min clinical assessment chosen for each date. TODO: get time stamps of interviews
 interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,date_clinical_assessment=`Dagsetning símtals`,clinical_assessment=`Klínískt mat`) %>%
@@ -453,10 +453,11 @@ length_of_stay_by_age_simple <- group_by(state_blocks_with_age_imputed,state,age
 first_state <- group_by(hospital_visits_filtered,patient_id) %>%
   summarize(initial_state_hospital=unit_in[which.min(date_time_in)],min_date_in=min(date_in,na.rm=TRUE)) %>%
   right_join(.,select(individs_extended,patient_id,age,sex,date_diagnosis),by='patient_id') %>%
-  mutate(initial_state=if_else(is.na(initial_state_hospital),'home',if_else(min_date_in==date_diagnosis,initial_state_hospital,'home'))) %>%
-  select(age,sex,initial_state)
-
-
+  mutate(initial_state=if_else(is.na(initial_state_hospital),'home',if_else(min_date_in==date_diagnosis,initial_state_hospital,'home')))
+  
+first_state_write <- select(first_state,age,sex,initial_state)
+first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
+first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
 
 ################# ----- Extract CDF from posterior predictive distribution from the stats group model of number infected
 hi_posterior_predictive_distr <- read_csv(paste0('https://raw.githubusercontent.com/bgautijonsson/covid19/master/Output/Iceland_Posterior/Iceland_Posterior_',prediction_date,'.csv'))
@@ -479,9 +480,11 @@ if(write_tables_for_simulation){
   write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_write,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
   write.table(current_state_per_date, file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_summary,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary','.csv'),sep=',',row.names=F,quote=F)
 }
 
 ############################## ------ Create tables for stats group ----- ##############################
