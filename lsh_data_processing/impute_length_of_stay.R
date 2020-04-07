@@ -18,13 +18,13 @@ fitlognormal <- function(df, thestate) {
   df <- filter(df, state == thestate)
   x <- filter(df, censored == TRUE)$state_duration
   y <- filter(df, censored == FALSE)$state_duration
-  print(x)
-  print(y)
+  #print(x)
+  #print(y)
   theta = directsearch(x,y)
-  h <- hist(df$state_duration, breaks=seq(0,21,1),plot=FALSE)
-  plot(h, col="grey") #plot hist
-  xlines <-seq(min(h$breaks),max(h$breaks),length.out=100) #seq of x for pdf
-  lines(x = xlines,y=dlnorm(xlines,theta[1],theta[2])*length(x)*diff(h$breaks)[1])
+  #h <- hist(df$state_duration, breaks=seq(0,21,1),plot=FALSE)
+  #plot(h, col="grey") #plot hist
+  #xlines <-seq(min(h$breaks),max(h$breaks),length.out=100) #seq of x for pdf
+  #lines(x = xlines,y=dlnorm(xlines,theta[1],theta[2])*length(x)*diff(h$breaks)[1])
   return(theta)
 }
 

@@ -416,10 +416,8 @@ patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','d
                                 mutate(state_tomorrow=if_else(outcome=='recovered' & date_tomorrow==date_outcome,'recovered',state_tomorrow),
                                       severity_tomorrow=if_else(outcome %in% c('death','recovered') & date_tomorrow==date_outcome,NA_character_,severity_tomorrow)) %>%
                                 select(-yesterday,-date_tomorrow,-outcome,-date_outcome) %>%
-                                group_by(.,patient_id) %>%
-                                mutate(state_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
                                 ungroup() %>%
-                                select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow,state_block_nr)
+                                select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow)
 
 
 #Add worst case state to each patient
@@ -447,17 +445,15 @@ individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id
 
 
 #summarise state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
-patient_transitions_state_blocks <- group_by(patient_transitions,patient_id,state_block_nr,state,severity) %>% arrange(.,date) %>% 
-  summarize(state_block_nr_start=min(date),state_block_nr_end=max(date),state_next=state_tomorrow[which.max(date)],severity_next=severity_tomorrow[which.max(date)]) %>%
-  mutate(censored=(is.na(state_next))) %>%
-  mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+if_else(state!=state_next,1,2)) %>%
-  ungroup()
-#summarise state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
-patient_transitions_state_blocks_extended <- group_by(patient_transitions_extended,patient_id,state_block_nr) %>% arrange(.,date) %>% 
-  summarize(state=min(state,na.rm=TRUE),state_block_nr_start=min(date),state_block_nr_end=max(date),state_next=tail(state_tomorrow,1)) %>%
-  mutate(censored=(state==state_next)) %>%
-  mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+if_else(state!=state_next,1,2)) %>%
-  ungroup()
+patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
+                                    mutate(state_block_nr=get_state_block_numbers(state),
+                                           state_with_severity_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
+                                    group_by(.,patient_id,state_block_nr,state_with_severity_block_nr,state,severity) %>% arrange(.,date) %>% 
+                                    summarize(state_block_nr_start=min(date),state_block_nr_end=max(date),state_next=state_tomorrow[which.max(date)],severity_next=severity_tomorrow[which.max(date)]) %>%
+                                    mutate(censored=(is.na(state_next))) %>%
+                                    mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+1) %>%
+                                    ungroup()
+
 #patient_transitions_state_blocks %>% group_by(patient_id) %>% filter(n()>1) %>% summarise(state_trajectory=paste0(paste0(state,collapse='->'),'->',tail(state_next,1))) %>% group_by(state_trajectory) %>% summarise(count=n())
 test_data_processing()
 
