@@ -14,6 +14,39 @@ write_data_health_info <- function(){
     num_recovered_with_last_interview <- left_join(individs,interview_last, by='patient_id') %>% filter(covid_group=='recovered' & is.finite(date_clinical_assessment)) %>% summarize(n()) %>% unlist()
     num_recovered <- filter(individs,covid_group=='recovered') %>% summarize(n()) %>% unlist()
     recovered_info <- sprintf("Number of recovered individs missing date of last interview in forms: %.0f (%.1f%%)", num_recovered-num_recovered_with_last_interview,100*(num_recovered-num_recovered_with_last_interview)/num_recovered)
+    
+    #
+    inconsistent_info_in_forms <- mutate(interview_first,diff_call=date_clinical_assessment-date_diagnosis) %>%
+                                    filter(is.finite(diff_call)) %>%
+                                    filter(diff_call<0) %>%
+                                    select(patient_id) %>%
+                                    mutate(explanation='Eftirfylgni hefst fyrir dagsetningu greiningar')
+    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,(left_join(select(individs,patient_id),select(hospital_visits_filtered,patient_id,text_out), by='patient_id') %>%
+                                                                        filter(!(text_out %in% c('at_hospital','death'))) %>%
+                                                                        select(-text_out) %>%
+                                                                        left_join(.,interview_first,by='patient_id') %>%
+                                                                        filter_at(vars(-patient_id), any_vars(is.na(.))) %>% 
+                                                                        distinct(patient_id) %>%
+                                                                        mutate(explanation="Vantar upplýsingar í fyrsta viðtal")
+                                                                        ))
+    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,(left_join(individs,interview_last, by='patient_id') %>%
+                                                                        filter(covid_group=='recovered' & !is.finite(date_clinical_assessment))%>%
+                                                                        select(patient_id) %>%
+                                                                        mutate(explanation='Vantar dagsetningu á síðasta viðtali læknis')
+                                                                        ))
+    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,left_join(select(individs,patient_id),select(hospital_visits_filtered,patient_id,text_out), by='patient_id') %>%
+                                                                        filter(!(text_out %in% c('at_hospital','death'))) %>%
+                                                                        select(-text_out) %>%
+                                                                        left_join(.,interview_follow_up,by='patient_id') %>%
+                                                                        group_by(patient_id) %>%
+                                                                        summarise(missing_clinical_assessment=all(is.na(clinical_assessment))) %>%
+                                                                        ungroup() %>%
+                                                                        filter(missing_clinical_assessment) %>%
+                                                                        select(patient_id) %>%
+                                                                        mutate(explanation="Vantar klíniskt mat eftir fyrsta viðtal")
+                                                                        )
+    inconsistent_info_in_forms_output <- pivot_wider(inconsistent_info_in_forms %>% mutate(values=1),id_cols='patient_id',names_from = 'explanation',values_from ='values') %>% arrange(patient_id)
+                                    
     output_string <- cat('Data health information:','\n\t-',date_diagnosis_info,'\n\t-',clinical_assessment_info,'\n\t-',recovered_info,'\n')
     return(output_string)
 }
@@ -127,9 +160,13 @@ test_new_sequences <- function(){
 }
 
 test_cleaning <- function(){
-    # compare individs$patient_id and individs_raw$`Person Key`
-    # ...
-    return('Success')
+  test_unique_id(interview_first)
+  test_unique_id(interview_last)
+  test_interview_unique_id_date(interview_follow_up)
+  test_interview_unique_id_date(interview_extra)
+  # compare individs$patient_id and individs_raw$`Person Key`
+  # ...
+  return('Success')
 }
 
 test_data_processing <- function(){
@@ -137,10 +174,7 @@ test_data_processing <- function(){
      #Write out data health information
     invisible(write_data_health_info())
     #check uniqueness of various tables
-    test_unique_id(interview_first)
-    test_unique_id(interview_last)
-    test_interview_unique_id_date(interview_follow_up)
-    test_interview_unique_id_date(interview_extra)
+
     test_unique_id(individs_extended)
     test_unique_id_date(dates_home)
     test_unique_id_date(dates_hospital)
