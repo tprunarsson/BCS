@@ -11,8 +11,10 @@ source('impute_length_of_stay.R')
 current_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-07','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
-write_tables_for_simulation_tmp <- FALSE
+write_tables_for_simulation_tmp <- TRUE
 save_additional_data_tmp <- FALSE
+max_num_days_inpatient_ward <- 21
+max_num_days_intensive_care_unit <- 28
 
 option_list <-  list(
   make_option(c("-c", "--current_date"), type="character", default=NULL, 
@@ -438,15 +440,36 @@ state_blocks_with_age <- inner_join(select(individs_extended,patient_id,age_grou
                                     select(patient_transitions_state_blocks_summary,patient_id,state,censored,state_duration),
                                     by='patient_id')
 
-theta_ward = fitlognormal(state_blocks_with_age, "inpatient_ward")
-theta_icu = fitlognormal(state_blocks_with_age, "intensive_care_unit")
-state_blocks_with_age_imputed <- impute_empirical(state_blocks_with_age, "home")
-state_blocks_with_age_imputed <- impute_empirical(state_blocks_with_age_imputed, "inpatient_ward")
-state_blocks_with_age_imputed <- impute_lognormal(state_blocks_with_age_imputed, "intensive_care_unit", theta_icu)
+theta_inpatient_ward = fitlognormal(state_blocks_with_age, "inpatient_ward",max_num_days=max_num_days_inpatient_ward)
+theta_intensive_care_unit = fitlognormal(state_blocks_with_age, "intensive_care_unit",max_num_days=max_num_days_intensive_care_unit)
 
-length_of_stay_by_age_simple <- group_by(state_blocks_with_age_imputed,state,age_group_simple,state_duration) %>%
+nr_samples <- 1e6
+
+length_of_stay_inpatient_ward_expanded <- expand_grid(age_group_simple,state_duration=1:max_num_days_inpatient_ward) %>% mutate(state='inpatient_ward')
+length_of_stay_intensive_care_unit_expanded <- expand_grid(age_group_simple,state_duration=1:max_num_days_intensive_care_unit) %>% mutate(state='intensive_care_unit')
+length_of_stay_expanded <- bind_rows(length_of_stay_inpatient_ward_expanded,length_of_stay_intensive_care_unit_expanded) %>% select(age_group_simple,state,state_duration)
+length_of_stay_inpatient_ward_samples <- rlnorm(nr_samples,theta_inpatient_ward[1],theta_inpatient_ward[2]) %>%
+                                          round() %>%
+                                          table() %>%
+                                          as.numeric() %>%
+                                          tibble(state='inpatient_ward',state_duration=0:(length(.)-1),count=.) %>%
+                                          filter(state_duration>0 & state_duration<=max_num_days_inpatient_ward)
+length_of_stay_intensive_care_unit_samples <- rlnorm(nr_samples,theta_intensive_care_unit[1],theta_intensive_care_unit[2]) %>%
+                                          ceiling() %>%
+                                          table() %>%
+                                          as.numeric() %>%
+                                          tibble(state='intensive_care_unit',state_duration=0:(length(.)-1),count=.) %>%
+                                          filter(state_duration>0 & state_duration<=max_num_days_intensive_care_unit)
+length_of_stay_samples <- bind_rows(length_of_stay_inpatient_ward_samples,length_of_stay_intensive_care_unit_samples)
+
+
+length_of_stay_predicted_by_age_simple <- filter(state_blocks_with_age,state=='home') %>% group_by(.,state,age_group_simple,state_duration) %>%
+                                summarise(count=n()) %>%
+                                bind_rows(.,inner_join(length_of_stay_expanded,length_of_stay_samples,c('state','state_duration')))
+
+length_of_stay_empirical_by_age_simple <- group_by(state_blocks_with_age,state,age_group_simple,censored,state_duration) %>%
   summarise(count=n()) %>%
-  arrange(state,age_group_simple)
+  arrange(state,censored,age_group_simple)
 
 ################# ----- First state of individuals diagnosed with COVID-19 ---- #############
 
@@ -479,7 +502,8 @@ if(write_tables_for_simulation){
   write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_tables,current_date,'_transition_matrix_under_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
-  write.table(length_of_stay_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_predicted_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_tables,current_date,'length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_write,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
   write.table(current_state_per_date, file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=F,quote=F)
