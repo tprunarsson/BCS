@@ -63,8 +63,9 @@ if(length(opt)>2){
 date_last_known_state <- current_date-1
 
 #Assuming working directory is lsh_data_processing in github repo
-path_tables='../input/'
-path_sensitive_tables='../lsh_data/'
+path_tables <- '../input/'
+path_sensitive_tables <- '../lsh_data/'
+path_dashboard_tables <- '../dashboard/input/'
 
 file_name_lsh_data <- paste0(current_date,'_lsh_covid_data.xlsx')
 file_path_coding <- 'lsh_coding.xlsx'
@@ -508,7 +509,7 @@ if(write_tables_for_simulation){
   write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_predicted_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
-  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_tables,current_date,'length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_dashboard_tables,current_date,'length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_write,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
   write.table(current_state_per_date, file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=F,quote=F)
