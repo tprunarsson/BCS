@@ -457,6 +457,9 @@ first_state <- group_by(hospital_visits_filtered,patient_id) %>%
   
 first_state_write <- select(first_state,age,sex,initial_state)
 first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
+first_state_per_date_summary_age <- inner_join(first_state,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>%
+                                    select(date_diagnosis,age_group_simple,initial_state) %>%
+                                    group_by(date_diagnosis,initial_state,age_group_simple) %>% summarise(count=n())
 first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
 
 ################# ----- Extract CDF from posterior predictive distribution from the stats group model of number infected
@@ -485,6 +488,7 @@ if(write_tables_for_simulation){
   write.table(current_state_per_date, file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date_summary,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_summary_age,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary_age','.csv'),sep=',',row.names=F,quote=F)
 }
 
 ############################## ------ Create tables for stats group ----- ##############################
