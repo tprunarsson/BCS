@@ -21,10 +21,9 @@ fitlognormal <- function(df, thestate) {
   print(x)
   print(y)
   theta = directsearch(x,y)
-  h <- hist(df$state_duration, breaks=seq(0,21,1),plot=FALSE)
-  plot(h, col="grey") #plot hist
-  xlines <-seq(min(h$breaks),max(h$breaks),length.out=100) #seq of x for pdf
-  lines(x = xlines,y=dlnorm(xlines,theta[1],theta[2])*length(x)*diff(h$breaks)[1])
+  hist(df$state_duration, breaks=seq(0,21,1),freq=F,probability = T, col="grey",ylim=c(0,1))
+  xlines <-seq(0,21,length.out=100) #seq of x for pdf
+  lines(x = xlines,y=dlnorm(xlines,theta[1],theta[2])*length(x)*diff(xlines)[1])
   return(theta)
 }
 
