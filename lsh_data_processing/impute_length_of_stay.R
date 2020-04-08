@@ -33,7 +33,7 @@ impute_lognormal <- function(df, thestate, theta) {
   for (i in idx) {
     z <- ceiling(rlnorm(1000,theta[1],theta[2]));
     sdur <- df$state_duration[i]
-    z <- z[(z > sdur) & (z < 14)]
+    z <- z[(z > sdur) & (z < 28)]
     df$state_duration[i] = z[1]
   }
   return(df)

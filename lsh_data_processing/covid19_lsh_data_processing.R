@@ -8,8 +8,8 @@ library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('impute_length_of_stay.R')
 
-current_date_tmp <- as.Date('2020-04-07','%Y-%m-%d')
-prediction_date_tmp <- as.Date('2020-04-06','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
+prediction_date_tmp <- as.Date('2020-04-07','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- FALSE
 save_additional_data_tmp <- FALSE
