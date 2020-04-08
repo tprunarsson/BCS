@@ -463,13 +463,15 @@ length_of_stay_intensive_care_unit_samples <- rlnorm(nr_samples,theta_intensive_
 length_of_stay_samples <- bind_rows(length_of_stay_inpatient_ward_samples,length_of_stay_intensive_care_unit_samples)
 
 
-length_of_stay_predicted_by_age_simple <- filter(state_blocks_with_age,state=='home') %>% group_by(.,state,age_group_simple,state_duration) %>%
+length_of_stay_predicted_by_age_simple <- filter(state_blocks_with_age,state=='home') %>% filter(!censored) %>% group_by(.,state,age_group_simple,state_duration) %>%
                                 summarise(count=n()) %>%
-                                bind_rows(.,inner_join(length_of_stay_expanded,length_of_stay_samples,c('state','state_duration')))
+                                ungroup() %>%
+                                bind_rows(.,inner_join(length_of_stay_expanded,length_of_stay_samples,c('state','state_duration'))) 
 
 length_of_stay_empirical_by_age_simple <- group_by(state_blocks_with_age,state,age_group_simple,censored,state_duration) %>%
   summarise(count=n()) %>%
-  arrange(state,censored,age_group_simple)
+  arrange(state,censored,age_group_simple) %>%
+  ungroup()
 
 ################# ----- First state of individuals diagnosed with COVID-19 ---- #############
 
