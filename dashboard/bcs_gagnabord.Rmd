@@ -1,0 +1,167 @@
+---
+title: "LSH - BCS Gagnaborð"
+author: ''
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+---
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(ggplot2)
+library(plotly)
+library(stringr)
+library(dplyr)
+library(readr)
+
+# Functions
+load_git_data <- function(type = c('length_of_stay_with_imputed')) {
+  root_path <- 'https://raw.githubusercontent.com/tprunarsson/BCS/master'
+  data_folder <- 'shiny_input'
+  los_files <- sprintf('%s_%s.csv', seq.Date(from = as.Date('2020-04-02'), Sys.Date(), by = 1), type)
+
+  data_list <- list()
+  for (file in los_files) {
+    data_list[[file]] <- try(
+      readr::read_csv(file.path(root_path, data_folder, file)), silent = TRUE
+    )
+    data_list[[file]]$date <- as.Date(str_extract(file, '\\d{4}-\\d{2}-\\d{2}'))
+  }
+  bind_rows(data_list)
+}
+
+# Load csv data
+data_length_of_stay <- load_git_data('length_of_stay_with_imputed')
+# data_transition <- read_csv('../BCS/input/2020-04-07_transition_matrix.csv')
+
+# Set constants
+start_date <- as.Date('2020-04-02')
+end_date <- Sys.Date()
+gagnagerdir <- unique(data_length_of_stay$type)
+aldurshopar <- unique(data_length_of_stay$age_group_simple) #list('0-50', '51+')
+states <- unique(data_length_of_stay$state)
+```
+
+Stillingar {.sidebar}
+=======================================================================
+
+```{r}
+sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = end_date,
+            value = end_date, step = 1, timeFormat = "%d %b")
+checkboxGroupInput('aldur', label = 'Aldurshópar:', 
+                   choices = aldurshopar, selected = aldurshopar)
+checkboxGroupInput('state', label = 'Staða:', 
+                   choices = states, selected = states)
+checkboxGroupInput('gagnagerd', label = 'Gagnagerð:', 
+                   choices = gagnagerdir, selected = gagnagerdir)
+selectInput('fill_by', 'Lita eftir:', c('-', names(data_length_of_stay)[1:3]))
+selectInput('facet', 'Facet eftir:', c('-', names(data_length_of_stay)[1:3]))
+
+```
+
+
+Dreifingar
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
+
+### Length of Stay
+
+```{r}
+dataset <- reactive({
+  data_length_of_stay %>%  
+    filter(date == input$dagsetning,
+           state %in% input$state,
+           age_group_simple %in% input$aldur, 
+           type %in% input$gagnagerd)
+})
+
+# renderText(print(as.Date(input$dagsetning, origin = '1970-01-01', format="%d %b")))
+renderPlot({
+  p <- ggplot(dataset(), aes(x=state_duration, y=count, fill = type)) + 
+    geom_col(position = 'dodge') +
+    scale_fill_viridis_d() +
+    theme_minimal()
+  
+  if (input$fill_by != '-')
+    p <- p + aes_string(fill = input$fill_by)
+  
+  if (input$facet != '-')
+    p <- p + facet_wrap(paste0('~', input$facet), scales = 'free')
+  
+  print(p)
+})
+```
+
+### Sankey Test
+
+```{r}
+links <- list(
+  source = c(0,1,0,2,1),
+  target = c(2,3,3,4,0),
+  value =  c(8,4,2,8,3))
+  
+nodes <-  list(
+  label = c("home", "inpatient_ward", "intensive_care_unit", "death"),
+  color = c("blue", "blue", "blue", "blue"),
+  pad = 15,
+  thickness = 20,
+  line = list(
+    color = "black",
+    width = 0.5
+  )
+)
+
+fig <- plot_ly(
+  type = "sankey",
+  orientation = "h",
+  node = nodes,
+  link = links
+)
+
+fig <- fig %>% layout(
+  title = "Basic Sankey Diagram",
+  font = list(
+    size = 10
+  )
+)
+
+fig
+```
+
+Row
+-----------------------------------------------------------------------
+
+### ggPlotly test
+
+```{r}
+p <- ggplot()
+ggplotly(p)
+```
+
+### ggPlotly test
+
+```{r}
+n <- 20
+x1 <- rnorm(n); x2 <- rnorm(n)
+y1 <- 2 * x1 + rnorm(n)
+y2 <- 3 * x2 + (2 + rnorm(n))
+A <- as.factor(rep(c(1, 2), each = n))
+df <- data.frame(x = c(x1, x2), y = c(y1, y2), A = A)
+fm <- lm(y ~ x + A, data = df)
+
+p <- ggplot(data = cbind(df, pred = predict(fm)), aes(x = x, y = y, color = A))
+p <- p + geom_point() + geom_line(aes(y = pred))
+ggplotly(p)
+```
+
+Gagnagæði
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
