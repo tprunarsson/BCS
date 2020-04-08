@@ -19,7 +19,7 @@ library(readr)
 # Functions
 load_git_data <- function(type = c('length_of_stay_with_imputed')) {
   root_path <- 'https://raw.githubusercontent.com/tprunarsson/BCS/master'
-  data_folder <- 'shiny_input'
+  data_folder <- 'dashboard/input'
   los_files <- sprintf('%s_%s.csv', seq.Date(from = as.Date('2020-04-02'), Sys.Date(), by = 1), type)
 
   data_list <- list()
