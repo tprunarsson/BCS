@@ -161,7 +161,7 @@ get_current_state <- function(type=''){
 }
 
 ############## ----- Length of stay distribution by state and age ----- ############## 
-get_length_of_stay_by_age_simple <- function(type='',){
+get_length_of_stay_by_age_simple <- function(type=''){
     if(type=='clinical_assessment_included'){
         transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
                                             select(.,patient_id,state_block_nr,state,censored,state_duration)
@@ -204,7 +204,7 @@ get_first_state <- function(type=''){
     #     mutate(initial_state=if_else(is.na(initial_state_hospital),'home',if_else(min_date_in==date_diagnosis,initial_state_hospital,'home'))) %>%
     #     select(age,sex,initial_state)
     first_state <- inner_join(select(individs_extended,patient_id,age,sex),patient_transitions,by='patient_id') %>%
-    group_by(patient_id) %>%
+    group_by(patient_id,age,sex) %>%
     summarise(date=min(date),state=state[which.min(date)])
     return(first_state)
 }

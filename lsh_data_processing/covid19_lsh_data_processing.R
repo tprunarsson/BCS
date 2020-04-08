@@ -307,7 +307,6 @@ dates_clinical_assessment <- bind_rows(select(interview_extra,patient_id,date_cl
                               rename(date=date_clinical_assessment)
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
-  #date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
   date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),date_last_known_state,hospital_visits_filtered$date_out[i])
   tmp <- tibble(patient_id=hospital_visits_filtered$patient_id[i],
                 state=hospital_visits_filtered$unit_in[i],
@@ -430,17 +429,7 @@ state_worst_case <- inner_join(patient_transitions,distinct(unit_categories,unit
                     summarize(.,state_worst=state[which.max(unit_category_order)],state_worst_severity=severity_worst[which.max(unit_category_order)]) %>%
                     ungroup()
 individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
-#Find those who have no transition i.e. were diagnosed on date_state_last_known
-# state_worst_case_special <- anti_join(select(individs_extended,patient_id),state_worst_case,by='patient_id') %>%
-#                             mutate(.,state_worst='home') %>%
-#                             left_join(.,select(hospital_visits_filtered,patient_id,unit_in),by='patient_id') %>%
-#                             mutate(state_worst=if_else(is.na(unit_in),state_worst,unit_in)) %>%
-#                             left_join(.,unit_categories,by=c('state_worst'='unit_category')) %>%
-#                             group_by(.,patient_id) %>%
-#                             summarize(.,state_worst=state_worst[which.max(unit_category_order)]) %>%
-#                             ungroup()
 
-#state_worst_case <- bind_rows(state_worst_case,state_worst_case_special)
 
 
 
