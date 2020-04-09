@@ -93,6 +93,17 @@ display_warning_if_items_not_found <- function(items,text){
   }
 }
 
+list_hash <- function(dat,cols=names(dat),verbose=FALSE){     
+    out_vec=vector('character',length=length(cols))     
+    for(i in 1:length(cols)){         
+         out_vec[i] <- md4(paste(dat[,cols[i]],collapse=''))     
+     }     
+     if(verbose){         
+        return(out_vec)     
+     }else{         
+        return(md4(paste(out_vec,collapse='')))      
+     }
+}
 ################ ---- Test functions ---- ##################
 
 test_lsh_data_file <- function(){
