@@ -14,20 +14,6 @@ get_current_state_per_date <- function(type=''){
     }else{
         transitions <- patient_transitions
     }
-    # state_newly_diagnosed <- anti_join(individs_extended,select(transitions,patient_id),by='patient_id') %>%
-    #     filter(.,outcome=='in_hospital_system') %>%
-    #     mutate(.,state='home') %>%
-    #     left_join(.,select(hospital_visits_filtered,patient_id,unit_in,date_time_in),by='patient_id') %>%
-    #     mutate(state=if_else(is.na(unit_in),state,unit_in)) %>%
-    #     group_by(.,patient_id) %>% arrange(date_time_in) %>%
-    #     summarize(.,date=min(date_diagnosis,na.rm=T),state=tail(state,1)) %>%
-    #     ungroup()
-    # 
-    # state_date_last_known <- filter(transitions,date==(date_last_known_state-1)) %>%
-    #     mutate(.,state=state_tomorrow,date=date+1) %>%
-    #     filter(state!='recovered') %>%
-    #     select(.,patient_id,date,state) %>%
-    #     bind_rows(.,state_newly_diagnosed)
     
     current_state_per_date <- select(transitions,-state_tomorrow) %>%
         group_by(.,date,state) %>%
@@ -140,23 +126,7 @@ get_current_state <- function(type=''){
         mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
         mutate(state_worst=if(type=='clinical_assessment_included') paste0(state_worst,'-',state_worst_severity) else state_worst) %>%
         select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
-    
-    
-    
-    # current_state_newly_diagnosed <- anti_join(individs_extended,select(current_state,patient_id),by='patient_id') %>%
-    #     filter(.,outcome=='in_hospital_system') %>%
-    #     mutate(.,state='home') %>%
-    #     left_join(.,select(hospital_visits_filtered,patient_id,unit_in,date_time_in),by='patient_id') %>%
-    #     mutate(state=if_else(is.na(unit_in),state,unit_in)) %>%
-    #     group_by(.,patient_id) %>% arrange(date_time_in) %>%
-    #     summarize(.,state=tail(state,1)) %>%
-    #     ungroup() %>%
-    #     inner_join(individs_extended,.,by='patient_id') %>%
-    #     mutate(.,days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
-    #     mutate(.,days_in_state=days_from_diagnosis) %>%
-    #     select(.,patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
-    
-    # current_state <- bind_rows(current_state,current_state_newly_diagnosed)
+
     return(current_state)
 }
 
