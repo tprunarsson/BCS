@@ -276,10 +276,13 @@ patient_transitions <- left_join(patient_transitions,recovered_transitions,by=c(
 
 #Add worst case state to each patient
 #Find those who have at least one transition
-state_worst_case <- inner_join(distinct(patient_transitions,patient_id,state),unit_categories,by=c('state'='unit_category')) %>%
+state_worst_case <- inner_join(patient_transitions,select(unit_categories, unit_category, unit_category_order),by=c('state'='unit_category')) %>%
+                    inner_join(.,select(unit_categories, unit_category, unit_category_order), by=c('state_tomorrow'='unit_category'),suffix=c('','_tomorrow')) %>%
                     group_by(.,patient_id) %>%
-                    summarize(.,state_worst=state[which.max(unit_category_order)]) %>%
-                    ungroup()
+                    summarize(.,state_worst=state[which.max(unit_category_order)], state_worst_order=max(unit_category_order), state_worst_tomorrow=state_tomorrow[which.max(unit_category_order_tomorrow)], state_worst_order_tomorrow=max(unit_category_order_tomorrow)) %>%
+                    ungroup() %>%
+                    mutate(state_worst=if_else(state_worst_order>=state_worst_order_tomorrow,state_worst,state_worst_tomorrow)) %>%
+                    select(patient_id,state_worst)
 #Find those who have no transition i.e. were diagnosed on date_state_last_known
 state_worst_case_special <- anti_join(select(individs_extended,patient_id),state_worst_case,by='patient_id') %>%
                             mutate(.,state_worst='home') %>%
