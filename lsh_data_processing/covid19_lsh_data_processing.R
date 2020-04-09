@@ -8,8 +8,8 @@ library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('impute_length_of_stay.R')
 
-current_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
-prediction_date_tmp <- as.Date('2020-04-07','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-09','%Y-%m-%d')
+prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- TRUE
 save_additional_data_tmp <- FALSE
@@ -229,8 +229,8 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
 #Note: patients diagnosed on current_date have a known state on that date, but others do not. Applies both for dates_home and dates_hospital
 
 dates_home <- lapply(1:nrow(individs_extended),function(i){  
-    date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==current_date,current_date, date_last_known_state)
-                return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_home_latest_imputed,by=1))) 
+    #date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==current_date,current_date, date_last_known_state)
+                return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_last_known_state,by=1))) 
               }) %>% 
               bind_rows() %>%
               left_join(.,select(individs_extended,patient_id,date_outcome),by='patient_id') %>%
@@ -240,7 +240,8 @@ dates_home <- lapply(1:nrow(individs_extended),function(i){
               ungroup()
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
-  date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
+  #date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),if_else(hospital_visits_filtered$date_in[i]==current_date,current_date,date_last_known_state),hospital_visits_filtered$date_out[i])
+  date_out_imputed <- if_else(!is.finite(hospital_visits_filtered$date_out[i]),date_last_known_state,hospital_visits_filtered$date_out[i])
   tmp <- tibble(patient_id=hospital_visits_filtered$patient_id[i],
                 state=hospital_visits_filtered$unit_in[i],
                 date=seq(hospital_visits_filtered$date_in[i],date_out_imputed,by=1))
@@ -362,6 +363,7 @@ current_state <-  filter(patient_transitions_state_blocks,date==date_last_known_
   inner_join(.,select(patient_transitions_state_blocks_summary,patient_id,state_block_nr,state_block_nr_start),by=c('patient_id','state_block_nr')) %>%
   filter(!(state_tomorrow %in% c('recovered','death'))) %>%
   mutate(days_in_state=if_else(state==state_tomorrow,as.numeric(current_date-state_block_nr_start),1)) %>%
+  mutate(state=state_tomorrow) %>%
   inner_join(individs_extended,.,by='patient_id') %>%
   mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
   select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
@@ -509,7 +511,7 @@ if(write_tables_for_simulation){
   write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=states,quote=F)
   write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_predicted_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
-  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_dashboard_tables,current_date,'length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_write,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
   write.table(current_state_per_date, file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=F,quote=F)
