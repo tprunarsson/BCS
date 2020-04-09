@@ -481,10 +481,11 @@ length_of_stay_empirical_by_age_simple <- group_by(state_blocks_with_age,state,a
 
 ################# ----- First state of individuals diagnosed with COVID-19 ---- #############
 
-first_state <- group_by(hospital_visits_filtered,patient_id) %>%
-  summarize(initial_state_hospital=unit_in[which.min(date_time_in)],min_date_in=min(date_in,na.rm=TRUE)) %>%
+first_state <- group_by(hospital_visits_filtered,patient_id, date_in) %>%
+  summarize(state=unit_in[which.max(date_time_in)]) %>% 
+  group_by(patient_id) %>% summarize(first_state_hospital=state[which.min(date_in)],date_first_state_hospital=min(date_in)) %>%
   right_join(.,select(individs_extended,patient_id,age,sex,date_diagnosis),by='patient_id') %>%
-  mutate(initial_state=if_else(is.na(initial_state_hospital),'home',if_else(min_date_in==date_diagnosis,initial_state_hospital,'home')))
+  mutate(initial_state=if_else(is.na(first_state_hospital),'home',if_else(date_first_state_hospital==date_diagnosis,first_state_hospital,'home')))
   
 first_state_write <- select(first_state,age,sex,initial_state)
 first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
