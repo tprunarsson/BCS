@@ -22,6 +22,6 @@ echo "---------Running simulation---------"
 ./covid "$current_date" ..
 cd ../report
 echo "---------Knitting report---------"
-Rscript -e 'args <- commandArgs(TRUE);current_date <- as.Date(args[1]);Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/MacOS/pandoc"); rmarkdown::render("report.Rmd", "html_document",output_file=paste0("../daily_report/",args[1],"-Flæði COVID-19 sjúklinga LSH.html"))' "$current_date"
+Rscript -e 'args <- commandArgs(trailingOnly = TRUE);current_date <- as.Date(args[1]);prediction_date<-as.Date(args[2]);Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/MacOS/pandoc"); rmarkdown::render("report.Rmd", "html_document",output_file=paste0("../daily_report/",args[1],"-Flæði COVID-19 sjúklinga LSH.html"))' "$current_date" "$prediction_date"
 
 

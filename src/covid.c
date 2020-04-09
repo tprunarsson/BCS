@@ -2,7 +2,7 @@
   COVID-19  Population-Quarantine-Isolation-(pre)-Ward-ICU-(ventilator) 
             Discrete Event Simulator 
   author:   tpr@hi.is        
-  version:  01/04/2020
+  version:  05/04/2020 (Sunday Release)
  */
 
 #include <stdio.h>
@@ -31,8 +31,9 @@ double ProbUnder50; /* this is computed by the function readFirstCDF */
 int numRecovered;
 int numDeath;
 int repeat;
+int PatientId; /*??*/
 
-FILE *infile, *outfile; /* global file pointers for report writing */
+FILE *outfile; /* global file pointers for report writing */
 
 /* for a workaround with the .csv files, get rid of the commas! */
 int get_index(char* string, char c) {
@@ -74,7 +75,7 @@ int get_my_location(char *szlocation) {
 /* 
   Read covid.hi.is posterior predictions for give day (MAX_SIM_TIME, )
 */
-int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
+int readHIposteriors(char *fname, char *szDate, int day, double *dbl) { /* TODO name change */
   FILE *fid;
   char sztmp[64];
   char buffer[8192];
@@ -104,6 +105,7 @@ int readHIposteriors(char *fname, char *szDate, int day, double *dbl) {
         token = strtok(NULL, ",");
         sscanf(token, "%lg", &dbl[i] );
       }
+      break;
     }
   }
   if (tmpday < 0) {
@@ -174,7 +176,6 @@ int readFirstCDF(char *fname) {
   return 0;
 }
 
-
 int readLosP(char *fname) {
   FILE *fid;
   int agegroup, day, location, value;
@@ -236,11 +237,13 @@ int readLosP(char *fname) {
   return 0;
 }
 
+/* Reading number between states */
+
 int readTransitionP(char *fname, int agegroup) {
   FILE *fid;
-  int i, j, ret;
+  int i, j;
   int n = (RECOVERED - HOME + 1);
-  double P[RECOVERED-HOME+1][RECOVERED-HOME+1], sum;
+  double P[RECOVERED - HOME + 1][RECOVERED - HOME + 1], sum;
   char buffer[1024];
  
   fid = fopen(fname, "r");
@@ -252,9 +255,9 @@ int readTransitionP(char *fname, int agegroup) {
     return 1;
   for (i = 0; i < n; i++) {
     for (j = 0; j < n-1; j++) {
-      ret = fscanf(fid, "%lg,", &P[i][j]);
+      fscanf(fid, "%lg,", &P[i][j]);
     }
-    ret = fscanf(fid, "%lg", &P[i][j]);
+    fscanf(fid, "%lg", &P[i][j]);
     sum = 0.0;
     for (j = 0; j < n; j++) {
       if (i != j)
@@ -280,7 +283,6 @@ int readTransitionP(char *fname, int agegroup) {
       fprintf(outfile, "%.4g ", CDF[agegroup][i][j]);
     fprintf(outfile, "\n");
   }
-  
   fclose(fid);
   return 0;
 }
@@ -289,10 +291,33 @@ int readTransitionP(char *fname, int agegroup) {
   A randomly sampled length of stay for the different locations based on an empirical distribution
   defined by the CDF (see function in rndlib.c, note it returns integers 0,1,2,3 and so we add 1.0)
 */
-double lengthOfStay(int location, int agegroup) {
+double lengthOfStay(int location, int agegroup, int newlocation, int days_from_diagnosis) {
   double los;
-  los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
+ 
+  if ((location == HOME) && (newlocation == RECOVERED)) {
+    los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0; 
+    while ((days_from_diagnosis+los) < 14)
+      los = (double) discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS);
+  }
+  else
+    los = discrete_empirical(losCDF[agegroup][location], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
   return los;
+}
+
+/*
+   Routing heuristic, TODO: check that location != newlocation
+
+  note we dont wanto to go to recovered if days_from_diagnosis < 14
+
+*/
+int where_to_next(int agegroup, int location, int days_from_diagnosis, int lastworst) {
+  int newlocation;
+  int n = RECOVERED - HOME + 1;
+
+  newlocation = discrete_empirical(CDF[agegroup][location], n, STREAM_AGE);
+  while ((newlocation == INTENSIVE_CARE_UNIT) && (lastworst == INTENSIVE_CARE_UNIT))
+    newlocation = discrete_empirical(CDF[agegroup][location], n, STREAM_AGE);
+  return newlocation;
 }
 
 /*
@@ -303,9 +328,9 @@ double lengthOfStay(int location, int agegroup) {
 int init_model(char *fname) {
   FILE *fid;
   unsigned int id, count;
-  int day, dayinloc, location, age, agegroup, gender;
-  double departureday;
-  char buffer[1024], szlocation[32], szgender[16], szworstlocation[32];
+  int days_from_diagnosis, dayinloc, location, newlocation, age, agegroup, worstlocation;
+  double departureday, los;
+  char buffer[1024], szlocation[32], szgender[32], szworstlocation[32];
  
   fid = fopen(fname, "r");
   if (fid == NULL) {
@@ -316,37 +341,34 @@ int init_model(char *fname) {
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_symbol(buffer,',');
-    sscanf(buffer, "%u %d %s %s %d %d %s", &id, &age, szgender, szlocation, &dayinloc, &day, szworstlocation);
+    sscanf(buffer, "%u %d %s %s %d %d %s", &id, &age, szgender, szlocation, &dayinloc, &days_from_diagnosis, szworstlocation);
     if (age <= 50) 
       agegroup = 0;
     else
       agegroup = 1;
     location = get_my_location(szlocation);
-    //worstlocation = get_my_location(szworstlocation); /* check data file for NA */
-    if (0 == strcmp(szgender, "Karl")) gender = 2;
-    else if (0 == strcmp(szgender, "Kona")) gender = 1;
-    else {
-      printf("error: unknown gender %s\n", szgender);
-      return 1;
-    }
+    worstlocation = get_my_location(szworstlocation);
     transfer[ATTR_AGEGROUP] = (double)agegroup;
-    transfer[ATTR_DAYS] = (double)day;
-    transfer[ATTR_GENDER] = (double)gender;
     transfer[ATTR_DAYSINLOC] = (double)dayinloc;
+    transfer[ATTR_DAYSDIAG] = (double)days_from_diagnosis;
     transfer[ATTR_LOCATION] = (double)location;
-   // transfer[ATTR_LOCATION+10] = (double)worstlocation;
+    transfer[ATTR_LASTWORSTLOC] = (double)worstlocation;
     transfer[ATTR_PERSON] = (double)id;
-    departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
+    newlocation = where_to_next(agegroup, location, days_from_diagnosis, worstlocation);
+    /* where should we go next? */
+    los = lengthOfStay(location, agegroup, newlocation, days_from_diagnosis) - (double)dayinloc;
     count = 0;
-    while (departureday < 0) {
-      departureday = lengthOfStay(location, agegroup) - (double)dayinloc;
+    while (los < 0) {
+      los = lengthOfStay(location, agegroup, newlocation, days_from_diagnosis) - (double)dayinloc;
       count++;
       if (count > 100) {
-        departureday = 1.0; /* give up and use the one more day approach */
+        los = 0.0001;
         break;
       }
     }
-    departureday = sim_time + departureday;
+    departureday = sim_time + los;
+    transfer[ATTR_DAYSDIAG] += los;
+    transfer[ATTR_NEXTLOCATION] = (double)newlocation;
     transfer[ATTR_DEPARTDAY] = (double)departureday;
     list_file (INCREASING, location);
     transfer[ATTR_LOCATION] = (double)location;
@@ -361,26 +383,28 @@ int init_model(char *fname) {
   newly infected should be based on a prediction model, we use covid.hi.is
 */
 void arrive(int n) {
-  int i, day, location, agegroup, gender;
+  int i, location, newlocation, agegroup;
   double departureday, los, u;
 
   for (i = 0; i < n; i++) {
     u = urand (STREAM_AGE);
-    agegroup = (u <= ProbUnder50);
-    day = sim_time; /* new arrivals today, that is sim_time wall-clock */
-    u = urand (STREAM_AGE);
-    gender = (u < 0.5) + 1; /* TODO: for now assume 50/50 arrivals, not used anyway! */
+    agegroup = (u > ProbUnder50);
     /* we need a strategy for selecting which location we enter */
     location = discrete_empirical(firstLocCDF[agegroup], RECOVERED-HOME+1, STREAM_AGE);
-    los = lengthOfStay(location, agegroup);
-    transfer[ATTR_PERSON] = 0.0;
+    newlocation = where_to_next(agegroup, location, 0, location); /* fresh arrival */
+    los = lengthOfStay(location, agegroup, newlocation, 0);
+    transfer[ATTR_PERSON] = PatientId++;
     transfer[ATTR_AGEGROUP] = (double)agegroup;
-    transfer[ATTR_DAYS] = (double)day;
-    transfer[ATTR_GENDER] = (double)gender;
+    transfer[ATTR_DAYSDIAG] += los;
     transfer[ATTR_DAYSINLOC] = los;
     transfer[ATTR_LOCATION] = (double)location;
-    departureday = sim_time + los;
+    transfer[ATTR_NEXTLOCATION] = (double)newlocation;
+    transfer[ATTR_LASTWORSTLOC] = (double)location;
+    departureday = floor(sim_time) + los;
     transfer[ATTR_DEPARTDAY] = departureday;
+    if (repeat == 0)
+      printf("trace[%d]: Person-%d is entering for %s on day %.2g (worst location is %s, days_from_diagnosis = %.2g)\n", repeat, (int)transfer[ATTR_PERSON], szLocations[location], sim_time, szLocations[location], transfer[ATTR_DAYSDIAG]);
+ 
     list_file (INCREASING, location);
     transfer[ATTR_LOCATION] = (double)location; /* must be repeated since transfer is new */
     event_schedule(departureday, EVENT_DEPARTURE);
@@ -390,39 +414,41 @@ void arrive(int n) {
 /* The departure function removes the individual from the location list and moves the
    patient to a new location based on the cumulative transition probability matrix CDF */
 void depart(void) {
-  int location, newlocation;
-  int day, agegroup, gender;
+  int location, newlocation, newnewlocation, worstlocation;
+  int days_from_diagnosis, agegroup, daysinloc;
   unsigned int id;
   double departureday, los;
-  int n = RECOVERED - HOME + 1;
   
   location = (int)transfer[ATTR_LOCATION]; /* location was in EVENT_LIST's transfer */
   list_remove (FIRST, location); /* now all the properties of this person is in transfer */
   
   agegroup = (int)transfer[ATTR_AGEGROUP];
-  day = (int)transfer[ATTR_DAYS];
-  gender = (int)transfer[ATTR_GENDER];
+  days_from_diagnosis = (int)transfer[ATTR_DAYSDIAG];
+  daysinloc = (int) transfer[ATTR_DAYSINLOC];
   id = (unsigned int)transfer[ATTR_PERSON];
-  /* find a new location for this person based on the CDF */
-  newlocation = discrete_empirical(CDF[agegroup][location], n, STREAM_AGE);
-  if (newlocation == n) {
-    printf("warning: stuck in state (agegroup,location)=(%d,%s) basically all values in CDF are zero!", agegroup, szLocations[location]);
-    newlocation = location; /* basically stuck where it is!!! */
-  }
+  newlocation = (int) transfer[ATTR_NEXTLOCATION]; /* was decided when assigned */
+  worstlocation = (int) transfer[ATTR_LASTWORSTLOC];
   /* in the future we may want to route undividual patients, then tracing may be useful */
-  //if (repeat == 0)
-  //  printf("trace[%d]: Person-%d is leaving %s for %s on day %.2g\n", repeat, id, szLocations[location], szLocations[newlocation], sim_time);
+  if (repeat == 0)
+    printf("trace[%d]: Person-%d is leaving %s for %s on day %.2g (worst location is %s, days from diagnosis = %d)\n", repeat, id, szLocations[location], szLocations[newlocation], sim_time, szLocations[worstlocation], days_from_diagnosis);
   if (newlocation == RECOVERED) 
     numRecovered++;
   else if (newlocation == DEATH)
     numDeath++;
   else {
-    los = lengthOfStay(newlocation, agegroup);
+    worstlocation = MAX(newlocation, worstlocation); /* ICU with highest value */
+    newnewlocation = where_to_next(agegroup, newlocation, days_from_diagnosis, worstlocation );
+    los = lengthOfStay(newlocation, agegroup, newnewlocation, days_from_diagnosis);
+    if (repeat == 0)
+      printf("[trace-x]: plan to stay here for %.0g days\n", los);
     departureday = sim_time + los;
+    transfer[ATTR_LASTWORSTLOC] = MAX(newlocation, worstlocation);
     transfer[ATTR_DEPARTDAY] = departureday;
     transfer[ATTR_LOCATION] = (double)newlocation;
-    transfer[ATTR_DAYSINLOC] += los;
-  //  transfer[newlocation+10] = transfer[newlocation+10] + 1; /* DEBUG: NOTE increase MAX_ATTR trace where this individual has been before */
+    transfer[ATTR_DAYSINLOC] = los;
+    transfer[ATTR_DAYSDIAG] += los;
+    transfer[ATTR_LASTWORSTLOC] = (double) worstlocation;
+    transfer[ATTR_NEXTLOCATION] = (double) newnewlocation;
     list_file (INCREASING, newlocation);
     transfer[ATTR_LOCATION] = (double)newlocation; /* must be repeated since transfer is allocated again */
     event_schedule(departureday, EVENT_DEPARTURE);
@@ -455,7 +481,7 @@ int main(int argc, char *argv[]) {
 //  int predMedian[MAX_SIM_TIME], predUpper[MAX_SIM_TIME];
   FILE *statfid;
 
-  maxatr = 10; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
+  maxatr = 15; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
 
   /* check user input arguments number */
   if (argc < 2) {
@@ -512,7 +538,7 @@ int main(int argc, char *argv[]) {
       fprintf(outfile,",%.4g", CDFposterior[i][j]);
     fprintf(outfile, "\n");
   }
-  
+ 
   /* Read the transition probability matrix */
   sprintf(fname, "%s%s_transition_matrix_under_50.csv", path_input, szDate);
   readTransitionP(fname, 0);
@@ -520,12 +546,13 @@ int main(int argc, char *argv[]) {
   readTransitionP(fname, 1);
 
   report(statfid,0,0); /* write header in output stats file */
-  for (repeat = 0; repeat < 300; repeat++) {
+  for (repeat = 0; repeat < MAX_REPEAT; repeat++) {
     /* Initialize the model and fire up departure event for thise in system */
     sprintf(fname, "%s%s_current_state.csv", path_lsh_data, szDate);
     init_model(fname);
     event_schedule(0, EVENT_ARRIVAL); /* schedule also new arrivals */
     numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
+    PatientId = 0; /* why is this here */
     /* Stop the simulation once the wall clock has reached MAX_SIM_TIME days */
     while ((list_size[LIST_EVENT] != 0) && (sim_time <= MAX_SIM_TIME)) {
     /* Determine the next event. */
@@ -534,7 +561,7 @@ int main(int argc, char *argv[]) {
         case EVENT_ARRIVAL:
           i = discrete_empirical(CDFposterior[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_AGE);    
           arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
-          event_schedule(sim_time + 1.01, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
+          event_schedule(sim_time + 1.00001, EVENT_ARRIVAL); /* schedule again new arrivals end of next day */
           /* Write out numbers in each location and zero daily counters */
           report(statfid,(int)floor(sim_time),1);
           numRecovered = 0; numDeath = 0; /* reset global counter for devovered and death */

@@ -4,6 +4,8 @@ write_data_health_info <- function(){
     num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
     date_diagnosis_info <- sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
     
+    patients_hospital <- distinct(hospital_visits_filtered,patient_id)
+    
     #clinical assessment
     num_with_clinical_assessment <- left_join(individs,interview_follow_up,by='patient_id') %>% filter(is.finite(date_clinical_assessment)) %>% distinct(patient_id) %>% summarize(n()) %>% unlist()
     clinical_assessment_info=sprintf("Number of individs missing clinical assessment in forms: %.0f (%.1f%%)", nrow(individs)-num_with_clinical_assessment,100*(nrow(individs)-num_with_clinical_assessment)/nrow(individs))
@@ -12,6 +14,39 @@ write_data_health_info <- function(){
     num_recovered_with_last_interview <- left_join(individs,interview_last, by='patient_id') %>% filter(covid_group=='recovered' & is.finite(date_clinical_assessment)) %>% summarize(n()) %>% unlist()
     num_recovered <- filter(individs,covid_group=='recovered') %>% summarize(n()) %>% unlist()
     recovered_info <- sprintf("Number of recovered individs missing date of last interview in forms: %.0f (%.1f%%)", num_recovered-num_recovered_with_last_interview,100*(num_recovered-num_recovered_with_last_interview)/num_recovered)
+    
+    #
+    inconsistent_info_in_forms <- mutate(interview_first,diff_call=date_clinical_assessment-date_diagnosis) %>%
+                                    filter(is.finite(diff_call)) %>%
+                                    filter(diff_call<0) %>%
+                                    select(patient_id) %>%
+                                    mutate(explanation='Eftirfylgni hefst fyrir dagsetningu greiningar')
+    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,(left_join(select(individs,patient_id),select(hospital_visits_filtered,patient_id,text_out), by='patient_id') %>%
+                                                                        filter(!(text_out %in% c('at_hospital','death'))) %>%
+                                                                        select(-text_out) %>%
+                                                                        left_join(.,interview_first,by='patient_id') %>%
+                                                                        filter_at(vars(-patient_id), any_vars(is.na(.))) %>% 
+                                                                        distinct(patient_id) %>%
+                                                                        mutate(explanation="Vantar upplýsingar í fyrsta viðtal")
+                                                                        ))
+    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,(left_join(individs,interview_last, by='patient_id') %>%
+                                                                        filter(covid_group=='recovered' & !is.finite(date_clinical_assessment))%>%
+                                                                        select(patient_id) %>%
+                                                                        mutate(explanation='Vantar dagsetningu á síðasta viðtali læknis')
+                                                                        ))
+    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,left_join(select(individs,patient_id),select(hospital_visits_filtered,patient_id,text_out), by='patient_id') %>%
+                                                                        filter(!(text_out %in% c('at_hospital','death'))) %>%
+                                                                        select(-text_out) %>%
+                                                                        left_join(.,interview_follow_up,by='patient_id') %>%
+                                                                        group_by(patient_id) %>%
+                                                                        summarise(missing_clinical_assessment=all(is.na(clinical_assessment))) %>%
+                                                                        ungroup() %>%
+                                                                        filter(missing_clinical_assessment) %>%
+                                                                        select(patient_id) %>%
+                                                                        mutate(explanation="Vantar klíniskt mat eftir fyrsta viðtal")
+                                                                        )
+    inconsistent_info_in_forms_output <- pivot_wider(inconsistent_info_in_forms %>% mutate(values=1),id_cols='patient_id',names_from = 'explanation',values_from ='values') %>% arrange(patient_id)
+                                    
     output_string <- cat('Data health information:','\n\t-',date_diagnosis_info,'\n\t-',clinical_assessment_info,'\n\t-',recovered_info,'\n')
     return(output_string)
 }
@@ -35,6 +70,7 @@ test_transition_matrices <- function(){
 
 
 test_current_state <- function(){
+    #test if number in current state is the same as registred in hospital system in indvidis_extended
     return(nrow(current_state)==nrow(filter(individs_extended,outcome=='in_hospital_system')))
 }
 
@@ -48,6 +84,13 @@ test_first_state <- function(){
 
 test_posterior_predictive_distr <- function(){
     
+}
+
+display_warning_if_items_not_found <- function(items,text){
+  if (nrow(items)>0) {
+    warning(text)
+    do.call(cat,c(items,sep='\n'))
+  }
 }
 
 ################ ---- Test functions ---- ##################
@@ -70,56 +113,75 @@ test_lsh_data_file <- function(){
     #Check if new unit categories
     distinct_uc_data <- distinct(rename(hospital_visits_raw, unit_category_raw=`Deild Heiti`),unit_category_raw) %>% filter(!is.na(unit_category_raw))
     distinct_uc_coding <- distinct(unit_categories,unit_category_raw)
-
-    if ((distinct_uc_data %>% summarize(n()) %>% unlist()) >
-        (distinct_uc_coding %>% summarize(n()) %>% unlist())) {
-        warning('BCS:New unit categories have been added to the LSH data file')
-        do.call(cat,c(setdiff(distinct_uc_data,distinct_uc_coding),sep='\n'))
-    }
+    not_found_in_data <- setdiff(distinct_uc_data,distinct_uc_coding)
+    warning_text <- 'BCS:New unit categories have been added to the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
 
     #Check if new text out categories
     distinct_toc_data <- distinct(rename(hospital_visits_raw, text_out_category_raw=`Heiti afdrifa`),text_out_category_raw) %>% filter(!is.na(text_out_category_raw))
     distinct_toc_coding <- distinct(text_out_categories,text_out_category_raw)
-
-    if ((distinct_toc_data %>% summarize(n()) %>% unlist()) >
-        (distinct_toc_coding %>% summarize(n()) %>% unlist())) {
-        warning('BCS:New text out categories have been added to the LSH data file')
-        do.call(cat,c(setdiff(distinct_toc_data,distinct_toc_coding),sep='\n'))
-    }
+    not_found_in_data <- setdiff(distinct_toc_data,distinct_toc_coding)
+    warning_text <- 'BCS:New text out categories have been added to the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
 
     #Check if new Covid groups
     distinct_cg_data <- distinct(rename(individs_raw, covid_group_raw=`Heiti sjúklingahóps`),covid_group_raw) %>% filter(!is.na(covid_group_raw))
     distinct_cg_coding <- distinct(covid_groups,covid_group_raw)
+    not_found_in_data <- setdiff(distinct_cg_data,distinct_cg_coding)
+    warning_text <- 'BCS:New COVID19 groups have been added to the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
+    
+    return('Finished testing data files')
+}
 
-    if ((distinct_cg_data %>% summarize(n()) %>% unlist()) >
-        (distinct_cg_coding %>% summarize(n()) %>% unlist())) {
-        warning('BCS:New COVID19 groups have been added to the LSH data file')
-        do.call(cat,c(setdiff(distinct_cg_data,distinct_cg_coding),sep='\n'))
+test_new_sequences <- function(){
+  allsequences = NULL
+  for (p in unique(patient_transitions$patient_id)) {
+    trans <- subset(patient_transitions,p==patient_transitions$patient_id)
+    trans <- trans[order(trans$date,trans$state_tomorrow),]
+    n = nrow(trans)
+    if (n > 1) {
+      idx = trans$state_tomorrow[1:n-1]!=trans$state_tomorrow[2:n]
+      if (sum(idx, na.rm = T) >= 1) {
+        sequence = trans$state_tomorrow[idx]
+        if (sequence[length(sequence)] != trans$state_tomorrow[n])
+          sequence = c(sequence,trans$state_tomorrow[n])
+        allsequences = c(allsequences, paste(sequence, collapse = "->"))
+      }
     }
-    return('Success')
+  }
+  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% summarize(count=n())
+  
+  # Reading same information from patient_transitions_state_blocks_summary
+  # dat2 <- patient_transitions_state_blocks_summary %>% group_by(patient_id) %>% 
+  #         summarise(state_trajectory=ifelse(sum(censored)==0,paste0(c(state,tail(state_next,1)),collapse='->'),
+  #                                           paste0(state,collapse='->'))) %>% group_by(state_trajectory) %>% 
+  #         summarise(count=n())
 }
 
 test_cleaning <- function(){
-    # compare individs$patient_id and individs_raw$`Person Key`
-    # ...
-    return('Success')
+  test_unique_id(interview_first)
+  test_unique_id(interview_last)
+  test_interview_unique_id_date(interview_follow_up)
+  test_interview_unique_id_date(interview_extra)
+  # compare individs$patient_id and individs_raw$`Person Key`
+  # ...
+  return('Success')
 }
 
 test_data_processing <- function(){
-    #Write out data health information
+ 
+     #Write out data health information
     invisible(write_data_health_info())
     #check uniqueness of various tables
-    test_unique_id(interview_first)
-    test_unique_id(interview_last)
-    test_interview_unique_id_date(interview_follow_up)
-    test_interview_unique_id_date(interview_extra)
+
     test_unique_id(individs_extended)
     test_unique_id_date(dates_home)
     test_unique_id_date(dates_hospital)
     test_unique_id_date(recovered_transitions)
     test_unique_id_date(patient_transitions)
     #check if state worst in individs_extended is correct
-    return('Success')
+    return('Finished testing data processing')
 }
 
 test_tables_for_simulation <- function(){

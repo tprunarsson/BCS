@@ -1,13 +1,6 @@
-```{r, include=FALSE}
-current_date=as.Date('2020-04-03','%Y-%m-%d')
-```
-
-
 ---
 title: "<center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>"
-output:
-  html_document: default
-  pdf_document: default
+output: html_document
 date: "<center> <h4> `r format(current_date, '%d-%m-%Y')` </h4></center>"
 ---
 
@@ -29,53 +22,125 @@ simulation <- read_csv(file = path_data_simulation) %>%
     gather(.,key='state',value='count',-date,-day) %>%
     mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
+quantiles <- group_by(simulation,date,state) %>% 
+    summarize(median=round(median(count)), quantile975=round(quantile(count,probs=0.975))) %>%
+    ungroup() %>%
+    mutate(date = as.Date(date))
+
 #Dates from when the data was retrieved
-fjoldi_smita_dags <- '02-04-2020'
-soguleg_gogn_dags <- current_date-1
+#current_date and prediction_date pass as arguements in bash script
+fjoldi_smita_dags <- format(prediction_date, '%d-%m-%Y')
+soguleg_gogn_dags <- format(current_date-1, '%d-%m-%Y')
+```
+
+```{r, echo=FALSE}
+#Göngudeild
+load("../lsh_data/hospital_visits.RData")
+load("../lsh_data/current_state_per_date.RData")
+
+window_size <- 7
+nr_at_home_per_day <- filter(current_state_per_date,state=='home') %>% rename(nr_at_home=count)
+outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
+    select(patient_id,date_in) %>%
+    arrange(patient_id,date_in) %>%
+    group_by(.,date_in) %>%
+    summarise(nr_visits=n()) %>% ungroup() %>%
+    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
+    mutate(prop_visits=nr_visits/nr_at_home)
+
+date_for_calculation <- current_date-window_size
+prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
+    summarise(prop_visits_last_week=sum(prop_visits)/window_size)
+prop_visits_last_week <- prop_outpatient_clinic_last_week$prop_visits_last_week
+
+outpatient_clinic_sim_visits <- filter(simulation, state == "Heimaeinangrun") %>%
+    mutate(.,count_visits = prop_visits_last_week*count)
+
+quantiles_outp <- group_by(outpatient_clinic_sim_visits, date) %>% 
+    summarise(median=round(median(count_visits)),quantile975=round(quantile(count_visits,probs=0.975))) %>%
+    ungroup() %>%
+    mutate(date = as.Date(date))
 ```
 
 
 $~$
 
-Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
+Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á Covid göngudeild, legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
+Komur á göngudeild eru áætlaðar út frá spáðum fjölda í heimaeinangrun og hlutfalli þeirra sem voru í heimaeinangrun í síðustu viku og komu á göngudeild.
 
-Spá um fjölda smita er frá `r fjoldi_smita_dags`.<br />
-Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.
+Spá um fjölda greindra smita er frá `r fjoldi_smita_dags`.<br />
+Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.<br />
+Hlutfall sjúklinga í heimaeinangrun sem komu á göngudeild frá og með `r format(date_for_calculation, "%d-%m-%Y")` til og með `r format(current_date-1, "%d-%m-%Y")` er `r round(prop_visits_last_week, 3)*100`%.
 
 $~$
 
 ### Heimaeinangrun
 
 ```{r heimaeinangrun, echo=FALSE, fig.align='center'}
-ggplot(simulation[simulation$state=="Heimaeinangrun",], aes(x = date, y = count)) + 
-    geom_boxplot(col='blue4') +
+quantiles %>%
+    filter(state == "Heimaeinangrun") %>%
+    ggplot(aes(date, median)) +
+    geom_line(group = 1, aes(lty = "Líkleg spá"), col = "blue4", size = 1.1) +
+    geom_line(group = 1, aes(y = quantile975, lty = "Svartsýn spá"), col = "blue4", size = 1.1) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.background = element_rect(fill='white',colour='black'),
           panel.grid.major = element_line(colour='gray95'),
-          panel.grid.minor = element_line(colour='gray95')) +
+          panel.grid.minor = element_line(colour='gray95'),
+          legend.position = "top",
+          legend.title = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    geom_text(aes(label = median), vjust=2, size = 3) +
+    geom_text(aes(y = quantile975, label = quantile975), vjust=-1.3, size = 3) +
     ylim(0,1300) +
     xlab('Dagsetning') + 
+    scale_x_date(date_breaks = "day", date_labels = "%m-%d", expand = c(0,0.5)) +
     ylab('Fjöldi') +
     ggtitle('Fjöldi smitaðra einstaklinga í heimaeinangrun á hverjum degi')
+```
+
+### Covid göngudeild
+
+```{r, echo=FALSE, fig.align="center"}
+quantiles_outp %>%
+    ggplot(aes(date, median)) +
+    geom_line(group = 1, aes(lty = "Líkleg spá"), col = "blue4", size = 1.1) +
+    geom_line(group = 1, aes(y = quantile975, lty = "Svartsýn spá"), col = "blue4", size = 1.1) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+          panel.background = element_rect(fill='white',colour='black'),
+          panel.grid.major = element_line(colour='gray95'),
+          panel.grid.minor = element_line(colour='gray95'),
+          legend.position = "top",
+          legend.title = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    geom_text(aes(label = median), vjust=2, size = 3) +
+    geom_text(aes(y=quantile975, label = quantile975), vjust=-1.3, size = 3) +
+    xlab('Dagsetning') + 
+    scale_x_date(date_breaks = "day", date_labels = "%m-%d", expand = c(0,0.5)) +
+    ylab('Fjöldi') +
+    ylim(0,20) +
+    ggtitle('Fjöldi smitaðra einstaklinga sem koma á göngudeild á hverjum degi')
 ```
 
 ### Legudeildir
 
 ```{r legudeildir, echo=FALSE, fig.align='center'}
-simulation_legudeild <- simulation[simulation$state=="Legudeild",]
-#Compute medians to display on plot
-medians <- aggregate(simulation_legudeild$count, list(simulation_legudeild$date), median)
-
-ggplot(simulation_legudeild, aes(x = date, y = count)) + 
-    geom_boxplot(col='blue4') +
+quantiles %>%
+    filter(state == "Legudeild") %>%
+    ggplot(aes(date, median)) +
+    geom_line(group = 1, aes(lty = "Líkleg spá"), col = "blue4", size = 1.1) +
+    geom_line(group = 1, aes(y = quantile975, lty = "Svartsýn spá"), col = "blue4", size = 1.1) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.background = element_rect(fill='white',colour='black'),
           panel.grid.major = element_line(colour='gray95'),
-          panel.grid.minor = element_line(colour='gray95')) + 
-    #Display medians
-    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
-    ylim(0,100)+
+          panel.grid.minor = element_line(colour='gray95'),
+          legend.position = "top",
+          legend.title = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    geom_text(aes(label = median), vjust=2, size = 3) +
+    geom_text(aes(y = quantile975, label = quantile975), vjust=-1.3, size = 3) +
+    ylim(0,100) +
     xlab('Dagsetning') + 
+    scale_x_date(date_breaks = "day", date_labels = "%m-%d", expand = c(0,0.5)) +
     ylab('Fjöldi') +
     ggtitle('Fjöldi smitaðra einstaklinga á legudeild á hverjum degi')
 ```
@@ -83,22 +148,25 @@ ggplot(simulation_legudeild, aes(x = date, y = count)) +
 ### Gjörgæsla
 
 ```{r gjorgaesla, echo=FALSE, fig.align='center'}
-simulation_gjorgaesla <- simulation[simulation$state=="Gjörgæsla",]
-#Compute medians to display on plot
-medians <- aggregate(simulation_gjorgaesla$count, list(simulation_gjorgaesla$date), median)
-
-ggplot(simulation_gjorgaesla, aes(x = date, y = count)) + 
-    geom_boxplot(col='blue4') +
+quantiles %>%
+    filter(state == "Gjörgæsla") %>%
+    ggplot(aes(date, median)) +
+    geom_line(group = 1, aes(lty = "Líkleg spá"), col = "blue4", size = 1.1) +
+    geom_line(group = 1, aes(y = quantile975, lty = "Svartsýn spá"), col = "blue4", size = 1.1) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.background = element_rect(fill='white',colour='black'),
           panel.grid.major = element_line(colour='gray95'),
-          panel.grid.minor = element_line(colour='gray95')) + 
-    #Display medians
-    geom_text(data=medians, aes(x=Group.1, y=x, label=ceiling(x)), size=2.5, vjust=1.1) +
+          panel.grid.minor = element_line(colour='gray95'),
+          legend.position = "top",
+          legend.title = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    geom_text(aes(label = median), vjust=2, size = 3) +
+    geom_text(aes(y = quantile975, label = quantile975), vjust=-1.3, size = 3) +
     ylim(0,50) +
     xlab('Dagsetning') + 
+    scale_x_date(date_breaks = "day", date_labels = "%m-%d", expand = c(0,0.5)) +
     ylab('Fjöldi') +
-    ggtitle('Fjöldi smitaðra einstaklinga á gjörgæslu á hverjum degi')
+    ggtitle('Fjöldi smitaðra einstaklinga á gjörgæsla á hverjum degi')
 ```
 
 $~$

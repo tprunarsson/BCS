@@ -1,58 +1,34 @@
 
-directsearch <- function(x,y) {
-  maxvalue = -Inf;
-  for (meanlog in seq(0,5,0.01)) {
-    for (sdlog in seq(0.05,5,0.01)) {
-      L =   sum(log(dlnorm(y,meanlog,sdlog))) + sum(log(1.0-plnorm(x,meanlog,sdlog)))
-      if (maxvalue < L) {
-        maxvalue = L
-        theta = c(meanlog,sdlog)
-      }
-    }
+fitlognormal <- function(df, thestate,max_num_days) {
+  x_c <- filter(df,state == thestate, censored == TRUE)$state_duration
+  x <- filter(df,state == thestate, censored == FALSE)$state_duration
+  n <- length(x)+length(x_c)
+  objective_function <- function(theta){
+    L=sum(log(plnorm(x+0.5,theta[1],theta[2])-plnorm(x-0.5,theta[1],theta[2]))) + sum(log(plnorm(max_num_days+0.5,theta[1],theta[2])-plnorm(x_c,theta[1],theta[2])))-n*log(plnorm(max_num_days+0.5,theta[1],theta[2]))
+    return(-L)
   }
+  theta_init <- c(1,1)
+  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = theta_init)$par
   return(theta)
 }
 
-#TODO: log(F(t_i + a) - F(t_i - a)) í stað log(f(t_i)) í log-sennileikafallinu þar sem a er 0.5 eða önnur tala sem er háð því hvernig er klippt niður í daga. Ég var t.d. að spá hvað t_i = 1 þýðir? Þýðir það í raun að t_i sé á bilinu [0, 1.5]? Og þýðir t_i = 2 að t_i sé á bilinu [1.5, 2.5]?    
-fitlognormal <- function(df, thestate) {
-  df <- filter(df, state == thestate)
-  x <- filter(df, censored == TRUE)$state_duration
-  y <- filter(df, censored == FALSE)$state_duration
-  #print(x)
-  #print(y)
-  theta = directsearch(x,y)
-  #h <- hist(df$state_duration, breaks=seq(0,21,1),plot=FALSE)
-  #plot(h, col="grey") #plot hist
-  #xlines <-seq(min(h$breaks),max(h$breaks),length.out=100) #seq of x for pdf
-  #lines(x = xlines,y=dlnorm(xlines,theta[1],theta[2])*length(x)*diff(h$breaks)[1])
-  return(theta)
-}
+#analysis
+# theta_ward = fitlognormal(state_blocks_with_age, "inpatient_ward",max_num_days=21)
+# theta_icu = fitlognormal(state_blocks_with_age, "intensive_care_unit",max_num_days=28)
+# 
+# theta_ward_data <- tibble(state_duration=seq(0,21,length.out = 100)) %>%
+#   mutate(inpatient_ward=dlnorm(state_duration,theta_ward[1],theta_ward[2])/plnorm(21,theta_ward[1],theta_ward[2])) %>%
+#   gather(.,key='state','density',inpatient_ward)
+# 
+# theta_icu_data <- tibble(state_duration=seq(0,28,length.out = 100)) %>%
+#   mutate(intensive_care_unit=dlnorm(state_duration,theta_icu[1],theta_icu[2])/plnorm(28,theta_icu[1],theta_icu[2])) %>%
+#   gather(.,key='state','density',intensive_care_unit)
+# 
+# theta_data <- bind_rows(theta_ward_data,theta_icu_data)
+# plot_data <- filter(state_blocks_with_age,state!='home') %>% group_by(state,censored,state_duration) %>% summarise(count=n()) %>% group_by(state) %>% mutate(density=count/sum(count))
+# ggplot(data=plot_data,aes(state_duration,density)) + geom_col(aes(fill=censored)) + geom_line(data=theta_data,aes(x=state_duration,y=density)) + facet_wrap(~state)
+# inpatient_ward_gof_dat <- filter(state_blocks_with_age,state=='inpatient_ward') %>% dplyr::select(state_duration,censored)
+# intensive_care_unit_gof_dat <- filter(state_blocks_with_age,state=='intensive_care_unit') %>% dplyr::select(state_duration,censored)
+# gofTestCensored(inpatient_ward_gof_dat$state_duration,inpatient_ward_gof_dat$censored, censoring.side = "right", test = "sf", distribution = "lnorm")
+# gofTestCensored(intensive_care_unit_gof_dat$state_duration,intensive_care_unit_gof_dat$censored, censoring.side = "right", test = "sf", distribution = "lnorm")
 
-impute_lognormal <- function(df, thestate, theta) {
-  idx <- which(df$state == thestate & df$censored == TRUE)
-  for (i in idx) {
-    z <- ceiling(rlnorm(1000,theta[1],theta[2]));
-    sdur <- df$state_duration[i]
-    z <- z[(z > sdur) & (z < 14)]
-    df$state_duration[i] = z[1]
-  }
-  return(df)
-}
-
-impute_empirical <- function(df, thestate) {
-  idx <- which(df$state == thestate & df$censored == TRUE)
-  duration_completed <- filter(df, state == thestate & censored == FALSE)$state_duration
-  for (i in idx) {
-    duration = df$state_duration[i] + 1 # default the next day 
-    for (j in c(1:100)) { # you get 100 tries before we give up to find a greater value!
-      imputed_duration <- sample(duration_completed,1)
-      if (imputed_duration >= duration) {
-         df$state_duration[i] = imputed_duration;
-         break
-      }
-    }
-  }
-  return(df)
-}
-
-  

@@ -42,22 +42,24 @@ get_states_in_order <- function(type='',active=F){
     return(states)
 }
 
-get_transition_matrix_all <- function(type=''){
+get_transition_matrix_all <- function(type='',recovered_imputed){
     if(type=='clinical_assessment_included'){
         transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
                               state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
                                                        is.na(severity_tomorrow) ~ state_tomorrow,
                                                        TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow))
-        )
+        ) %>% select(.,patient_id,date,state,state_tomorrow)
+        
     }else{
-        transitions <- patient_transitions
+        transitions <- select(patient_transitions,patient_id,date,state,state_tomorrow)
     }
     states <- get_states_in_order(type)
     #all age groups
     state_transitions_all <- expand.grid(states,states,stringsAsFactors = FALSE) %>%
                                 rename(state=Var1,state_tomorrow=Var2) %>%
                                 as_tibble()
-    transition_counts_all <- filter(transitions,!is.na(state_tomorrow)) %>% group_by(.,state,state_tomorrow) %>%
+    transition_counts_all <- bind_rows(transitions,recovered_imputed) %>% 
+                                filter(.,!is.na(state_tomorrow)) %>% group_by(.,state,state_tomorrow) %>%
                                 summarise(count=as.numeric(n())) %>% 
                                 right_join(.,state_transitions_all,by=c('state','state_tomorrow')) %>%
                                 mutate(count=if_else(is.na(count),0,count))
@@ -66,7 +68,7 @@ get_transition_matrix_all <- function(type=''){
     return(transition_counts_matrix_all)
 }
 #simple age groups
-get_transition_matrix_by_age <- function(type=''){
+get_transition_matrix_by_age <- function(type='',recovered_imputed_by_age){
     if(type=='clinical_assessment_included'){
         transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
                               state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
@@ -82,6 +84,7 @@ get_transition_matrix_by_age <- function(type=''){
         rename(age_group_simple=Var1,state=Var2,state_tomorrow=Var3) %>%
         as_tibble()
     transition_counts_age_simple <- filter(transitions,!is.na(state_tomorrow)) %>% inner_join(select(individs_extended,patient_id,age_group_simple),.,by='patient_id') %>%
+                                        bind_rows(.,recovered_imputed_by_age) %>%
                                         group_by(.,age_group_simple,state,state_tomorrow) %>%
                                         summarize(count=as.numeric(n())) %>%
                                         group_by(age_group_simple) %>%
@@ -131,7 +134,7 @@ get_current_state <- function(type=''){
 }
 
 ############## ----- Length of stay distribution by state and age ----- ############## 
-get_length_of_stay_by_age_simple <- function(type=''){
+get_length_of_stay_predicted_by_age_simple <- function(type=''){
     if(type=='clinical_assessment_included'){
         transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
                                             select(.,patient_id,state_block_nr,state,censored,state_duration)
@@ -143,26 +146,57 @@ get_length_of_stay_by_age_simple <- function(type=''){
     state_blocks_with_age <- inner_join(select(individs_extended,patient_id,age_group_simple),
                                         select(transitions_state_blocks_summary,patient_id,state,censored,state_duration),
                                         by='patient_id')
-    #theta_ward = fitlognormal(state_blocks_with_age, "inpatient_ward")
+    
+    theta_inpatient_ward = fitlognormal(state_blocks_with_age, "inpatient_ward",max_num_days=max_num_days_inpatient_ward)
+    theta_intensive_care_unit = fitlognormal(state_blocks_with_age, "intensive_care_unit",max_num_days=max_num_days_intensive_care_unit)
+    
+    nr_samples <- 1e6
+    set.seed(1)
+    age_group_simple <- sort(unique(state_blocks_with_age$age_group_simple))
+    length_of_stay_inpatient_ward_expanded <- expand_grid(age_group_simple,state_duration=1:max_num_days_inpatient_ward) %>% mutate(state='inpatient_ward')
+    length_of_stay_intensive_care_unit_expanded <- expand_grid(age_group_simple,state_duration=1:max_num_days_intensive_care_unit) %>% mutate(state='intensive_care_unit')
+    length_of_stay_expanded <- bind_rows(length_of_stay_inpatient_ward_expanded,length_of_stay_intensive_care_unit_expanded) %>% select(age_group_simple,state,state_duration)
+    length_of_stay_inpatient_ward_samples <- rlnorm(nr_samples,theta_inpatient_ward[1],theta_inpatient_ward[2]) %>%
+        round() %>%
+        table() %>%
+        as.numeric() %>%
+        tibble(state='inpatient_ward',state_duration=0:(length(.)-1),count=.) %>%
+        filter(state_duration>0 & state_duration<=max_num_days_inpatient_ward)
+    length_of_stay_intensive_care_unit_samples <- rlnorm(nr_samples,theta_intensive_care_unit[1],theta_intensive_care_unit[2]) %>%
+        ceiling() %>%
+        table() %>%
+        as.numeric() %>%
+        tibble(state='intensive_care_unit',state_duration=0:(length(.)-1),count=.) %>%
+        filter(state_duration>0 & state_duration<=max_num_days_intensive_care_unit)
+    length_of_stay_samples <- bind_rows(length_of_stay_inpatient_ward_samples,length_of_stay_intensive_care_unit_samples)
     
     
-    
-    states_active <- get_states_in_order(type,active=T)
-    #for now exclude intensive care unit, missing data on severity in that state at the moment
-    states_active <- states_active[!grepl('intensive_care_unit',states_active)]
-    state_blocks_with_age_imputed <- state_blocks_with_age
-    for(i in 1:length(states_active)){
-        state_blocks_with_age_imputed <- impute_empirical(state_blocks_with_age, states_active[i])
-    }
-    theta_icu = fitlognormal(state_blocks_with_age, "intensive_care_unit")
-    state_blocks_with_age_imputed <- impute_lognormal(state_blocks_with_age_imputed, "intensive_care_unit", theta_icu)
-    
-    length_of_stay_by_age_simple <- group_by(state_blocks_with_age_imputed,state,age_group_simple,state_duration) %>%
+    length_of_stay_predicted_by_age_simple <- filter(state_blocks_with_age,state=='home') %>% filter(!censored) %>% group_by(.,state,age_group_simple,state_duration) %>%
         summarise(count=n()) %>%
-        arrange(state,age_group_simple)
-    return(length_of_stay_by_age_simple)
-}
+        ungroup() %>%
+        bind_rows(.,inner_join(length_of_stay_expanded,length_of_stay_samples,c('state','state_duration'))) 
+    
 
+    return(length_of_stay_predicted_by_age_simple)
+}
+get_length_of_stay_empirical_by_age_simple <- function(type=''){
+    if(type=='clinical_assessment_included'){
+        transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
+            select(.,patient_id,state_block_nr,state,censored,state_duration)
+    }else{
+        transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+            summarize(censored=censored[which.max(state_with_severity_block_nr)],state_duration=sum(state_duration)) %>%
+            ungroup()
+    }
+    state_blocks_with_age <- inner_join(select(individs_extended,patient_id,age_group_simple),
+                                        select(transitions_state_blocks_summary,patient_id,state,censored,state_duration),
+                                        by='patient_id')
+    length_of_stay_empirical_by_age_simple <- group_by(state_blocks_with_age,state,age_group_simple,censored,state_duration) %>%
+        summarise(count=n()) %>%
+        arrange(state,censored,age_group_simple) %>%
+        ungroup()
+    return(length_of_stay_empirical_by_age_simple)
+}
 
 ################# ----- First state of individuals diagnosed with COVID-19 ---- #############
 get_first_state <- function(type=''){
@@ -175,7 +209,8 @@ get_first_state <- function(type=''){
     #     select(age,sex,initial_state)
     first_state <- inner_join(select(individs_extended,patient_id,age,sex),patient_transitions,by='patient_id') %>%
     group_by(patient_id,age,sex) %>%
-    summarise(date=min(date),state=state[which.min(date)])
+    summarise(date_diagnosis=min(date),initial_state=state[which.min(date)]) %>%
+    ungroup()
     return(first_state)
 }
 
