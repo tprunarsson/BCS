@@ -81,6 +81,7 @@ interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr for
 interview_last_raw <- read_excel(file_path_data,sheet = 'Lokaviðtal-Spurning úr forms', skip=1)
 interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl úr hóp', skip=3) 
 NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
+ventilator_info_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 
 
 covid_groups <- read_excel(file_path_coding,sheet = 1)
@@ -214,6 +215,9 @@ NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtí
               group_by(.,patient_id,date) %>%
               summarise(NEWS_score=NEWS_score[which.max(date_time)]) %>%
               mutate(NEWS_score=if_else(NEWS_score>5,'red','green'))
+
+ventilator_info <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtími skráningar`,NEWS_score=`News score`) %>% 
+  select(.,patient_id,date_time,NEWS_score)
               
 #When running the bash script
 if (save_additional_data){
@@ -402,7 +406,27 @@ patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','d
 
 #Add worst case state to each patient
 #Find those who have at least one transition
-state_worst_case <- inner_join(patient_transitions,distinct(unit_categories,unit_category,.keep_all = T),by=c('state'='unit_category')) %>%
+
+get_state_worst <- function(state_vec,order_vec){
+  state_worst_vec <- vector('character',length=length(state_vec))
+  if(length(state_vec)==0){
+    return(state_worst_vec)
+  }
+  state_worst=state_vec[1]
+  state_worst_order=order_vec[1]
+  for(i in 1:length(state_vec)){
+    if(order_vec[i]>state_worst_order){
+      state_worst <- state_vec[i]
+      state_worst_order <- order_vec[i]
+      state_worst_vec[i] <- state_vec[i]
+    }else{
+      state_worst_vec[i] <- state_worst
+    }
+  }
+  return(state_block_numbers)
+}
+
+state_worst_case_per_date <- inner_join(patient_transitions,distinct(unit_categories,unit_category,.keep_all = T),by=c('state'='unit_category')) %>%
                     inner_join(.,distinct(clinical_assessment_categories,clinical_assessment_category,.keep_all = T),by=c('severity'='clinical_assessment_category')) %>%
                     group_by(.,patient_id,state,unit_category_order) %>%
                     summarize(.,severity_worst=severity[which.max(clinical_assessment_category_order)]) %>%
@@ -427,6 +451,7 @@ patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
 #test_data_processing()
 
 ############################## ------ Create input without clinical assessment for simulation ----- ##############################
+
 current_state_per_date <- get_current_state_per_date()
 current_state <- get_current_state()
 current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home'))
@@ -463,7 +488,7 @@ if(write_tables_for_simulation){
   write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_dashboard_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_predicted_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_write,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date_summary,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date_summary_age,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary_age','.csv'),sep=',',row.names=F,quote=F)
