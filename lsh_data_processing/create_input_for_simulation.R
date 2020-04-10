@@ -10,17 +10,27 @@ get_current_state_per_date <- function(type=''){
                               state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
                                                        is.na(severity_tomorrow) ~ state_tomorrow,
                                                        TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow))
-                        )
+                        ) %>%
+                        group_by(.,patient_id) %>%
+                        mutate(.,state_block_nr=get_state_block_numbers(state)) %>%
+                        ungroup()
+        state_block_starts <- select(patient_transitions_state_blocks,patient_id,state_block_nr,state_block_nr_start)
     }else{
-        transitions <- patient_transitions
+        transitions <- group_by(patient_transitions,patient_id) %>% mutate(state_block_nr=get_state_block_numbers(state)) %>% ungroup()
+        state_block_starts <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr) %>%
+            summarize(state_block_nr_start=min(state_block_nr_start)) %>%
+            ungroup()
     }
     
-    current_state_per_date <- select(transitions,-state_tomorrow) %>%
-        group_by(.,date,state) %>%
-        summarise(count=n())
+    current_state_per_date <- inner_join(transitions,state_block_starts,by=c('patient_id','state_block_nr')) %>%
+        mutate(days_in_state=as.numeric(date-state_block_nr_start)+1) %>%
+        inner_join(select(individs_extended,patient_id,age,sex,date_diagnosis),.,by='patient_id') %>%
+        mutate(days_from_diagnosis=as.numeric(date-date_diagnosis)+1) %>%
+        inner_join(.,state_worst_case_per_date,by=c('patient_id','date')) %>%
+        mutate(state_worst=if(type=='clinical_assessment_included') paste0(state_worst,'-',state_worst_severity) else state_worst) %>%
+        select(patient_id,date,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
     return(current_state_per_date)
 }
-
 
 ############### ---- Transition matrices ---- ###################################
 get_states_in_order <- function(type='',active=F){
@@ -104,34 +114,7 @@ get_transition_matrix_by_age <- function(type='',recovered_imputed_by_age){
     return(list('under_50'=transition_counts_matrix_age_simple_under_50,'over_50'=transition_counts_matrix_age_simple_over_50))
 }
 ############### ---- Current state of patients in hospital system ---- ###################################
-get_current_state <- function(type=''){
-    if(type=='clinical_assessment_included'){
-        transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
-                                                  state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
-                                                                           is.na(severity_tomorrow) ~ state_tomorrow,
-                                                                           TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow))
-                       ) %>%
-                       group_by(.,patient_id) %>%
-                       mutate(.,state_block_nr=get_state_block_numbers(state)) %>%
-                       ungroup()
-        state_block_starts <- select(patient_transitions_state_blocks,patient_id,state_block_nr,state_block_nr_start)
-    }else{
-        transitions <- group_by(patient_transitions,patient_id) %>% mutate(state_block_nr=get_state_block_numbers(state)) %>% ungroup()
-        state_block_starts <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr) %>%
-                                summarize(state_block_nr_start=min(state_block_nr_start)) %>%
-                                ungroup()
-    }
-    
-    current_state <- filter(transitions,date==date_last_known_state) %>%
-        inner_join(.,state_block_starts,by=c('patient_id','state_block_nr')) %>%
-        mutate(days_in_state=as.numeric(current_date-state_block_nr_start)) %>%
-        inner_join(individs_extended,.,by='patient_id') %>%
-        mutate(days_from_diagnosis=as.numeric(current_date-date_diagnosis)) %>%
-        mutate(state_worst=if(type=='clinical_assessment_included') paste0(state_worst,'-',state_worst_severity) else state_worst) %>%
-        select(patient_id,age,sex,state,days_in_state,days_from_diagnosis,state_worst)
 
-    return(current_state)
-}
 
 ############## ----- Length of stay distribution by state and age ----- ############## 
 get_length_of_stay_predicted_by_age_simple <- function(type=''){
