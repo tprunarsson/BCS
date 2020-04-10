@@ -423,18 +423,20 @@ get_state_worst <- function(state_vec,order_vec){
       state_worst_vec[i] <- state_worst
     }
   }
-  return(state_block_numbers)
+  return(state_worst_vec)
 }
 
 state_worst_case_per_date <- inner_join(patient_transitions,distinct(unit_categories,unit_category,.keep_all = T),by=c('state'='unit_category')) %>%
                     inner_join(.,distinct(clinical_assessment_categories,clinical_assessment_category,.keep_all = T),by=c('severity'='clinical_assessment_category')) %>%
-                    group_by(.,patient_id,state,unit_category_order) %>%
-                    summarize(.,severity_worst=severity[which.max(clinical_assessment_category_order)]) %>%
-                    group_by(patient_id) %>%
-                    summarize(.,state_worst=state[which.max(unit_category_order)],state_worst_severity=severity_worst[which.max(unit_category_order)]) %>%
-                    ungroup()
+                    group_by(.,patient_id) %>%
+                    arrange(.,date) %>%
+                    mutate(state_worst=get_state_worst(paste0(state,'-',severity),paste0(unit_category_order,clinical_assessment_category_order))) %>%
+                    separate(.,state_worst,into=c('state_worst','state_worst_severity'),sep='-') %>%
+                    ungroup() %>%
+                    select(patient_id,date,state_worst,state_worst_severity)
+state_worst_case <- group_by(state_worst_case_per_date,patient_id) %>% arrange(date) %>% slice(n()) %>% select(-date)
 individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
-
+rm(state_worst_case)
 
 
 
@@ -453,7 +455,8 @@ patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
 ############################## ------ Create input without clinical assessment for simulation ----- ##############################
 
 current_state_per_date <- get_current_state_per_date()
-current_state <- get_current_state()
+current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>% summarise(count=n())
+current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
 current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home'))
 recovered_imputed_by_age <- anti_join(current_state,current_state_write) %>%
   inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
@@ -481,12 +484,13 @@ if (save_additional_data){
 }
 ############### ----- Write simple tables to disk ----- ############################
 if(write_tables_for_simulation){
-  write.table(current_state_per_date,file=paste0(path_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_per_date_summary,file=paste0(path_tables,current_date,'_current_state_per_date_summary','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(patient_transition_counts_matrix_all,file=paste0(path_tables,current_date,'_transition_matrix','.csv'),sep=',',row.names=FALSE,col.names=T,quote=FALSE)
   write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_tables,current_date,'_transition_matrix_under_50','.csv'),sep=',',row.names=F,col.names=T,quote=F)
   write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=T,quote=F)
-  write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=F,quote=F)
-  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_dashboard_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
   write.table(length_of_stay_predicted_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_write,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date','.csv'),sep=',',row.names=F,quote=F)
