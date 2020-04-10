@@ -498,10 +498,17 @@ if(write_tables_for_simulation){
   write.table(first_state_per_date_summary_age,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary_age','.csv'),sep=',',row.names=F,quote=F)
 }
 
-# current_state_per_date_extended <- get_current_state_per_date(type='extended')
-# patient_transition_counts_matrix_all_extended <- get_transition_matrix_all(type='extended')
-# patient_transition_counts_matrix_age_simple_under_50_extended <- get_transition_matrix_by_age(type='extended')$under_50 
-# patient_transition_counts_matrix_age_simple_over_50_extended <- get_transition_matrix_by_age(type='extended')$over_50
+current_state_per_date_extended <- get_current_state_per_date(type='clinical_assessment_included')
+current_state_per_date_extended_summary <- group_by(current_state_per_date_extended,date,state) %>% summarise(count=n())
+current_state_extended <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
+current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home_green'))
+recovered_imputed_by_age_extended <- anti_join(current_state,current_state_write) %>%
+  inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
+  mutate(date=current_date,state_tomorrow='recovered') %>%
+  select(patient_id,age_group_simple,date,state,state_tomorrow)
+patient_transition_counts_matrix_all_extended <- get_transition_matrix_all(type='clinical_assessment_included',select(recovered_imputed_by_age_extended,-age_group_simple))
+# patient_transition_counts_matrix_age_simple_under_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included')$under_50 
+# patient_transition_counts_matrix_age_simple_over_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included')$over_50
 # current_state_extended <- get_current_state(type='extended')
 # current_state_extended_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home_green'))
 # #length_of_stay_by_age_simple_extended <- get_length_of_stay_by_age_simple(type='extended') 

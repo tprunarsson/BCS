@@ -14,7 +14,8 @@ get_current_state_per_date <- function(type=''){
                         group_by(.,patient_id) %>%
                         mutate(.,state_block_nr=get_state_block_numbers(state)) %>%
                         ungroup()
-        state_block_starts <- select(patient_transitions_state_blocks,patient_id,state_block_nr,state_block_nr_start)
+        state_block_starts <- select(patient_transitions_state_blocks,patient_id,state_with_severity_block_nr,state_block_nr_start) %>%
+                                rename(state_block_nr=state_with_severity_block_nr)
     }else{
         transitions <- group_by(patient_transitions,patient_id) %>% mutate(state_block_nr=get_state_block_numbers(state)) %>% ungroup()
         state_block_starts <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr) %>%
