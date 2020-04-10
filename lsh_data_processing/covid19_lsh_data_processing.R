@@ -99,7 +99,7 @@ comorbidities_categories <- read_excel(file_path_coding,sheet = 8) %>%
   arrange(comorbidities_raw)
 
 
-#test_lsh_data_file()
+test_lsh_data_file()
 
 ################## ----- Cleaning ----- ##############################################################
 
@@ -450,7 +450,7 @@ patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
                                     mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+1) %>%
                                     ungroup()
 
-#test_data_processing()
+test_data_processing()
 
 ############################## ------ Create input without clinical assessment for simulation ----- ##############################
 
@@ -482,6 +482,9 @@ first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_stat
 if (save_additional_data){
   save(current_state_per_date, file = paste0(path_sensitive_tables, "current_state_per_date.RData"))
 }
+
+test_tables_for_simulation()
+
 ############### ----- Write simple tables to disk ----- ############################
 if(write_tables_for_simulation){
   write.table(current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_current_state_per_date','.csv'),sep=',',row.names=FALSE,quote=FALSE)
