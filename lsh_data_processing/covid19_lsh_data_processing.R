@@ -457,7 +457,7 @@ test_data_processing()
 current_state_per_date <- get_current_state_per_date()
 current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>% summarise(count=n())
 current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
-current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home'))
+current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
 recovered_imputed_by_age <- anti_join(current_state,current_state_write) %>%
   inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
   mutate(date=current_date,state_tomorrow='recovered') %>%
