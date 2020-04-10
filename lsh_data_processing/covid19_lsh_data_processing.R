@@ -9,7 +9,7 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('impute_length_of_stay.R')
 
-current_date_tmp <- as.Date('2020-04-09','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-10','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- TRUE
@@ -198,7 +198,7 @@ hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`
                     mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
                     inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
                     filter(!(unit_category_all=='inpatient_ward_geriatric' & is.na(date_diagnosis_hospital))) %>%
-                    mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital,date_time_in)) %>%
+                    mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital-1,date_time_in)) %>%
                     filter(!(unit_category_all %in% c('maternity_clinic','endoscopy_clinic','inpatient_ward_maternity'))) %>%
                     separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
                     separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
