@@ -189,7 +189,7 @@ test_data_processing <- function(){
     test_unique_id(individs_extended)
     test_unique_id_date(dates_home)
     test_unique_id_date(dates_hospital)
-    test_unique_id_date(recovered_transitions)
+#    test_unique_id_date(recovered_transitions)
     test_unique_id_date(patient_transitions)
     #check if state worst in individs_extended is correct
     return('Finished testing data processing')
@@ -197,7 +197,7 @@ test_data_processing <- function(){
 
 test_tables_for_simulation <- function(){
     #test output tables
-    test_transition_matrices()
+#    test_transition_matrices()
     test_current_state()
     test_length_of_stay()
     test_first_state()
