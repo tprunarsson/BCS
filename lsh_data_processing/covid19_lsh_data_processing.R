@@ -7,9 +7,9 @@ library(tidyr)
 library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
-source('impute_length_of_stay.R')
+source('model_length_of_stay.R')
 
-current_date_tmp <- as.Date('2020-04-10','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-11','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- TRUE
@@ -81,7 +81,7 @@ interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr for
 interview_last_raw <- read_excel(file_path_data,sheet = 'Lokaviðtal-Spurning úr forms', skip=1)
 interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl úr hóp', skip=3) 
 NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
-ventilator_info_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
+ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
 
 
 covid_groups <- read_excel(file_path_coding,sheet = 1)
@@ -216,8 +216,22 @@ NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtí
               summarise(NEWS_score=NEWS_score[which.max(date_time)]) %>%
               mutate(NEWS_score=if_else(NEWS_score>5,'red','green'))
 
-ventilator_info <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtími skráningar`,NEWS_score=`News score`) %>% 
-  select(.,patient_id,date_time,NEWS_score)
+ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_time_ventilator_start=`Dags settur í öndunarvél`,date_time_ventilator_end=`Dags tekin úr öndunarvél`) %>% 
+                      select(.,patient_id,date_time_ventilator_start,date_time_ventilator_end) %>%
+                      mutate(unit_in='intensive_care_unit') %>%
+                      mutate(date_ventilator_start=as.Date(gsub('\\s.*','',date_time_ventilator_start),'%Y-%m-%d'),
+                             date_ventilator_end=as.Date(gsub('\\s.*','',date_time_ventilator_end),'%Y-%m-%d')) %>%
+                      select(-date_time_ventilator_start,-date_time_ventilator_end) %>%
+                      filter(!is.na(date_ventilator_start)) %>%
+                      inner_join(.,select(hospital_visits,patient_id,unit_category_all,date_in),by=c('patient_id','unit_in'='unit_category_all')) %>%
+                      group_by(.,patient_id,unit_in) %>%
+                      summarise(date_in=min(date_in,na.rm=T),date_ventilator_start=min(date_ventilator_start),date_ventilator_end=suppressWarnings(max(date_ventilator_end,na.rm=T))) %>%
+                      gather(key='ventilator',value='date',date_in,date_ventilator_start,date_ventilator_end) %>%
+                      filter(is.finite(date)) %>%
+                      mutate(ventilator=if_else(ventilator=='date_ventilator_start','red','green')) %>%
+                      group_by(patient_id,unit_in,date) %>%
+                      summarise(ventilator=ventilator[which.max(ventilator=='red')])
+                
               
 #When running the bash script
 if (save_additional_data){
@@ -326,64 +340,15 @@ dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
   return(tmp)
 }) %>% bind_rows() %>% group_by(.,patient_id,date) %>% summarize(state=tail(state,1)) %>% ungroup()
 
-impute_severity <- function(state,severity_vec){
-  output_vec <- vector('character',length = length(severity_vec))
-  if(length(severity_vec)>0){
-    if(is.na(severity_vec[1])){
-      if(state=='home'){
-        output_vec[1] <- 'green'
-      }else{
-        output_vec[1] <- 'red'
-      }
-      
-    }else{
-      output_vec[1] <- severity_vec[1]
-    }
-    if(length(severity_vec)>1){
-      current_severity <- output_vec[1]
-      for(i in 2:length(severity_vec)){
-        if(is.na(severity_vec[i])){
-          output_vec[i] <- current_severity
-        }else{
-          output_vec[i] <- severity_vec[i]
-          current_severity <- output_vec[i]
-        }
-      }
-    }
-  }
-  return(output_vec)
-}
-
-#identify and sequencially number blocks of states for each patient_id 
-get_state_block_numbers <- function(state_vec){
-  state_nr=1
-  state_block_numbers <- c()
-  
-  if(length(state_vec)==0){
-    return(state_block_numbers)
-  }
-  
-  state_block_numbers[1]=state_nr=1
-  
-  if(length(state_vec)==1){
-    return(state_block_numbers)
-  }
-  for(i in 2:length(state_vec)){
-    if(state_vec[i]!=state_vec[i-1]){
-      state_nr <- state_nr+1
-    }
-    state_block_numbers[i] <- state_nr
-  }
-  return(state_block_numbers)
-}
 #no score for ICU in data - use NEWS score instead
 patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
                                 mutate(.,state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
                                 left_join(.,dates_clinical_assessment,by=c('patient_id','date')) %>%
                                 left_join(.,NEWS_score,by=c('patient_id','date')) %>%
+                                left_join(.,ventilator_times,by=c('patient_id','date')) %>%
                                 mutate(.,severity=case_when(state=='home' ~ clinical_assessment,
                                                           state=='inpatient_ward' ~ NEWS_score,
-                                                          state=='intensive_care_unit' ~ NEWS_score)) %>%
+                                                          state=='intensive_care_unit' ~ ventilator)) %>%
                                 arrange(.,patient_id,date) %>%
                                 group_by(.,patient_id) %>%
                                 mutate(.,state_block_nr=get_state_block_numbers(state)) %>%
@@ -405,27 +370,6 @@ patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','d
 
 
 #Add worst case state to each patient
-#Find those who have at least one transition
-
-get_state_worst <- function(state_vec,order_vec){
-  state_worst_vec <- vector('character',length=length(state_vec))
-  if(length(state_vec)==0){
-    return(state_worst_vec)
-  }
-  state_worst=state_vec[1]
-  state_worst_order=order_vec[1]
-  for(i in 1:length(state_vec)){
-    if(order_vec[i]>state_worst_order){
-      state_worst <- state_vec[i]
-      state_worst_order <- order_vec[i]
-      state_worst_vec[i] <- state_vec[i]
-    }else{
-      state_worst_vec[i] <- state_worst
-    }
-  }
-  return(state_worst_vec)
-}
-
 state_worst_case_per_date <- inner_join(patient_transitions,distinct(unit_categories,unit_category,.keep_all = T),by=c('state'='unit_category')) %>%
                     inner_join(.,distinct(clinical_assessment_categories,clinical_assessment_category,.keep_all = T),by=c('severity'='clinical_assessment_category')) %>%
                     group_by(.,patient_id) %>%
@@ -457,7 +401,7 @@ test_data_processing()
 current_state_per_date <- get_current_state_per_date()
 current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>% summarise(count=n())
 current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
-current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home'))
+current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
 recovered_imputed_by_age <- anti_join(current_state,current_state_write) %>%
   inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
   mutate(date=current_date,state_tomorrow='recovered') %>%
@@ -466,7 +410,7 @@ patient_transition_counts_matrix_all <- get_transition_matrix_all('',select(reco
 patient_transition_counts_matrix_age_simple_under_50 <- get_transition_matrix_by_age('',recovered_imputed_by_age)$under_50 
 patient_transition_counts_matrix_age_simple_over_50 <- get_transition_matrix_by_age('',recovered_imputed_by_age)$over_50
 length_of_stay_empirical_by_age_simple <- get_length_of_stay_empirical_by_age_simple('') 
-length_of_stay_predicted_by_age_simple <- get_length_of_stay_predicted_by_age_simple('') 
+length_of_stay_predicted_by_age_simple <- get_length_of_stay_predicted_by_age_simple('',c('inpatient_ward','intensive_care_unit'),c(max_num_days_inpatient_ward,max_num_days_intensive_care_unit)) 
 
 first_state <- get_first_state()
 first_state_write <- select(first_state,age,sex,initial_state)
@@ -503,25 +447,27 @@ if(write_tables_for_simulation){
 
 current_state_per_date_extended <- get_current_state_per_date(type='clinical_assessment_included')
 current_state_per_date_extended_summary <- group_by(current_state_per_date_extended,date,state) %>% summarise(count=n())
-current_state_extended <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
-current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home_green'))
+current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state) %>% select(-date)
+current_state_extended_write <- filter(current_state_extended,!(days_from_diagnosis > 14 & state == 'home_green'))
 recovered_imputed_by_age_extended <- anti_join(current_state,current_state_write) %>%
   inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
   mutate(date=current_date,state_tomorrow='recovered') %>%
   select(patient_id,age_group_simple,date,state,state_tomorrow)
 patient_transition_counts_matrix_all_extended <- get_transition_matrix_all(type='clinical_assessment_included',select(recovered_imputed_by_age_extended,-age_group_simple))
-# patient_transition_counts_matrix_age_simple_under_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included')$under_50 
-# patient_transition_counts_matrix_age_simple_over_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included')$over_50
-# current_state_extended <- get_current_state(type='extended')
-# current_state_extended_write <- filter(current_state,!(days_from_diagnosis > 14 & state == 'home_green'))
-# #length_of_stay_by_age_simple_extended <- get_length_of_stay_by_age_simple(type='extended') 
-# first_state_extended <- get_first_state(type='extended')
+patient_transition_counts_matrix_age_simple_under_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included',recovered_imputed_by_age_extended)$under_50 
+patient_transition_counts_matrix_age_simple_over_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included',recovered_imputed_by_age_extended)$over_50
+length_of_stay_empirical_by_age_simple_extended <- get_length_of_stay_empirical_by_age_simple(type='clinical_assessment_included') 
+length_of_stay_predicted_by_age_simple_extended <- get_length_of_stay_predicted_by_age_simple('clinical_assessment_included',
+                                                                                              c('inpatient_ward','inpatient_ward','intensive_care_unit','intensive_care_unit'),
+                                                                                              c(rep(max_num_days_inpatient_ward,2),rep(max_num_days_intensive_care_unit,2)),
+                                                                                              c('inpatient_ward-green','inpatient_ward-red','intensive_care_unit-green','intensive_care_unit-red')) 
+first_state_extended <- get_first_state(type='clinical_assessment_included')
 # #TODO: add to create_output_for_simulation
-# # first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
-# # first_state_per_date_summary_age <- inner_join(first_state,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>%
-# #   select(date_diagnosis,age_group_simple,initial_state) %>%
-# #   group_by(date_diagnosis,initial_state,age_group_simple) %>% summarise(count=n())
-# # first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
+first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
+first_state_per_date_summary_age <- inner_join(first_state,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>%
+  select(date_diagnosis,age_group_simple,initial_state) %>%
+  group_by(date_diagnosis,initial_state,age_group_simple) %>% summarise(count=n())
+first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
 # 
 # ############### ----- Write extended tables to disk ----- ############################
 # if(write_tables_for_simulation){
