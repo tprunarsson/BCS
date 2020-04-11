@@ -20,11 +20,17 @@ print_report_tmp <- "none"
 max_num_days_inpatient_ward <- 21
 max_num_days_intensive_care_unit <- 28
 
+#Supported unit category types: all,simple
 unit_category_type <- 'simple'
+#Supported text out category types: simple
 text_out_category_type <- 'simple'
+#Supported clnical assessment category types: all,simple
 clinical_assessment_category_type <- 'simple'
+#Supported priority category types: simple
 priority_category_type <- 'simple'
+#Supported age group types: official,three,simple
 age_group_type <- 'simple'
+#Supported splitting variable names: age,priority
 splitting_variable_name <- 'age'
 
 option_list <-  list(
