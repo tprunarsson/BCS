@@ -11,9 +11,10 @@ source('impute_length_of_stay.R')
 
 current_date_tmp <- as.Date('2020-04-10','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
-path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
-write_tables_for_simulation_tmp <- TRUE
-save_additional_data_tmp <- FALSE
+path_to_lsh_data_tmp <- '../../'
+write_tables_for_simulation_tmp <- FALSE
+write_table_for_report_tmp <- FALSE
+print_report_tmp <- "none"
 max_num_days_inpatient_ward <- 21
 max_num_days_intensive_care_unit <- 28
 
@@ -23,8 +24,10 @@ option_list <-  list(
   make_option(c("-p", "--prediction_date"), type="character", default=NULL, 
               help="date of prediction from covid.hi.is", metavar="character"),
   make_option(c("-d", "--path_to_lsh_data"), type="character", default=path_to_lsh_data_tmp, 
-              help="path to data from LSH", metavar="character")
-) 
+              help="path to data from LSH", metavar="character"),
+  make_option(c("-r", "--print_report"), type="character", default=print_report_tmp, 
+              help="none for no report, tmp for report in report_tmp, final for daily_report official, none is default", metavar="character")
+)
 
 opt_parser <-  OptionParser(option_list=option_list);
 opt <-  parse_args(opt_parser);
@@ -33,29 +36,39 @@ if(is.null(opt[['current_date']])){
   current_date <- current_date_tmp 
   warning(paste0('You did not provide a current date. ',current_date,' will be used'))
 }else{
-  current_date <- as.Date(as.character(opt['current_date']),'%Y-%m-%d')
+  current_date <- as.Date(as.character(opt[['current_date']]),'%Y-%m-%d')
 }
 
 if(is.null(opt[['prediction_date']])){
   prediction_date <- prediction_date_tmp 
-  warning(paste0('You did not provide a prediction date. ',prediction_date,' will be used'))
+  warning(paste0('You did not provide a prediction date.',prediction_date,' will be used'))
 }else{
-  prediction_date <- as.Date(as.character(opt['prediction_date']),'%Y-%m-%d')
+  prediction_date <- as.Date(as.character(opt[['prediction_date']]),'%Y-%m-%d')
 }
 
-if(opt[['path_to_lsh_data']]==path_to_lsh_data_tmp){
+if(opt[['path_to_lsh_data']] == ""){
   path_to_lsh_data <- path_to_lsh_data_tmp
 }else{
   path_to_lsh_data <- opt[['path_to_lsh_data']]
 }
 
-if(length(opt)>2){
+if(opt[['print_report']] == ""){
+  print_report <- print_report_tmp
+}else{
+  print_report <- opt[['print_report']]
+}
+
+if(print_report == "final" | print_report == "tmp"){
   write_tables_for_simulation <- TRUE
-  save_additional_data <- TRUE
+  write_table_for_report <- TRUE
+}else if (length(opt)>1){
+  write_tables_for_simulation <- TRUE
+  write_table_for_report <- write_table_for_report_tmp
 }else{
   write_tables_for_simulation <- write_tables_for_simulation_tmp
-  save_additional_data <- save_additional_data_tmp
+  write_table_for_report <- write_table_for_report_tmp
 }
+
 
 #date of prediction by covid.hi.is
 
@@ -219,10 +232,6 @@ NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtí
 ventilator_info <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtími skráningar`,NEWS_score=`News score`) %>% 
   select(.,patient_id,date_time,NEWS_score)
               
-#When running the bash script
-if (save_additional_data){
-  save(hospital_visits, file = paste0(path_sensitive_tables, "hospital_visits.RData"))
-}
 
 test_cleaning()
 
@@ -438,8 +447,6 @@ state_worst_case <- group_by(state_worst_case_per_date,patient_id) %>% arrange(d
 individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
 rm(state_worst_case)
 
-
-
 #summarise state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
 patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
                                     mutate(state_block_nr=get_state_block_numbers(state),
@@ -468,7 +475,7 @@ patient_transition_counts_matrix_age_simple_over_50 <- get_transition_matrix_by_
 length_of_stay_empirical_by_age_simple <- get_length_of_stay_empirical_by_age_simple('') 
 length_of_stay_predicted_by_age_simple <- get_length_of_stay_predicted_by_age_simple('') 
 
-first_state <- get_first_state()
+first_state <- get_first_state()  
 first_state_write <- select(first_state,age,sex,initial_state)
 #add to create input for simulation
 first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
@@ -478,9 +485,23 @@ first_state_per_date_summary_age <- inner_join(first_state,select(individs_exten
 first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
 
 
-#When running the bash script
-if (save_additional_data){
-  save(current_state_per_date, file = paste0(path_sensitive_tables, "current_state_per_date.RData"))
+#Write tables for outpatient clinic for report
+if (write_table_for_report){
+  window_size <- 7
+  nr_at_home_per_day <- filter(current_state_per_date_summary,state=='home') %>% rename(nr_at_home=count)
+  outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
+    select(patient_id,date_in) %>%
+    arrange(patient_id,date_in) %>%
+    group_by(.,date_in) %>%
+    summarise(nr_visits=n()) %>% ungroup() %>%
+    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
+    mutate(prop_visits=nr_visits/nr_at_home)
+  
+  date_for_calculation <- current_date-window_size
+  prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
+    summarise(prop_visits_last_week=sum(prop_visits)/window_size)
+  
+  write.table(prop_outpatient_clinic_last_week, file=paste0(path_sensitive_tables,current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
 }
 
 test_tables_for_simulation()
@@ -540,6 +561,7 @@ for (i in 1:length(dates)) {
   new_cases <- table(filter(hi_posterior_predictive_distr,date==dates[i])$new_cases)
   hi_mat_CDF[i,names(new_cases)] = cumsum(new_cases)/sum(new_cases)
 }
+
 if(write_tables_for_simulation){
   write.csv(hi_mat_CDF, file = paste0(path_tables,current_date,'_iceland_posterior.csv'), quote = F)
 }
@@ -549,9 +571,7 @@ if(write_tables_for_simulation){
 
 path_stats_tables='../output_stats_group/'
 #Create table of new hospital cases,new icu,out of hospital and out of icu per day
-finished_states <- inner_join(select(individs_extended,patient_id,age_group_std),
-                              select(patient_transitions_state_blocks,-censored,-state_duration),
-                              by='patient_id')%>%
+finished_states <- inner_join(select(individs_extended,patient_id,age_group_std), select(patient_transitions_state_blocks,-censored,-state_duration),by='patient_id')%>%
   filter(state!=state_next) %>%
   mutate(date=state_block_nr_end+1) %>%
   select(patient_id,date,age_group_std,state,state_next)

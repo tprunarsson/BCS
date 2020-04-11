@@ -1,0 +1,61 @@
+#!/bin/bash
+
+#Reading arguements
+while getopts ":c:p:d:r:n:" opt; do
+  case $opt in
+    c) current_date="$OPTARG"
+    ;;
+    p) prediction_date="$OPTARG"
+    ;;
+    d) path_to_lsh_data="$OPTARG"
+    ;;
+    r) print_report="$OPTARG"
+    ;;
+    n) name_of_report="$OPTARG"
+    ;;
+    \?) echo "Invalid option -$OPTARG" >&2
+    ;;
+  esac
+done
+
+#If empty then set default value
+print_report="${print_report:-"none"}"
+name_of_report="${name_of_report:-"Flæði COVID-19 sjúklinga LSH"}"
+
+echo "-----------------------------------------"
+echo "---------Running data processing---------"
+echo "-----------------------------------------"
+cd lsh_data_processing
+Rscript covid19_lsh_data_processing.R -c "$current_date" -p "$prediction_date" -d "$path_to_lsh_data" -r "$print_report"
+
+echo "-----------------------------------------"
+echo "-----------Running simulation------------"
+echo "-----------------------------------------"
+cd ../src
+make
+./covid "$current_date" ..
+
+
+#Finding path for report
+if [ "none" == "$print_report" ]; then
+	echo "Finished running simulation. Not printing report."
+	exit 1
+elif [ "tmp" == "$print_report" ]; then
+	path_to_report="../reports_tmp/"
+elif [ "final" == "$print_report" ]; then
+	path_to_report="../daily_report/"
+	#Copy files from output to simulation_history
+	cp ../output/$current_date* ../simulation_history/
+	#Running post simulation processing that saves csv files to output_lsh folder
+	cd ../lsh_data_processing
+	Rscript post_simulation_processing.R -c "$current_date"
+fi
+
+
+echo "-----------------------------------------"
+echo "-------------Knitting report-------------"
+echo "-----------------------------------------"
+cd ../report
+Rscript -e 'args <- commandArgs(trailingOnly = TRUE);current_date <- as.Date(args[1]);prediction_date<-as.Date(args[2]);Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/MacOS/pandoc"); rmarkdown::render("report.Rmd", "html_document",output_file=paste0(args[3],args[1],"-",args[4],".html"))' "$current_date" "$prediction_date" "$path_to_report" "$name_of_report"
+
+
