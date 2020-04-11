@@ -7,12 +7,12 @@ library(tidyr)
 library(readr)
 source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
-source('model_length_of_stay.R')
+source('help_functions.R')
 
 current_date_tmp <- as.Date('2020-04-11','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
-write_tables_for_simulation_tmp <- TRUE
+write_tables_for_simulation_tmp <- FALSE
 save_additional_data_tmp <- FALSE
 max_num_days_inpatient_ward <- 21
 max_num_days_intensive_care_unit <- 28
@@ -463,22 +463,28 @@ length_of_stay_predicted_by_age_simple_extended <- get_length_of_stay_predicted_
                                                                                               c('inpatient_ward-green','inpatient_ward-red','intensive_care_unit-green','intensive_care_unit-red')) 
 first_state_extended <- get_first_state(type='clinical_assessment_included')
 # #TODO: add to create_output_for_simulation
-first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
-first_state_per_date_summary_age <- inner_join(first_state,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>%
+first_state_extended_write <- select(first_state,age,sex,initial_state)
+first_state_per_date_extended <- select(first_state_extended,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
+first_state_per_date_extended_summary_age <- inner_join(first_state_extended,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>%
   select(date_diagnosis,age_group_simple,initial_state) %>%
   group_by(date_diagnosis,initial_state,age_group_simple) %>% summarise(count=n())
-first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
+first_state_per_date_extended_summary <- group_by(first_state_extended,date_diagnosis,initial_state) %>% summarise(count=n())
 # 
 # ############### ----- Write extended tables to disk ----- ############################
-# if(write_tables_for_simulation){
-#   write.table(current_state_per_date_extended,file=paste0(path_tables,current_date,'_current_state_per_date_extended','.csv'),sep=',',row.names=FALSE,quote=FALSE)
-#   write.table(patient_transition_counts_matrix_all_extended,file=paste0(path_tables,current_date,'_transition_matrix_extended','.csv'),sep=',',row.names=FALSE,col.names=states,quote=FALSE)
-#   write.table(patient_transition_counts_matrix_age_simple_under_50_extended,file=paste0(path_tables,current_date,'_transition_matrix_under_50_extended','.csv'),sep=',',row.names=F,col.names=T,quote=F)
-#   write.table(patient_transition_counts_matrix_age_simple_over_50_extended,file=paste0(path_tables,current_date,'_transition_matrix_over_50_extended','.csv'),sep=',',row.names=F,col.names=T,quote=F)
-#   write.table(current_state_write_extended,file=paste0(path_sensitive_tables,current_date,'_current_state_extended','.csv'),sep=',',row.names=F,quote=F)
-#   write.table(length_of_stay_by_age_simple_extended,file=paste0(path_tables,current_date,'_length_of_stay_extended','.csv'),sep=',',row.names=F,quote=F)
-#   write.table(first_state_extended,file=paste0(path_sensitive_tables,current_date,'_first_state_extended','.csv'),sep=',',row.names=F,quote=F)
-# }
+if(write_tables_for_simulation){
+  write.table(current_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_current_state_per_date_extended','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_per_date_extended_summary,file=paste0(path_tables,current_date,'_current_state_per_date_extended_summary','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_current_state_extended','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(patient_transition_counts_matrix_all_extended,file=paste0(path_tables,current_date,'_transition_matrix_extended','.csv'),sep=',',row.names=FALSE,col.names=T,quote=FALSE)
+  write.table(patient_transition_counts_matrix_age_simple_under_50_extended,file=paste0(path_tables,current_date,'_transition_matrix_under_50_extended','.csv'),sep=',',row.names=F,col.names=T,quote=F)
+  write.table(patient_transition_counts_matrix_age_simple_over_50_extended,file=paste0(path_tables,current_date,'_transition_matrix_over_50_extended','.csv'),sep=',',row.names=F,col.names=T,quote=F)
+  write.table(length_of_stay_empirical_by_age_simple_extended,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical_extended','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_predicted_by_age_simple_extended,file=paste0(path_tables,current_date,'_length_of_stay_extended','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_first_state_extended','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_extended_summary,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_summary','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_extended_summary_age,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_summary_age','.csv'),sep=',',row.names=F,quote=F)
+}
 
 
 ################# ----- Extract CDF from posterior predictive distribution from the stats group model of number infected
