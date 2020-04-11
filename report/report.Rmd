@@ -33,35 +33,21 @@ fjoldi_smita_dags <- format(prediction_date, '%d-%m-%Y')
 soguleg_gogn_dags <- format(current_date-1, '%d-%m-%Y')
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 #Göngudeild
-load("../lsh_data/hospital_visits.RData")
-load("../lsh_data/current_state_per_date.RData")
-
 window_size <- 7
-nr_at_home_per_day <- filter(current_state_per_date,state=='home') %>% rename(nr_at_home=count)
-outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
-    select(patient_id,date_in) %>%
-    arrange(patient_id,date_in) %>%
-    group_by(.,date_in) %>%
-    summarise(nr_visits=n()) %>% ungroup() %>%
-    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
-    mutate(prop_visits=nr_visits/nr_at_home)
-
-date_for_calculation <- current_date-window_size
-prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
-    summarise(prop_visits_last_week=sum(prop_visits)/window_size)
-prop_visits_last_week <- prop_outpatient_clinic_last_week$prop_visits_last_week
+date_for_calculation <- current_date - window_size
+path_to_prop <- paste0('../lsh_data/',current_date,'_prop_outpatient_clinic.csv')
+prop_outpatient_clinic_last_week <- read_csv(file = path_to_prop)$prop_visits_last_week
 
 outpatient_clinic_sim_visits <- filter(simulation, state == "Heimaeinangrun") %>%
-    mutate(.,count_visits = prop_visits_last_week*count)
+    mutate(.,count_visits = prop_outpatient_clinic_last_week*count)
 
 quantiles_outp <- group_by(outpatient_clinic_sim_visits, date) %>% 
     summarise(median=round(median(count_visits)),quantile975=round(quantile(count_visits,probs=0.975))) %>%
     ungroup() %>%
     mutate(date = as.Date(date))
 ```
-
 
 $~$
 
@@ -70,7 +56,7 @@ Komur á göngudeild eru áætlaðar út frá spáðum fjölda í heimaeinangrun
 
 Spá um fjölda greindra smita er frá `r fjoldi_smita_dags`.<br />
 Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.<br />
-Hlutfall sjúklinga í heimaeinangrun sem komu á göngudeild frá og með `r format(date_for_calculation, "%d-%m-%Y")` til og með `r format(current_date-1, "%d-%m-%Y")` er `r round(prop_visits_last_week, 3)*100`%.
+Hlutfall sjúklinga í heimaeinangrun sem komu á göngudeild frá og með `r format(date_for_calculation, "%d-%m-%Y")` til og með `r format(current_date-1, "%d-%m-%Y")` er `r round(prop_outpatient_clinic_last_week, 4)*100`%.
 
 $~$
 
@@ -166,7 +152,7 @@ quantiles %>%
     xlab('Dagsetning') + 
     scale_x_date(date_breaks = "day", date_labels = "%m-%d", expand = c(0,0.5)) +
     ylab('Fjöldi') +
-    ggtitle('Fjöldi smitaðra einstaklinga á gjörgæsla á hverjum degi')
+    ggtitle('Fjöldi smitaðra einstaklinga á gjörgæslu á hverjum degi')
 ```
 
 $~$
