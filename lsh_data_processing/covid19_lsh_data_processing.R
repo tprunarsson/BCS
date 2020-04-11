@@ -11,7 +11,8 @@ source('help_functions.R')
 
 current_date_tmp <- as.Date('2020-04-11','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
-path_to_lsh_data_tmp <- '../../'
+path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
+#path_to_lsh_data_tmp <- '../../'
 write_tables_for_simulation_tmp <- FALSE
 write_table_for_report_tmp <- FALSE
 print_report_tmp <- "none"
