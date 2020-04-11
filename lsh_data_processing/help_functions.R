@@ -1,3 +1,64 @@
+get_states_in_order <- function(type='',active=F){
+  states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
+    arrange(unit_category_order) %>%
+    select(unit_category) %>%
+    unlist() %>%
+    unname() 
+  if(type=='clinical_assessment_included'){
+    clinical_assessment_active <- c('green','red')
+    states_active <- sapply(states_active,function(x) paste0(x,'-',clinical_assessment_active)) %>% c()
+  }
+  if(active){
+    states <- states_active 
+  }else{
+    states_end <- c('death','recovered')
+    states <- c(states_active,states_end)
+  }
+  return(states)
+}
+
+get_splitting_variable_values_in_order <- function(splitting_variable_name){
+  if(splitting_variable_name=='age'){
+    values <- distinct(age_groups,age_group,age_group_order) %>%
+      arrange(age_group_order) %>%
+      select(age_group) %>%
+      mutate(age_group=paste0('age_',age_group)) %>%
+      unlist() %>%
+      unname() 
+  }else if(splitting_variable_name=='priority'){
+    values <- distinct(priority_categories,priority_category,priority_category_order) %>%
+      arrange(priority_category_order) %>%
+      select(priority_category) %>%
+      mutate(priority_category=paste0('priority_',priority_category)) %>%
+      unlist() %>%
+      unname() 
+  }else{
+    stop('splitting variable not yet defined')
+  }
+  return(values)
+}
+
+
+get_splitting_variable <- function(dat,variable_name){
+  splitting_variable <- c()
+  if(variable_name=='age'){
+    if(!('age' %in% names(dat))){
+      stop("age must be a variable in dat")   
+    }
+    splitting_variable <- select(dat,age) %>% inner_join(age_groups,by='age') %>% mutate(age_group=paste0('age_',age_group)) %>% select(age_group) %>% unlist() %>% unname()
+  }else if(variable_name=='priority'){
+    if(!('priority' %in% names(dat))){
+      stop("priority must be a variable in dat")   
+    }
+    splitting_variable <- select(dat,priority) %>% mutate(priority=paste0('priority_',priority)) %>% unlist() %>% unname()
+  }else{
+    stop("splitting variable type not yet defined") 
+  }
+  splitting_variable_values_in_order <- get_splitting_variable_values_in_order(variable_name)
+  return(factor(splitting_variable,levels=splitting_variable_values_in_order,labels=splitting_variable_values_in_order))
+}
+
+
 impute_severity <- function(state,severity_vec){
   output_vec <- vector('character',length = length(severity_vec))
   if(length(severity_vec)>0){
@@ -75,10 +136,10 @@ fitlognormal <- function(x,x_c,max_num_days) {
   return(theta)
 }
 
-sample_from_lognormal <- function(x,x_c,s,max_num_days,age_groups,nr_samples=1e6){
+sample_from_lognormal <- function(x,x_c,s,max_num_days,splitting_variable_values,nr_samples=1e6){
   theta_s = fitlognormal(x,x_c,max_num_days=max_num_days_inpatient_ward)
-  length_of_stay_s_expanded <- expand_grid(age_group_simple=age_groups,state_duration=1:max_num_days) %>%
-    mutate(state=s)
+  length_of_stay_s_expanded <- expand_grid(splitting_variable=splitting_variable_values,state_duration=1:max_num_days) %>%
+    mutate(state=s,splitting_variable=factor(splitting_variable,levels=splitting_variable_values,labels=splitting_variable_values))
   length_of_stay_s <- rlnorm(nr_samples,theta_s[1],theta_s[2]) %>%
     round() %>%
     table() %>%
@@ -86,7 +147,7 @@ sample_from_lognormal <- function(x,x_c,s,max_num_days,age_groups,nr_samples=1e6
     tibble(state=s,state_duration=0:(length(.)-1),count=.) %>%
     filter(state_duration>0 & state_duration<=max_num_days) %>%
     inner_join(.,length_of_stay_s_expanded,by=c('state','state_duration')) %>%
-    select(state,age_group_simple,state_duration,count)
+    select(state,splitting_variable,state_duration,count)
   return(length_of_stay_s)
 }
 

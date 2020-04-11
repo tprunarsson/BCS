@@ -13,11 +13,19 @@ current_date_tmp <- as.Date('2020-04-11','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
-write_tables_for_simulation_tmp <- FALSE
+
+write_tables_for_simulation_tmp <- TRUE
 write_table_for_report_tmp <- FALSE
 print_report_tmp <- "none"
 max_num_days_inpatient_ward <- 21
 max_num_days_intensive_care_unit <- 28
+
+unit_category_type <- 'simple'
+text_out_category_type <- 'simple'
+clinical_assessment_category_type <- 'simple'
+priority_category_type <- 'simple'
+age_group_type <- 'simple'
+splitting_variable_name <- 'age'
 
 option_list <-  list(
   make_option(c("-c", "--current_date"), type="character", default=NULL, 
@@ -98,19 +106,26 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
 
 
-covid_groups <- read_excel(file_path_coding,sheet = 1)
-unit_categories <- read_excel(file_path_coding,sheet = 3) %>% mutate(unit_category=unit_category_simple,
-                                                                     unit_category_order=unit_category_order_simple)
-text_out_categories <- read_excel(file_path_coding,sheet = 4) %>% mutate(text_out_category=text_out_category_simple)
+covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
+unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
+                    mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
+                           unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
+text_out_categories <- read_excel(file_path_coding,sheet = 'lsh_text_out_categories') %>%
+                        mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
 
-clinical_assessment_categories <- read_excel(file_path_coding,sheet = 5) %>% mutate(clinical_assessment_category=clinical_assessment_category_simple,
-                                                                                    clinical_assessment_category_order=clinical_assessment_category_order_simple)
-priority_categories <- read_excel(file_path_coding,sheet = 7) %>% mutate(priority_category=priority_category_simple,
-                                                                          priority_category_order=priority_category_order_simple)
-sheet_names <- read_excel(file_path_coding,sheet = 6,trim_ws = FALSE)
+clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_assessment_categories') %>%
+                                  mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
+                                         clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
+priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories') %>%
+                        mutate(priority_category=!!as.name(paste0('priority_category_',priority_category_type)),
+                               priority_category_order=!!as.name(paste0('priority_category_order_',priority_category_type)))
+age_groups <- read_excel(file_path_coding,sheet = 'age_groups') %>%
+                mutate(age_group=!!as.name(paste0('age_group_',age_group_type)),
+                       age_group_order=!!as.name(paste0('age_group_order_',age_group_type)))
+sheet_names <- read_excel(file_path_coding,sheet = 'lsh_sheet_names',trim_ws = FALSE)
 
 comorbidities_categories <- read_excel(file_path_coding,sheet = 8) %>%
-  arrange(comorbidities_raw)
+                              arrange(comorbidities_raw)
 
 
 test_lsh_data_file()
@@ -227,7 +242,8 @@ NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtí
               filter(!is.na(NEWS_score)) %>%
               filter(date<=date_last_known_state) %>%
               group_by(.,patient_id,date) %>%
-              summarise(NEWS_score=NEWS_score[which.max(date_time)]) %>%
+              #summarise(NEWS_score=NEWS_score[which.max(date_time)]) %>%
+              summarise(NEWS_score=mean(as.numeric(NEWS_score),na.rm=T)) %>%
               mutate(NEWS_score=if_else(NEWS_score>5,'red','green'))
 
 ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_time_ventilator_start=`Dags settur í öndunarvél`,date_time_ventilator_end=`Dags tekin úr öndunarvél`) %>% 
@@ -306,9 +322,12 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       left_join(.,interview_last_date,by='patient_id') %>%
                       mutate(.,date_outcome=pmin(date_outcome_tmp,if_else(covid_group=='recovered',date_last_known,NULL),na.rm=TRUE)) %>%
                       filter(if_else(is.finite(date_outcome) & outcome=='recovered',(date_outcome-date_diagnosis)>0,TRUE)) %>%
-                      mutate(.,age_group_std=as.character(cut(age,breaks=c(-Inf,seq(10,80,by=10),Inf),labels=c('0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80+'),right=FALSE)),
-                             age_group_simple=as.character(cut(age,breaks=c(-Inf,50,Inf),labels=c('0-50','51+'),right=TRUE)))%>%
-                      select(.,patient_id,zip_code,age,age_group_std,age_group_simple,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+                      #mutate(.,age_group_std=as.character(cut(age,breaks=c(-Inf,seq(10,80,by=10),Inf),labels=c('0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80+'),right=FALSE)),
+                      #       age_group_simple=as.character(cut(age,breaks=c(-Inf,50,Inf),labels=c('0-50','51+'),right=TRUE)))%>%
+                      #select(.,patient_id,zip_code,age,age_group_std,age_group_simple,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+                      mutate(.,splitting_variable=get_splitting_variable(.,splitting_variable_name)) %>%
+                      select(.,patient_id,zip_code,age,splitting_variable,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+                      
 
 #patient transitions.
 #Start by assuming everybody is at home from the time diagnosed to today
@@ -410,23 +429,23 @@ current_state_per_date <- get_current_state_per_date()
 current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>% summarise(count=n())
 current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
 current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
-recovered_imputed_by_age <- anti_join(current_state,current_state_write) %>%
-  inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
+recovered_imputed <- anti_join(select(current_state,patient_id,state),select(current_state_write,patient_id)) %>%
+  inner_join(.,select(individs_extended,patient_id,splitting_variable),by='patient_id') %>% 
   mutate(date=current_date,state_tomorrow='recovered') %>%
-  select(patient_id,age_group_simple,date,state,state_tomorrow)
-patient_transition_counts_matrix_all <- get_transition_matrix_all('',select(recovered_imputed_by_age,-age_group_simple))
-patient_transition_counts_matrix_age_simple_under_50 <- get_transition_matrix_by_age('',recovered_imputed_by_age)$under_50 
-patient_transition_counts_matrix_age_simple_over_50 <- get_transition_matrix_by_age('',recovered_imputed_by_age)$over_50
-length_of_stay_empirical_by_age_simple <- get_length_of_stay_empirical_by_age_simple('') 
-length_of_stay_predicted_by_age_simple <- get_length_of_stay_predicted_by_age_simple('',c('inpatient_ward','intensive_care_unit'),c(max_num_days_inpatient_ward,max_num_days_intensive_care_unit)) 
+  select(.,patient_id,splitting_variable,date,state,state_tomorrow)
+patient_transition_counts_matrix_all <- get_transition_matrix_all('',select(recovered_imputed,-splitting_variable))
+patient_transition_counts_matrix_list<- get_transition_matrix_by_splitting_variable('',recovered_imputed,splitting_variable_name)
+length_of_stay_empirical <- get_length_of_stay_empirical('') 
+length_of_stay_predicted <- get_length_of_stay_predicted('',c('inpatient_ward','intensive_care_unit'),c(max_num_days_inpatient_ward,max_num_days_intensive_care_unit),splitting_variable_name) 
 
 first_state <- get_first_state()  
-first_state_write <- select(first_state,age,sex,initial_state)
+first_state_write <- select(first_state,splitting_variable,initial_state)
 #add to create input for simulation
-first_state_per_date <- select(first_state,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
-first_state_per_date_summary_age <- inner_join(first_state,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>%
-  select(date_diagnosis,age_group_simple,initial_state) %>%
-  group_by(date_diagnosis,initial_state,age_group_simple) %>% summarise(count=n())
+first_state_per_date <- select(first_state,date_diagnosis,splitting_variable,initial_state) %>% arrange(date_diagnosis)
+first_state_per_date_summary_splitting_variable <- inner_join(first_state,select(individs_extended,patient_id,splitting_variable),by=c('patient_id','splitting_variable')) %>%
+  select(date_diagnosis,splitting_variable,initial_state) %>%
+  group_by(date_diagnosis,initial_state,splitting_variable) %>%
+  summarise(count=n())
 first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
 
 
@@ -457,39 +476,41 @@ if(write_tables_for_simulation){
   write.table(current_state_per_date_summary,file=paste0(path_tables,current_date,'_current_state_per_date_summary','.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(current_state_write,file=paste0(path_sensitive_tables,current_date,'_current_state','.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(patient_transition_counts_matrix_all,file=paste0(path_tables,current_date,'_transition_matrix','.csv'),sep=',',row.names=FALSE,col.names=T,quote=FALSE)
-  write.table(patient_transition_counts_matrix_age_simple_under_50,file=paste0(path_tables,current_date,'_transition_matrix_under_50','.csv'),sep=',',row.names=F,col.names=T,quote=F)
-  write.table(patient_transition_counts_matrix_age_simple_over_50,file=paste0(path_tables,current_date,'_transition_matrix_over_50','.csv'),sep=',',row.names=F,col.names=T,quote=F)
-  write.table(length_of_stay_empirical_by_age_simple,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
-  write.table(length_of_stay_predicted_by_age_simple,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
+  for(val in names(patient_transition_counts_matrix_list)){
+    write.table(patient_transition_counts_matrix_list[[val]],file=paste0(path_tables,current_date,'_transition_matrix_',val,'.csv'),sep=',',row.names=F,col.names=T,quote=F)
+  }
+  write.table(length_of_stay_empirical,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_predicted,file=paste0(path_tables,current_date,'_length_of_stay','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_write,file=paste0(path_sensitive_tables,current_date,'_first_state','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date_summary,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary','.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state_per_date_summary_age,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary_age','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_summary_splitting_variable,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_summary_age','.csv'),sep=',',row.names=F,quote=F)
 }
 
 current_state_per_date_extended <- get_current_state_per_date(type='clinical_assessment_included')
 current_state_per_date_extended_summary <- group_by(current_state_per_date_extended,date,state) %>% summarise(count=n())
 current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state) %>% select(-date)
-current_state_extended_write <- filter(current_state_extended,!(days_from_diagnosis > 14 & state == 'home_green'))
-recovered_imputed_by_age_extended <- anti_join(current_state,current_state_write) %>%
-  inner_join(.,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>% 
+current_state_extended_write <- filter(current_state_extended,!(days_from_diagnosis > 14 & state == 'home-green'))
+recovered_imputed_extended <- anti_join(select(current_state_extended,patient_id,state),select(current_state_extended_write,patient_id)) %>%
+  inner_join(.,select(individs_extended,patient_id,splitting_variable),by='patient_id') %>% 
   mutate(date=current_date,state_tomorrow='recovered') %>%
-  select(patient_id,age_group_simple,date,state,state_tomorrow)
-patient_transition_counts_matrix_all_extended <- get_transition_matrix_all(type='clinical_assessment_included',select(recovered_imputed_by_age_extended,-age_group_simple))
-patient_transition_counts_matrix_age_simple_under_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included',recovered_imputed_by_age_extended)$under_50 
-patient_transition_counts_matrix_age_simple_over_50_extended <- get_transition_matrix_by_age(type='clinical_assessment_included',recovered_imputed_by_age_extended)$over_50
-length_of_stay_empirical_by_age_simple_extended <- get_length_of_stay_empirical_by_age_simple(type='clinical_assessment_included') 
-length_of_stay_predicted_by_age_simple_extended <- get_length_of_stay_predicted_by_age_simple('clinical_assessment_included',
+  select(.,patient_id,splitting_variable,date,state,state_tomorrow)
+patient_transition_counts_matrix_all_extended <- get_transition_matrix_all(type='clinical_assessment_included',select(recovered_imputed_extended,-splitting_variable))
+patient_transition_counts_matrix_list_extended <- get_transition_matrix_by_splitting_variable(type='clinical_assessment_included',recovered_imputed_extended,splitting_variable_name) 
+length_of_stay_empirical_extended <- get_length_of_stay_empirical(type='clinical_assessment_included') 
+length_of_stay_predicted_extended <- get_length_of_stay_predicted('clinical_assessment_included',
                                                                                               c('inpatient_ward','inpatient_ward','intensive_care_unit','intensive_care_unit'),
                                                                                               c(rep(max_num_days_inpatient_ward,2),rep(max_num_days_intensive_care_unit,2)),
+                                                                                              splitting_variable_name,
                                                                                               c('inpatient_ward-green','inpatient_ward-red','intensive_care_unit-green','intensive_care_unit-red')) 
 first_state_extended <- get_first_state(type='clinical_assessment_included')
 # #TODO: add to create_output_for_simulation
-first_state_extended_write <- select(first_state,age,sex,initial_state)
-first_state_per_date_extended <- select(first_state_extended,date_diagnosis,age,sex,initial_state) %>% arrange(date_diagnosis)
-first_state_per_date_extended_summary_age <- inner_join(first_state_extended,select(individs_extended,patient_id,age_group_simple),by='patient_id') %>%
-  select(date_diagnosis,age_group_simple,initial_state) %>%
-  group_by(date_diagnosis,initial_state,age_group_simple) %>% summarise(count=n())
+first_state_extended_write <- select(first_state,splitting_variable,initial_state)
+first_state_per_date_extended <- select(first_state_extended,date_diagnosis,splitting_variable,initial_state) %>% arrange(date_diagnosis)
+first_state_per_date_extended_summary_splitting_variable <- inner_join(first_state_extended,select(individs_extended,patient_id,splitting_variable),by=c('patient_id','splitting_variable')) %>%
+  select(date_diagnosis,splitting_variable,initial_state) %>%
+  group_by(date_diagnosis,initial_state,splitting_variable) %>%
+  summarise(count=n())
 first_state_per_date_extended_summary <- group_by(first_state_extended,date_diagnosis,initial_state) %>% summarise(count=n())
 # 
 # ############### ----- Write extended tables to disk ----- ############################
@@ -498,14 +519,15 @@ if(write_tables_for_simulation){
   write.table(current_state_per_date_extended_summary,file=paste0(path_tables,current_date,'_current_state_per_date_extended_summary','.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(current_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_current_state_extended','.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(patient_transition_counts_matrix_all_extended,file=paste0(path_tables,current_date,'_transition_matrix_extended','.csv'),sep=',',row.names=FALSE,col.names=T,quote=FALSE)
-  write.table(patient_transition_counts_matrix_age_simple_under_50_extended,file=paste0(path_tables,current_date,'_transition_matrix_under_50_extended','.csv'),sep=',',row.names=F,col.names=T,quote=F)
-  write.table(patient_transition_counts_matrix_age_simple_over_50_extended,file=paste0(path_tables,current_date,'_transition_matrix_over_50_extended','.csv'),sep=',',row.names=F,col.names=T,quote=F)
-  write.table(length_of_stay_empirical_by_age_simple_extended,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical_extended','.csv'),sep=',',row.names=F,quote=F)
-  write.table(length_of_stay_predicted_by_age_simple_extended,file=paste0(path_tables,current_date,'_length_of_stay_extended','.csv'),sep=',',row.names=F,quote=F)
+  for(val in names(patient_transition_counts_matrix_list_extended)){
+    write.table(patient_transition_counts_matrix_list_extended[[val]],file=paste0(path_tables,current_date,'_transition_matrix_',val,'.csv'),sep=',',row.names=F,col.names=T,quote=F)
+  }
+  write.table(length_of_stay_empirical_extended,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical_extended','.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_predicted_extended,file=paste0(path_tables,current_date,'_length_of_stay_extended','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_first_state_extended','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended','.csv'),sep=',',row.names=F,quote=F)
   write.table(first_state_per_date_extended_summary,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_summary','.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state_per_date_extended_summary_age,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_summary_age','.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_extended_summary_splitting_variable,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_summary_age','.csv'),sep=',',row.names=F,quote=F)
 }
 
 
@@ -529,41 +551,41 @@ if(write_tables_for_simulation){
 
 ############################## ------ Create tables for stats group ----- ##############################
 
-path_stats_tables='../output_stats_group/'
-#Create table of new hospital cases,new icu,out of hospital and out of icu per day
-finished_states <- inner_join(select(individs_extended,patient_id,age_group_std), select(patient_transitions_state_blocks,-censored,-state_duration),by='patient_id')%>%
-  filter(state!=state_next) %>%
-  mutate(date=state_block_nr_end+1) %>%
-  select(patient_id,date,age_group_std,state,state_next)
-
-first_states_hospitals <- inner_join(select(individs_extended,patient_id,age_group_std),
-                                     select(patient_transitions_state_blocks,-censored,-state_duration),
-                                     by='patient_id') %>%
-  filter(state_block_nr==1 & state!='home') %>%
-  mutate(date=state_block_nr_start,state_next=state) %>%
-  mutate(state=NA) %>% select(patient_id,date,age_group_std,state,state_next)
-
-states_by_date_and_age_std <- bind_rows(first_states_hospitals,finished_states) %>%
-  group_by(.,date,age_group_std,state,state_next) %>%
-  summarise(.,value=n()) %>% ungroup() %>%
-  mutate(.,variable=case_when(
-    (state=='home' & state_next %in% c('inpatient_ward','intensive_care_unit')) | is.na(state)  ~ 'fj_innlagna_a_spitala',
-    state_next=='intensive_care_unit' ~ 'fj_innlagna_a_icu',
-    state_next=='home' ~ 'fj_utskrifta_af_spitala',
-    state=='intensive_care_unit' ~ 'fj_utskrifta_af_icu',
-    state_next=='recovered' ~ 'fj_batnad',
-    state_next=='death' ~ 'fj_andlata'
-  )) %>% rename(agegroup='age_group_std') %>% select(date,agegroup,variable,value)
-
-write.table(states_by_date_and_age_std,paste0(path_stats_tables,current_date,'_events_per_date_and_age.csv'),sep=',')
-
-#hospital and icu distributions for Brynjólfur
-group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('intensive_care_unit',unit_in))) %>%
-  ungroup() %>% left_join(select(individs_extended,patient_id,age_group_std),.,by='patient_id') %>%
-  group_by(age_group_std) %>% summarise(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>%
-  ungroup() %>% arrange(age_group_std)
-write.table(paste0(path_stats_tables,current_date,'_hospital_and_icu_distr.csv'),row.names=F,quote=F,sep=',')
-
-#extract length of hopspital stays including icu and icu times censored and uncensored
-previous_hospital_stays <- filter(patient_transitions_state_blocks,state!='home')
- 
+# path_stats_tables='../output_stats_group/'
+# #Create table of new hospital cases,new icu,out of hospital and out of icu per day
+# finished_states <- inner_join(select(individs_extended,patient_id,age_group_std), select(patient_transitions_state_blocks,-censored,-state_duration),by='patient_id')%>%
+#   filter(state!=state_next) %>%
+#   mutate(date=state_block_nr_end+1) %>%
+#   select(patient_id,date,age_group_std,state,state_next)
+# 
+# first_states_hospitals <- inner_join(select(individs_extended,patient_id,age_group_std),
+#                                      select(patient_transitions_state_blocks,-censored,-state_duration),
+#                                      by='patient_id') %>%
+#   filter(state_block_nr==1 & state!='home') %>%
+#   mutate(date=state_block_nr_start,state_next=state) %>%
+#   mutate(state=NA) %>% select(patient_id,date,age_group_std,state,state_next)
+# 
+# states_by_date_and_age_std <- bind_rows(first_states_hospitals,finished_states) %>%
+#   group_by(.,date,age_group_std,state,state_next) %>%
+#   summarise(.,value=n()) %>% ungroup() %>%
+#   mutate(.,variable=case_when(
+#     (state=='home' & state_next %in% c('inpatient_ward','intensive_care_unit')) | is.na(state)  ~ 'fj_innlagna_a_spitala',
+#     state_next=='intensive_care_unit' ~ 'fj_innlagna_a_icu',
+#     state_next=='home' ~ 'fj_utskrifta_af_spitala',
+#     state=='intensive_care_unit' ~ 'fj_utskrifta_af_icu',
+#     state_next=='recovered' ~ 'fj_batnad',
+#     state_next=='death' ~ 'fj_andlata'
+#   )) %>% rename(agegroup='age_group_std') %>% select(date,agegroup,variable,value)
+# 
+# write.table(states_by_date_and_age_std,paste0(path_stats_tables,current_date,'_events_per_date_and_age.csv'),sep=',')
+# 
+# #hospital and icu distributions for Brynjólfur
+# group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('intensive_care_unit',unit_in))) %>%
+#   ungroup() %>% left_join(select(individs_extended,patient_id,age_group_std),.,by='patient_id') %>%
+#   group_by(age_group_std) %>% summarise(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>%
+#   ungroup() %>% arrange(age_group_std)
+# write.table(paste0(path_stats_tables,current_date,'_hospital_and_icu_distr.csv'),row.names=F,quote=F,sep=',')
+# 
+# #extract length of hopspital stays including icu and icu times censored and uncensored
+# previous_hospital_stays <- filter(patient_transitions_state_blocks,state!='home')
+#  
