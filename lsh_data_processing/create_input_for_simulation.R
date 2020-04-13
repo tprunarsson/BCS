@@ -178,7 +178,8 @@ get_length_of_stay_predicted <- function(type='',states_to_predict,max_num_days_
         group_by(.,state,splitting_variable,state_duration) %>%
         summarize(count=n()) %>%
         ungroup() %>%
-        bind_rows(.,length_of_stay_samples) 
+        bind_rows(.,length_of_stay_samples) %>%
+        arrange(state,splitting_variable,state_duration)
 
     return(length_of_stay_predicted)
 }
