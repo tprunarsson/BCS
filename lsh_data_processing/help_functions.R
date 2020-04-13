@@ -139,10 +139,6 @@ fit_lognormal <- function(x,x_c,max_num_days) {
   return(theta)
 }
 
-map_to_unit_interval(x,max_num_days){
-  (x-0.5)/max_num_days
-}
-
 fit_beta <- function(x,x_c,max_num_days) {
   objective_function <- function(theta){
     L=sum(log(pbeta(x/max_num_days,theta[1],theta[2])-pbeta((x-1)/max_num_days,theta[1],theta[2]))) + sum(log(1-pbeta((x_c-0.5)/max_num_days,theta[1],theta[2])))
