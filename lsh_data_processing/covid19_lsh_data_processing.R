@@ -29,7 +29,7 @@ clinical_assessment_category_type <- 'simple'
 #Supported priority category types: simple
 priority_category_type <- 'simple'
 #Supported age group types: official,three,simple
-age_group_type <- 'three'
+age_group_type <- 'simple'
 #Supported splitting variable names: age,priority
 splitting_variable_name <- 'age'
 #splitting variable name write
