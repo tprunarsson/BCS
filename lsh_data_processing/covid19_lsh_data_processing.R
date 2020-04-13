@@ -156,7 +156,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                     left_join(.,clinical_assessment_categories,by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
                     mutate(.,clinical_assessment=clinical_assessment_category) %>%
                     group_by(.,patient_id) %>%
-                    summarise(.,date_first_symptoms=min(date_first_symptoms,na.rm=TRUE),
+                    summarize(.,date_first_symptoms=min(date_first_symptoms,na.rm=TRUE),
                                     date_diagnosis=min(date_diagnosis,na.rm=TRUE),
                                     date_clinical_assessment=min(date_clinical_assessment,na.rm=TRUE),
                                     #date_clinical_assessment=if(!any(is.finite(clinical_assessment))) NA else date_clinical_assessment[which.max(clinical_assessment_category_order)],
@@ -167,7 +167,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                     filter(.,if_else(is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>%
                     ungroup()%>%
                     separate(comorbidities_raw,into = paste("comorbidity",c(1:10)),sep="; ") %>% #Adding comorbidities
-                    gather(key="comorb_number",value="comorbidity",matches("comorbidity")) %>%
+                    pivot_longer(matches("comorbidity"),names_to="comorb_number",values_to="comorbidity") %>%
                     distinct(patient_id,comorbidity,.keep_all=T) %>%
                     arrange(comorb_number) %>%
                     filter(!is.na(comorbidity) | !duplicated(patient_id)) %>%
@@ -193,7 +193,7 @@ interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,da
                         mutate(.,clinical_assessment=clinical_assessment_category) %>%
                         select(.,patient_id,date_clinical_assessment,clinical_assessment,clinical_assessment_category_order) %>%
                         group_by(.,patient_id,date_clinical_assessment) %>%
-                        summarise(.,clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)])
+                        summarize(.,clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)])
                         
 
 #date_clinical_assessment is the last interview by a physician. Remove scheduled future phone calls
@@ -202,7 +202,7 @@ interview_last <- rename(interview_last_raw,patient_id=`Person Key`,date_clinica
                   filter(is.finite(date_clinical_assessment)) %>%
                   filter(date_clinical_assessment<=date_last_known_state) %>%
                   group_by(.,patient_id) %>%
-                  summarise(.,date_clinical_assessment=max(date_clinical_assessment,na.rm=T))
+                  summarize(.,date_clinical_assessment=max(date_clinical_assessment,na.rm=T))
     
 
 interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_clinical_assessment=`Dags breytingar`,col_name=`Heiti dálks`,col_value=`Skráningar - breytingar.Skráð gildi`) %>% 
@@ -211,7 +211,9 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     group_by(.,patient_id,date_clinical_assessment,col_name) %>%
                     summarize(date_time_clinical_assessment=max(date_time_clinical_assessment),col_value=col_value[which.max(date_time_clinical_assessment)]) %>%
                     ungroup(.) %>%
-                    spread(col_name,col_value) %>% 
+                    pivot_wider(.,id_cols=c('patient_id','date_clinical_assessment','date_time_clinical_assessment'),
+                                  names_from=col_name,
+                                  values_from=col_value) %>% 
                     rename(clinical_assessment=`Klínískt daglegt mat`, priority=`Áhættuflokkur`) %>%
                     filter(!is.na(clinical_assessment) | !is.na(priority)) %>%
                     filter(date_clinical_assessment<=date_last_known_state) %>%
@@ -221,7 +223,7 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     left_join(.,clinical_assessment_categories,by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
                     mutate(.,clinical_assessment=clinical_assessment_category) %>%
                     group_by(.,patient_id,date_clinical_assessment) %>%
-                    summarise(.,priority=if(all(is.na(priority))) NA_character_ else min(priority,na.rm=T),
+                    summarize(.,priority=if(all(is.na(priority))) NA_character_ else min(priority,na.rm=T),
                               clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)]) %>%
                     select(patient_id,priority, date_clinical_assessment,clinical_assessment) 
                     
@@ -248,8 +250,8 @@ NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtí
               filter(!is.na(NEWS_score)) %>%
               filter(date<=date_last_known_state) %>%
               group_by(.,patient_id,date) %>%
-              #summarise(NEWS_score=NEWS_score[which.max(date_time)]) %>%
-              summarise(NEWS_score=mean(as.numeric(NEWS_score),na.rm=T)) %>%
+              #summarize(NEWS_score=NEWS_score[which.max(date_time)]) %>%
+              summarize(NEWS_score=mean(as.numeric(NEWS_score),na.rm=T)) %>%
               mutate(NEWS_score=if_else(NEWS_score>5,'red','green'))
 
 ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_time_ventilator_start=`Dags settur í öndunarvél`,date_time_ventilator_end=`Dags tekin úr öndunarvél`) %>% 
@@ -261,12 +263,12 @@ ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_ti
                       filter(!is.na(date_ventilator_start)) %>%
                       inner_join(.,select(hospital_visits,patient_id,unit_category_all,date_in),by=c('patient_id','unit_in'='unit_category_all')) %>%
                       group_by(.,patient_id,unit_in) %>%
-                      summarise(date_in=min(date_in,na.rm=T),date_ventilator_start=min(date_ventilator_start),date_ventilator_end=suppressWarnings(max(date_ventilator_end,na.rm=T))) %>%
-                      gather(key='ventilator',value='date',date_in,date_ventilator_start,date_ventilator_end) %>%
+                      summarize(date_in=min(date_in,na.rm=T),date_ventilator_start=min(date_ventilator_start),date_ventilator_end=suppressWarnings(max(date_ventilator_end,na.rm=T))) %>%
+                      pivot_longer(cols=c('date_in','date_ventilator_start','date_ventilator_end'),names_to='ventilator',values_to='date') %>%
                       filter(is.finite(date)) %>%
                       mutate(ventilator=if_else(ventilator=='date_ventilator_start','red','green')) %>%
                       group_by(patient_id,unit_in,date) %>%
-                      summarise(ventilator=ventilator[which.max(ventilator=='red')])
+                      summarize(ventilator=ventilator[which.max(ventilator=='red')])
                 
               
 
@@ -277,7 +279,7 @@ test_cleaning()
 #create some help tables
 
 hospital_visit_first_date <- group_by(hospital_visits,patient_id) %>% 
-                              summarise(min_date_in=min(date_in,na.rm=TRUE)) %>%
+                              summarize(min_date_in=min(date_in,na.rm=TRUE)) %>%
                               ungroup()
 # fix to remove redundancies due to simple classification
 #filter out units that are not predicted and relabel the units in the terms to be predicted.Also relabel text_out
@@ -291,12 +293,12 @@ hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,un
                             arrange(patient_id,date_time_in) #arrange precisely in time
 
 hospital_outcomes <- group_by(hospital_visits_filtered,patient_id) %>%
-                      summarise(.,outcome_tmp=if_else(any(grepl('death',text_out)),'death',NULL),
+                      summarize(.,outcome_tmp=if_else(any(grepl('death',text_out)),'death',NULL),
                                 date_outcome_tmp=min(date_out[grepl('death',text_out)],na.rm=TRUE)) %>%
                       ungroup()
 
 interview_extra_first_date <- group_by(interview_extra,patient_id) %>%
-                              summarise(priority_tmp=min(priority,na.rm=TRUE),min_date_clincial_assessment=min(date_clinical_assessment,na.rm=TRUE)) %>%
+                              summarize(priority_tmp=min(priority,na.rm=TRUE),min_date_clincial_assessment=min(date_clinical_assessment,na.rm=TRUE)) %>%
                               ungroup()
 
 #Find latest interview for each patient
@@ -304,7 +306,7 @@ interview_last_date <- bind_rows(select(interview_first,patient_id,date_clinical
                                  select(interview_extra,patient_id,date_clinical_assessment)) %>%
                         filter(date_clinical_assessment<=current_date) %>% # We have some future dates - check.
                         group_by(.,patient_id) %>%
-                        summarise(.,date_last_known=max(date_clinical_assessment,na.rm=TRUE)) %>%
+                        summarize(.,date_last_known=max(date_clinical_assessment,na.rm=TRUE)) %>%
                         ungroup() %>% 
                         left_join(.,interview_last,by='patient_id') %>% 
                         mutate(date_last_known=if_else(is.finite(date_clinical_assessment),date_clinical_assessment,date_last_known))
@@ -359,7 +361,7 @@ dates_clinical_assessment <- bind_rows(select(interview_extra,patient_id,date_cl
                               filter(!is.na(clinical_assessment)) %>%
                               filter(clinical_assessment!='unknown') %>%
                               group_by(patient_id,date_clinical_assessment) %>%  
-                              summarise(clinical_assessment=clinical_assessment[which.max(confidence)]) %>%
+                              summarize(clinical_assessment=clinical_assessment[which.max(confidence)]) %>%
                               rename(date=date_clinical_assessment)
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
@@ -417,7 +419,7 @@ state_worst_case <- group_by(state_worst_case_per_date,patient_id) %>% arrange(d
 individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
 rm(state_worst_case)
 
-#summarise state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
+#summarize state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
 patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
                                     mutate(state_block_nr=get_state_block_numbers(state),
                                            state_with_severity_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
@@ -432,7 +434,7 @@ test_data_processing()
 ############################## ------ Create input without clinical assessment for simulation ----- ##############################
 
 current_state_per_date <- get_current_state_per_date()
-current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>% summarise(count=n())
+current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>% summarize(count=n())
 current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
 current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
 recovered_imputed <- anti_join(select(current_state,patient_id,state),select(current_state_write,patient_id)) %>%
@@ -440,7 +442,7 @@ recovered_imputed <- anti_join(select(current_state,patient_id,state),select(cur
   mutate(date=current_date,state_tomorrow='recovered') %>%
   select(.,patient_id,splitting_variable,date,state,state_tomorrow)
 patient_transition_counts_matrix_all <- get_transition_matrix_all('',select(recovered_imputed,-splitting_variable))
-patient_transition_counts_matrix_list<- get_transition_matrix_by_splitting_variable('',recovered_imputed,splitting_variable_name)
+patient_transition_counts_matrix_list <- get_transition_matrix_by_splitting_variable('',recovered_imputed,splitting_variable_name)
 length_of_stay_empirical <- get_length_of_stay_empirical('') 
 length_of_stay_predicted <- get_length_of_stay_predicted('',c('inpatient_ward','intensive_care_unit'),c(max_num_days_inpatient_ward,max_num_days_intensive_care_unit),splitting_variable_name) 
 
@@ -451,8 +453,8 @@ first_state_per_date <- select(first_state,date_diagnosis,splitting_variable,ini
 first_state_per_date_summary_splitting_variable <- inner_join(first_state,select(individs_extended,patient_id,splitting_variable),by=c('patient_id','splitting_variable')) %>%
   select(date_diagnosis,splitting_variable,initial_state) %>%
   group_by(date_diagnosis,initial_state,splitting_variable) %>%
-  summarise(count=n())
-first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarise(count=n())
+  summarize(count=n())
+first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarize(count=n())
 
 
 #Write tables for outpatient clinic for report
@@ -463,13 +465,13 @@ if (write_table_for_report){
     select(patient_id,date_in) %>%
     arrange(patient_id,date_in) %>%
     group_by(.,date_in) %>%
-    summarise(nr_visits=n()) %>% ungroup() %>%
+    summarize(nr_visits=n()) %>% ungroup() %>%
     left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
     mutate(prop_visits=nr_visits/nr_at_home)
   
   date_for_calculation <- current_date-window_size
   prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
-    summarise(prop_visits_last_week=sum(prop_visits)/window_size)
+    summarize(prop_visits_last_week=sum(prop_visits)/window_size)
   
   write.table(prop_outpatient_clinic_last_week, file=paste0(path_sensitive_tables,current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
 }
@@ -494,7 +496,7 @@ if(write_tables_for_simulation){
 }
 
 current_state_per_date_extended <- get_current_state_per_date(type='clinical_assessment_included')
-current_state_per_date_extended_summary <- group_by(current_state_per_date_extended,date,state) %>% summarise(count=n())
+current_state_per_date_extended_summary <- group_by(current_state_per_date_extended,date,state) %>% summarize(count=n())
 current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state) %>% select(-date)
 current_state_extended_write <- filter(current_state_extended,!(days_from_diagnosis > 14 & state == 'home-green'))
 recovered_imputed_extended <- anti_join(select(current_state_extended,patient_id,state),select(current_state_extended_write,patient_id)) %>%
@@ -516,8 +518,8 @@ first_state_per_date_extended <- select(first_state_extended,date_diagnosis,spli
 first_state_per_date_extended_summary_splitting_variable <- inner_join(first_state_extended,select(individs_extended,patient_id,splitting_variable),by=c('patient_id','splitting_variable')) %>%
   select(date_diagnosis,splitting_variable,initial_state) %>%
   group_by(date_diagnosis,initial_state,splitting_variable) %>%
-  summarise(count=n())
-first_state_per_date_extended_summary <- group_by(first_state_extended,date_diagnosis,initial_state) %>% summarise(count=n())
+  summarize(count=n())
+first_state_per_date_extended_summary <- group_by(first_state_extended,date_diagnosis,initial_state) %>% summarize(count=n())
 # 
 # ############### ----- Write extended tables to disk ----- ############################
 if(write_tables_for_simulation){
@@ -573,7 +575,7 @@ if(write_tables_for_simulation){
 # 
 # states_by_date_and_age_std <- bind_rows(first_states_hospitals,finished_states) %>%
 #   group_by(.,date,age_group_std,state,state_next) %>%
-#   summarise(.,value=n()) %>% ungroup() %>%
+#   summarize(.,value=n()) %>% ungroup() %>%
 #   mutate(.,variable=case_when(
 #     (state=='home' & state_next %in% c('inpatient_ward','intensive_care_unit')) | is.na(state)  ~ 'fj_innlagna_a_spitala',
 #     state_next=='intensive_care_unit' ~ 'fj_innlagna_a_icu',
@@ -586,9 +588,9 @@ if(write_tables_for_simulation){
 # write.table(states_by_date_and_age_std,paste0(path_stats_tables,current_date,'_events_per_date_and_age.csv'),sep=',')
 # 
 # #hospital and icu distributions for Brynjólfur
-# group_by(hospital_visits_filtered,patient_id) %>% summarise(icu=any(grepl('intensive_care_unit',unit_in))) %>%
+# group_by(hospital_visits_filtered,patient_id) %>% summarize(icu=any(grepl('intensive_care_unit',unit_in))) %>%
 #   ungroup() %>% left_join(select(individs_extended,patient_id,age_group_std),.,by='patient_id') %>%
-#   group_by(age_group_std) %>% summarise(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>%
+#   group_by(age_group_std) %>% summarize(fj_smitadra=n(),fj_spitala=sum(!is.na(icu)),fj_icu=sum(icu,na.rm=T)) %>%
 #   ungroup() %>% arrange(age_group_std)
 # write.table(paste0(path_stats_tables,current_date,'_hospital_and_icu_distr.csv'),row.names=F,quote=F,sep=',')
 # 

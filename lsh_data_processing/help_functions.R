@@ -125,7 +125,7 @@ get_state_worst <- function(state_vec,order_vec){
   return(state_worst_vec)
 }
 
-fitlognormal <- function(x,x_c,max_num_days) {
+fit_lognormal <- function(x,x_c,max_num_days) {
   n <- length(x)+length(x_c)
   objective_function <- function(theta){
     L=sum(log(plnorm(x+0.5,theta[1],theta[2])-plnorm(x-0.5,theta[1],theta[2]))) + sum(log(plnorm(max_num_days+0.5,theta[1],theta[2])-plnorm(x_c,theta[1],theta[2])))-n*log(plnorm(max_num_days+0.5,theta[1],theta[2]))
@@ -136,8 +136,23 @@ fitlognormal <- function(x,x_c,max_num_days) {
   return(theta)
 }
 
+map_to_unit_interval(x,max_num_days){
+  (x-0.5)/max_num_days
+}
+
+fit_beta <- function(x,x_c,max_num_days) {
+  objective_function <- function(theta){
+    L=sum(log(pbeta(x/max_num_days,theta[1],theta[2])-pbeta((x-1)/max_num_days,theta[1],theta[2]))) + sum(log(1-pbeta((x_c-0.5)/max_num_days,theta[1],theta[2])))
+    return(-L)
+  }
+  theta_init <- c(1,2.5)
+  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = c(0,0))$par
+  return(theta)
+}
+
+
 sample_from_lognormal <- function(x,x_c,s,max_num_days,splitting_variable_values,nr_samples=1e6){
-  theta_s = fitlognormal(x,x_c,max_num_days=max_num_days_inpatient_ward)
+  theta_s = fit_lognormal(x,x_c,max_num_days=max_num_days_inpatient_ward)
   length_of_stay_s_expanded <- expand_grid(splitting_variable=splitting_variable_values,state_duration=1:max_num_days) %>%
     mutate(state=s,splitting_variable=factor(splitting_variable,levels=splitting_variable_values,labels=splitting_variable_values))
   length_of_stay_s <- rlnorm(nr_samples,theta_s[1],theta_s[2]) %>%
@@ -150,6 +165,22 @@ sample_from_lognormal <- function(x,x_c,s,max_num_days,splitting_variable_values
     select(state,splitting_variable,state_duration,count)
   return(length_of_stay_s)
 }
+
+sample_from_beta <- function(x,x_c,s,max_num_days,splitting_variable_values,nr_samples=1e6){
+  theta_s = fit_beta(x,x_c,max_num_days=max_num_days_inpatient_ward)
+  length_of_stay_s_expanded <- expand_grid(splitting_variable=splitting_variable_values,state_duration=1:max_num_days) %>%
+    mutate(state=s,splitting_variable=factor(splitting_variable,levels=splitting_variable_values,labels=splitting_variable_values))
+  length_of_stay_s <- (max_num_days*(rbeta(nr_samples,theta_s[1],theta_s[2])+0.5)) %>%
+                        round() %>%
+                        table() %>%
+                        as.numeric() %>%
+                        tibble(state=s,state_duration=0:(length(.)-1),count=.) %>%
+                        filter(state_duration>0 & state_duration<=max_num_days) %>%
+                        inner_join(.,length_of_stay_s_expanded,by=c('state','state_duration')) %>%
+                        select(state,splitting_variable,state_duration,count)
+  return(length_of_stay_s)
+}
+
 
 #analysis
 # theta_ward = fitlognormal(state_blocks_with_age, "inpatient_ward",max_num_days=21)

@@ -52,7 +52,7 @@ get_transition_matrix_all <- function(type='',recovered_imputed){
     transition_counts_all <- bind_rows(transitions,recovered_imputed) %>% 
                                 filter(.,!is.na(state_tomorrow)) %>%
                                 group_by(.,state,state_tomorrow) %>%
-                                summarise(count=as.numeric(n())) %>%
+                                summarize(count=as.numeric(n())) %>%
                                 ungroup() %>%
                                 right_join(.,state_transitions_all,by=c('state','state_tomorrow')) %>% 
                                 mutate(count=if_else(is.na(count),0,count)) %>%
@@ -118,7 +118,7 @@ get_length_of_stay_empirical <- function(type=''){
                                         select(transitions_state_blocks_summary,patient_id,state,censored,state_duration),
                                         by='patient_id')
     length_of_stay_empirical <- group_by(state_blocks_with_splitting_variable,state,splitting_variable,censored,state_duration) %>%
-        summarise(count=n()) %>%
+        summarize(count=n()) %>%
         arrange(state,censored,splitting_variable) %>%
         ungroup()
     return(length_of_stay_empirical)
@@ -146,7 +146,7 @@ get_length_of_stay_predicted <- function(type='',states_to_predict,max_num_days_
     length_of_stay_predicted <- filter(state_blocks_with_splitting_variable,grepl('home',state)) %>%
         filter(!censored) %>%
         group_by(.,state,splitting_variable,state_duration) %>%
-        summarise(count=n()) %>%
+        summarize(count=n()) %>%
         ungroup() %>%
         bind_rows(.,length_of_stay_samples) 
 
@@ -166,7 +166,7 @@ get_first_state <- function(type=''){
     }
     first_state <- inner_join(select(individs_extended,patient_id,splitting_variable),transitions,by='patient_id') %>%
     group_by(patient_id,splitting_variable) %>%
-    summarise(date_diagnosis=min(date),initial_state=state[which.min(date)]) %>%
+    summarize(date_diagnosis=min(date),initial_state=state[which.min(date)]) %>%
     ungroup()
     return(first_state)
 }
