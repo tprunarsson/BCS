@@ -15,17 +15,19 @@ name_display_out ='Released'
 
 #all
 covid_all <- select(individs_extended, patient_id, outcome) %>% group_by(outcome) %>% summarize(cnt=n()) %>% add_sum_row('All')
-hospital <- filter(hospital_visits, !is.finite(date_out)) %>% left_join(., unit_categories, by=c('unit_in'='unit_category_raw')) %>%
-            select(patient_id, unit_in, unit_category) 
+hospital_current <- filter(hospital_visits, !is.finite(date_out)) %>% left_join(., unit_categories, by=c('unit_in'='unit_category_raw')) %>%
+            select(patient_id, unit_in, unit_category)
+hospital_all <- left_join(hospital_visits, unit_categories, by=c('unit_in'='unit_category_raw')) %>%
+                select(patient_id, date_in, date_out, unit_in, unit_category)
 #home
 recovered_imputed <- mutate(recovered_imputed_by_age, state='imputed as recovered') %>% select(patient_id,state)
 home <- select(current_state_write, patient_id, state) %>% filter(state=='home') %>% bind_rows(recovered_imputed) %>%
          group_by(state) %>% summarize(cnt=n()) %>% add_sum_row(.,name_display_home)
 
 # ward
-ward <- filter(hospital, unit_category=='inpatient_ward') %>% group_by(unit_in) %>% summarize(Count=n()) %>% add_sum_row(.,name_display_wards)
+ward <- filter(hospital_current, unit_category=='inpatient_ward') %>% group_by(unit_in) %>% summarize(Count=n()) %>% add_sum_row(.,name_display_wards)
 #icu
-icu <- filter(hospital, unit_category=='intensive_care_unit') %>% group_by(unit_in) %>% summarize(Count=n()) %>% add_sum_row(.,name_display_icu)
+icu <- filter(hospital_current, unit_category=='intensive_care_unit') %>% group_by(unit_in) %>% summarize(Count=n()) %>% add_sum_row(.,name_display_icu)
 #released
 released <- filter(individs_extended, outcome!='in_hospital_system') %>% select(patient_id, outcome) %>% group_by(outcome) %>% 
             summarize(Count=n()) %>% add_sum_row(.,name_display_out)
@@ -50,14 +52,53 @@ sim_dfd_dis <- select(current_state_write, patient_id, state, days_from_diagnosi
          dis_min=days_in_state_min,dis_median=days_in_state_median, dis_max=days_in_state_max) %>%
   select(state,dfd_min,dfd_median,dfd_max,dis_min,dis_median,dis_max)
 
+
+# hosp_turn <- select(hospital_visits,patient_id, unit_in, unit_category_all,date_in, date_out ) %>% 
+#                       filter(!(unit_category_all=='outpatient_clinic' | unit_category_all=='emergency_room') & 
+#                                (date_in==date_last_known_state | date_out==date_last_known_state)) %>% 
+#               mutate_at(vars(date_in), ~replace(., date_in!=date_last_known_state, NA)) %>% 
+#               mutate(transition=if_else(is.finite(date_in),'incoming','outgoing')) %>%
+#               group_by(patient_id) %>% mutate_at(vars(transition),~replace(., n()>1, 'transfer')) %>%
+#               ungroup() %>% mutate(value=1) %>% 
+#               mutate_at(vars(value),~replace(.,(transition=='transfer' & is.finite(date_out)),-1)) %>% 
+#               pivot_wider(names_from='transition', values_from = 'value') %>%
+#               select(unit_category_all, incoming, transfer,outgoing) %>% 
+#               group_by(unit_category_all) %>% summarize_all(sum, na.rm=T) %>% 
+#               mutate(all=incoming+transfer-outgoing) %>% add_sum_row('Turnover at hospital')
+
+outcome_raw <- c('diagnosed','recovered','deceased')
+outcome_text <- c('Greinst með smit','Batnað','Látist')
+sys_turn_labels <- tibble(outcome_raw,outcome_text)
+sys_turn <- filter(individs_extended, (date_outcome==date_last_known_state) | (date_diagnosis==date_last_known_state)) %>%
+                select(patient_id, date_diagnosis, outcome) %>%
+                mutate_at(vars(outcome), ~replace(.,date_diagnosis==date_last_known_state,'diagnosed')) %>%
+                group_by(outcome) %>% summarize(cnt=n()) %>% 
+                mutate_at(vars(cnt), ~replace(.,outcome!='diagnosed',-cnt)) %>%
+                add_sum_row('Turnover in system')
+
+#DfD when arriving at hospital
+hosp_arr_dfd <- filter(hospital_all, unit_category=='inpatient_ward' | unit_category=='intensive_care_unit') %>%
+                left_join(.,individs_extended, by='patient_id') %>% 
+                select(patient_id,unit_category, date_in, date_diagnosis) %>%
+                mutate(dfd=date_in-date_diagnosis) %>% group_by(unit_category) %>% 
+                summarize_at(vars(dfd),funs(min,median,max))
+        
+#Printing
 print(covid_all)
 print(home)
 print(ward)
 print(icu)
 print(released)
+print('Age groups')
 print(sim_total_age_groups)
+print('Worst State')
 print(sim_total_state_worst)
+print("Days from diagnosis (dfd) and days in state (dis)")
 print(sim_dfd_dis)
+print('Turnover from the day before')
+print(sys_turn)
+#print(hosp_turn)
+
 
 # hospital <- filter(hospital_visits, !is.finite(date_out)) %>% left_join(., unit_categories, by=c('unit_in'='unit_category_raw')) %>%
 #             select(patient_id, unit_in, unit_category) 

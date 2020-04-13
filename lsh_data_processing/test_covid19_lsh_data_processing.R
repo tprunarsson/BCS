@@ -1,6 +1,12 @@
 ############ ------------- Help functions ########################
 write_data_health_info <- function(){
     #date of diagnosis
+    interview_first_filtered <- filter(interview_first, is.finite(date_diagnosis)) 
+    date_diagnosis_last_info <- sprintf(paste0("Most recent date of diagnosis in forms: ", max(interview_first_filtered$date_diagnosis,na.rm=T)))
+    
+    interview_last_filtered <- filter(interview_last, is.finite(date_clinical_assessment)) 
+    date_interview_last_info <- sprintf(paste0("Most recent date of last interview in forms: ", max(interview_last_filtered$date_clinical_assessment,na.rm=T)))
+    
     num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
     date_diagnosis_info <- sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
     
@@ -16,38 +22,34 @@ write_data_health_info <- function(){
     recovered_info <- sprintf("Number of recovered individs missing date of last interview in forms: %.0f (%.1f%%)", num_recovered-num_recovered_with_last_interview,100*(num_recovered-num_recovered_with_last_interview)/num_recovered)
     
     #
-    inconsistent_info_in_forms <- mutate(interview_first,diff_call=date_clinical_assessment-date_diagnosis) %>%
-                                    filter(is.finite(diff_call)) %>%
-                                    filter(diff_call<0) %>%
-                                    select(patient_id) %>%
-                                    mutate(explanation='Eftirfylgni hefst fyrir dagsetningu greiningar')
-    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,(left_join(select(individs,patient_id),select(hospital_visits_filtered,patient_id,text_out), by='patient_id') %>%
+    potential_wrong_date_diagnosis <- mutate(interview_first,diff_call=date_clinical_assessment-date_diagnosis) %>%
+                                      filter(is.finite(diff_call)) %>%
+                                      filter(diff_call<0) %>%
+                                      select(patient_id) %>%
+                                      mutate(explanation='Eftirfylgni hefst fyrir dagsetningu greiningar')
+    
+    potential_wrong_date_diagnosis_info <- sprintf("Number of individs with date of follow-up before date of diagnosis: %.0f (%.1f%%)",nrow(potential_wrong_date_diagnosis),100*nrow(potential_wrong_date_diagnosis)/nrow(individs))
+    
+    
+    missing_info_interview_first <- left_join(select(individs,patient_id),select(hospital_visits_filtered,patient_id,text_out), by='patient_id') %>%
                                                                         filter(!(text_out %in% c('at_hospital','death'))) %>%
                                                                         select(-text_out) %>%
                                                                         left_join(.,interview_first,by='patient_id') %>%
                                                                         filter_at(vars(-patient_id), any_vars(is.na(.))) %>% 
                                                                         distinct(patient_id) %>%
                                                                         mutate(explanation="Vantar upplýsingar í fyrsta viðtal")
-                                                                        ))
-    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,(left_join(individs,interview_last, by='patient_id') %>%
-                                                                        filter(covid_group=='recovered' & !is.finite(date_clinical_assessment))%>%
-                                                                        select(patient_id) %>%
-                                                                        mutate(explanation='Vantar dagsetningu á síðasta viðtali læknis')
-                                                                        ))
-    inconsistent_info_in_forms <- bind_rows(inconsistent_info_in_forms,left_join(select(individs,patient_id),select(hospital_visits_filtered,patient_id,text_out), by='patient_id') %>%
-                                                                        filter(!(text_out %in% c('at_hospital','death'))) %>%
-                                                                        select(-text_out) %>%
-                                                                        left_join(.,interview_follow_up,by='patient_id') %>%
-                                                                        group_by(patient_id) %>%
-                                                                        summarise(missing_clinical_assessment=all(is.na(clinical_assessment))) %>%
-                                                                        ungroup() %>%
-                                                                        filter(missing_clinical_assessment) %>%
-                                                                        select(patient_id) %>%
-                                                                        mutate(explanation="Vantar klíniskt mat eftir fyrsta viðtal")
-                                                                        )
-    inconsistent_info_in_forms_output <- pivot_wider(inconsistent_info_in_forms %>% mutate(values=1),id_cols='patient_id',names_from = 'explanation',values_from ='values') %>% arrange(patient_id)
+    
+    missing_info_interview_first_info <- sprintf("Number of individs with missing info in first interview: %.0f (%.1f%%)",nrow(missing_info_interview_first),100*nrow(missing_info_interview_first)/nrow(individs))
+    
                                     
-    output_string <- cat('Data health information:','\n\t-',date_diagnosis_info,'\n\t-',clinical_assessment_info,'\n\t-',recovered_info,'\n')
+    output_string <- cat('Data health information:','\n\t-',
+                         date_diagnosis_last_info,'\n\t-',
+                         date_diagnosis_info,'\n\t-',
+                         potential_wrong_date_diagnosis_info,'\n\t-',
+                         missing_info_interview_first_info,'\n\t-',
+                         clinical_assessment_info,'\n\t-',
+                         date_interview_last_info, '\n\t-',
+                         recovered_info,'\n')
     return(output_string)
 }
 
