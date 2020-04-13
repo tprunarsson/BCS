@@ -16,7 +16,7 @@ path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- FALSE
 write_table_for_report_tmp <- FALSE
 print_report_tmp <- "none"
-max_num_days_inpatient_ward <- 21
+max_num_days_inpatient_ward <- 28
 max_num_days_intensive_care_unit <- 28
 
 option_list <-  list(
