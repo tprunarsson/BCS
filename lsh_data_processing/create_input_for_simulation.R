@@ -102,6 +102,36 @@ get_transition_matrix_by_splitting_variable <- function(type='',recovered_impute
     return(transition_matrix_list)
 }
 
+get_transition_summary <- function(type='',recovered_imputed,splitting_variable_name){
+    if(type=='clinical_assessment_included'){
+        transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
+                              state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
+                                                       is.na(severity_tomorrow) ~ state_tomorrow,
+                                                       TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow))
+        )
+    }else{
+        transitions <- patient_transitions
+    }
+    states <- get_states_in_order(type)
+    splitting_variable_values <- get_splitting_variable_values_in_order(splitting_variable_name)
+    state_transitions_all_by_splitting_variable <- expand_grid(splitting_variable=splitting_variable_values,state=states,state_tomorrow=states) %>%
+        mutate(splitting_variable=factor(splitting_variable,levels=splitting_variable_values,labels=splitting_variable_values))
+    transition_counts_by_splitting_variable <- filter(transitions,!is.na(state_tomorrow)) %>%
+        inner_join(select(individs_extended,patient_id,splitting_variable),.,by='patient_id') %>%
+        bind_rows(.,recovered_imputed) %>%
+        group_by(.,splitting_variable,state,state_tomorrow) %>%
+        summarize(count=as.numeric(n())) %>%
+        ungroup() %>%
+        right_join(.,state_transitions_all_by_splitting_variable,by=c('splitting_variable','state','state_tomorrow')) %>%
+        mutate(count=if_else(is.na(count),0,count)) %>%
+        mutate(state=factor(state,levels=states,labels=states),
+               state_tomorrow=factor(state_tomorrow,levels=states,labels=states)) %>%
+        arrange(splitting_variable,state,state_tomorrow) %>%
+        filter(state!=state_tomorrow)
+    
+    return(transition_counts_by_splitting_variable)
+}
+
 
 ############## ----- Length of stay distribution by state and splitting variable ----- ############## 
 get_length_of_stay_empirical <- function(type=''){
