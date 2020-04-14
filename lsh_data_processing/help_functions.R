@@ -162,7 +162,7 @@ fit_beta <- function(x,x_c,max_num_days) {
     L=sum(log(pbeta(x/max_num_days,theta[1],theta[2])-pbeta((x-1)/max_num_days,theta[1],theta[2]))) + sum(log(1-pbeta((x_c-0.5)/max_num_days,theta[1],theta[2])))
     return(-L)
   }
-  theta_init <- c(1,4)
+  theta_init <- c(1,3.5)
   theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = c(0,0))$par
   return(theta)
 }
