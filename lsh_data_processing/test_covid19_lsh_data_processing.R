@@ -147,7 +147,9 @@ test_lsh_data_file <- function(){
     return('Finished testing data files')
 }
 
-test_new_sequences <- function(){
+get_sequences <- function(){
+  pt <- filter(patient_transitions,!is.na(state_tomorrow))
+  
   allsequences = NULL
   for (p in unique(patient_transitions$patient_id)) {
     trans <- subset(patient_transitions,p==patient_transitions$patient_id)
@@ -163,7 +165,9 @@ test_new_sequences <- function(){
       }
     }
   }
-  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% summarize(count=n())
+  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% 
+                              summarize(count=n()) %>% arrange(desc(count))
+  return(state_sequences_in_data)
   
   # Reading same information from patient_transitions_state_blocks_summary
   # dat2 <- patient_transitions_state_blocks_summary %>% group_by(patient_id) %>% 
@@ -172,6 +176,34 @@ test_new_sequences <- function(){
   #         summarise(count=n())
 }
 
+get_sequences_extended <- function(){
+  patient_transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),                       
+                                state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,                                                
+                                                         is.na(severity_tomorrow) ~ state_tomorrow,                                                
+                                                         TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow)) ) %>%     
+    group_by(.,patient_id) %>% mutate(.,state_block_nr=get_state_block_numbers(state)) %>%     
+    ungroup() %>%     
+    filter(!is.na(state_tomorrow))
+  
+  allsequences = NULL
+  for (p in unique(patient_transitions$patient_id)) {
+    trans <- subset(patient_transitions,p==patient_transitions$patient_id)
+    trans <- trans[order(trans$date,trans$state_tomorrow),]
+    n = nrow(trans)
+    if (n > 1) {
+      idx = trans$state_tomorrow[1:n-1]!=trans$state_tomorrow[2:n]
+      if (sum(idx, na.rm = T) >= 1) {
+        sequence = trans$state_tomorrow[idx]
+        if (sequence[length(sequence)] != trans$state_tomorrow[n])
+          sequence = c(sequence,trans$state_tomorrow[n])
+        allsequences = c(allsequences, paste(sequence, collapse = "->"))
+      }
+    }
+  }
+  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% 
+                              summarize(count=n()) %>% arrange(desc(count))
+  return(state_sequences_in_data)
+}
 test_cleaning <- function(){
   test_unique_id(interview_first)
   test_unique_id(interview_last)
