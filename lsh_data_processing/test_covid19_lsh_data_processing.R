@@ -163,7 +163,7 @@ test_new_sequences <- function(){
       }
     }
   }
-  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% summarize(count=n())
+  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% summarize(count=n()) %>% arrange(desc(count))
   
   # Reading same information from patient_transitions_state_blocks_summary
   # dat2 <- patient_transitions_state_blocks_summary %>% group_by(patient_id) %>% 
