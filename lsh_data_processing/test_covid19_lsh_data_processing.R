@@ -165,13 +165,8 @@ get_sequences <- function(){
       }
     }
   }
-<<<<<<< HEAD
-  state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% 
-                              summarize(count=n()) %>% arrange(desc(count))
-  return(state_sequences_in_data)
-=======
+
   state_sequences_in_data <- tibble(allsequences) %>% group_by(allsequences) %>% summarize(count=n()) %>% arrange(desc(count))
->>>>>>> 2f6f2114106243a33368c20330cfbf8fb2025694
   
   # Reading same information from patient_transitions_state_blocks_summary
   # dat2 <- patient_transitions_state_blocks_summary %>% group_by(patient_id) %>% 
