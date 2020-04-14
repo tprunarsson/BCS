@@ -17,11 +17,12 @@ library(dplyr)
 library(readr)
 
 # Functions
-load_git_data <- function(type = c('length_of_stay_with_imputed', 'length_of_stay_empirical', 'transition_matrix'),
-                          data_folder = 'dashboard/input') {
+load_git_data <- function(type = c('length_of_stay_with_imputed', 'length_of_stay_empirical', 'transition_matrix', 'covid_simulation'),
+                          data_folder = 'dashboard/input', 
+                          start_date = '2020-04-02') {
   # Create URLs to csv files
   root_path <- 'https://raw.githubusercontent.com/tprunarsson/BCS/master'
-  files <- sprintf('%s_%s.csv', seq.Date(from = as.Date('2020-04-02'), Sys.Date(), by = 1), type)
+  files <- sprintf('%s_%s.csv', seq.Date(from = as.Date(start_date), to = Sys.Date(), by = 1), type)
 
   #Get csv data to a list and row-bind all non-null results
   data_list <- list()
@@ -43,17 +44,22 @@ load_git_data <- function(type = c('length_of_stay_with_imputed', 'length_of_sta
   bind_rows(data_list)
 }
 
-# Load csv data
-data_length_of_stay <- load_git_data('length_of_stay_empirical') %>% 
+recode_states <- function(df_with_state) {
+  stopifnot('state' %in% names(df_with_state))
+  df_with_state %>% 
     mutate(state = state %>% recode(home='Heimaeinangrun',
                                     inpatient_ward='Legudeild',
                                     intensive_care_unit='Gjörgæsla'))
+}
+# Load csv data
+data_length_of_stay <- load_git_data('length_of_stay_empirical') %>% 
+    recode_states()
 
-# data_transition <- load_git_data('transition_matrix', data_folder = 'input')
+data_transition <- load_git_data('transition_matrix', data_folder = 'input')
 
 # Set constants
 start_date <- min(data_length_of_stay$date) # as.Date('2020-04-02')
-end_date <- max(data_length_of_stay$date)
+end_date <- Sys.Date()
 gagnagerdir <- unique(data_length_of_stay$censored)
 aldurshopar <- unique(data_length_of_stay$age_group_simple) #list('0-50', '51+')
 states <- unique(data_length_of_stay$state)
@@ -80,7 +86,7 @@ selectInput('facet', 'Facet eftir:', c('-', names(data_length_of_stay)[1:3]))
 Dreifingar {data-icon="fa-signal"}
 =======================================================================
 
-column {.tabset}
+column {.tabset .tabset-fade}
 -----------------------------------------------------------------------
 
 
@@ -172,5 +178,22 @@ Gagnagæði {data-icon="fa-tasks"}
 =======================================================================
 
 
-Skýrslur {data-icon="fa-file-alt"}
+Skýrslur {id=skyrslur data-icon="fa-file-alt"}
 =======================================================================
+
+Column {width=100%}
+-----------------------
+<iframe style="position: absolute; height: 100%; border: none"></iframe>
+```{r, echo=FALSE}
+htmlbase_url <- 'https://htmlpreview.github.io/?https://raw.githubusercontent.com/tprunarsson/BCS/master/daily_report/'
+this_report <- function() {
+  URLencode(paste0(
+    htmlbase_url, input$dagsetning, '-Flæði COVID-19 sjúklinga LSH.html'))
+}
+renderUI(
+  htmltools::tags$iframe(height='1080', width='100%', title = "Skýrsla valins dags",
+    src = this_report())
+)
+```
+
+> Dagleg skýrsla - Veljið dagsetningu í stillingum
