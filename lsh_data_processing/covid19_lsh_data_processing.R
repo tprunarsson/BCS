@@ -455,7 +455,7 @@ patient_transition_counts_matrix_all <- get_transition_matrix_all('',select(reco
 patient_transition_summary <- get_transition_summary('',recovered_imputed,splitting_variable_name)
 #patient_transition_counts_matrix_list <- get_transition_matrix_by_splitting_variable('',recovered_imputed,splitting_variable_name)
 length_of_stay_empirical <- get_length_of_stay_empirical('') 
-length_of_stay_predicted <- get_length_of_stay_predicted('',c('inpatient_ward','intensive_care_unit'),c(max_num_days_inpatient_ward,max_num_days_intensive_care_unit),splitting_variable_name) 
+length_of_stay_predicted <- get_length_of_stay_predicted('',c('inpatient_ward','intensive_care_unit'),c(max_num_days_inpatient_ward,max_num_days_intensive_care_unit),splitting_variable_name,distr='lognormal') 
 
 first_state <- get_first_state()  
 first_state_write <- select(first_state,splitting_variable,initial_state)
@@ -520,7 +520,7 @@ length_of_stay_predicted_extended <- get_length_of_stay_predicted('clinical_asse
                                                                   c('inpatient_ward-green','inpatient_ward-red','intensive_care_unit-green','intensive_care_unit-red'),
                                                                   c(rep(max_num_days_inpatient_ward,2),rep(max_num_days_intensive_care_unit,2)),
                                                                   splitting_variable_name,
-                                                                  c('inpatient_ward-green','inpatient_ward-red','intensive_care_unit-green','intensive_care_unit-red')) 
+                                                                  c('inpatient_ward-green','inpatient_ward-red','intensive_care_unit-green','intensive_care_unit-red'),distr='beta') 
 first_state_extended <- get_first_state(type='clinical_assessment_included')
 # #TODO: add to create_output_for_simulation
 first_state_extended_write <- select(first_state_extended,splitting_variable,initial_state)
