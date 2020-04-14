@@ -11,7 +11,7 @@
 	#To run tmp report which is saved in BCS/reports_tmp
 		#bash run_simulation -c 2020-04-14 -p 2020-04-08 -r tmp
 		#bash run_simulation -c 2020-04-14 -p 2020-04-08 -r tmp -n "another name for report"
-	#To run the final report which is saved in BCS/daily_report and also computes the outputs for simulation_history, output_lsh and dashboard/input
+	#To run the final report which is saved in BCS/daily_report and also computes the outputs for simulation_history, output_lsh
 		#bash run_simulation -c 2020-04-14 -p 2020-04-08 -r final
 
 
