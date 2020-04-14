@@ -1,5 +1,20 @@
 #!/bin/bash
 
+#How to run bash script
+
+#Today (current_date) is 2020-04-14 and the most recent posterior from Binni is from 2020-04-08 (prediction_date)
+#To run the data processing and simulation
+	#Assuming the directory to your raw data from lsh is '~/projects/covid/BCS/lsh_data/'
+		#bash run_simulation -c 2020-04-14 -p 2020-04-08
+#To run the data processing, simulation and report
+	#Default name for report is 'Flæði COVID-19 sjúklinga LSH'
+	#To run tmp report which is saved in BCS/reports_tmp
+		#bash run_simulation -c 2020-04-14 -p 2020-04-08 -r tmp
+		#bash run_simulation -c 2020-04-14 -p 2020-04-08 -r tmp -n "another name for report"
+	#To run the final report which is saved in BCS/daily_report and also computes the outputs for simulation_history, output_lsh and dashboard/input
+		#bash run_simulation -c 2020-04-14 -p 2020-04-08 -r final
+
+
 #Reading arguements
 while getopts ":c:p:d:r:n:" opt; do
   case $opt in
