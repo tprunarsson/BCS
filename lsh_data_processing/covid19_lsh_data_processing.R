@@ -9,7 +9,7 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
-current_date_tmp <- as.Date('2020-04-13','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
@@ -532,17 +532,17 @@ first_state_per_date_extended_summary <- group_by(first_state_extended,date_diag
 # 
 # ############### ----- Write extended tables to disk ----- ############################
 if(write_tables_for_simulation){
-  write.table(current_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_current_state_per_date_extended_',splitting_variable_write,'.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(current_state_per_date_extended_summary,file=paste0(path_tables,current_date,'_current_state_per_date_extended_summary','.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(current_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_current_state_extended_',splitting_variable_write,'.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(patient_transition_counts_matrix_all_extended,file=paste0(path_tables,current_date,'_transition_matrix_extended','.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(patient_transition_summary_extended,file=paste0(path_tables,current_date,'_transition_summary_extended_',splitting_variable_write,'.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(length_of_stay_empirical_extended,file=paste0(path_dashboard_tables,current_date,'_length_of_stay_empirical_extended_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
-  write.table(length_of_stay_predicted_extended,file=paste0(path_tables,current_date,'_length_of_stay_extended_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_first_state_extended_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state_per_date_extended_summary,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_summary_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
-  write.table(first_state_per_date_extended_summary_splitting_variable,file=paste0(path_sensitive_tables,current_date,'_first_state_per_date_extended_summary_splitting_variable_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
+  write.table(current_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_extended_current_state_per_date_',splitting_variable_write,'.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_per_date_extended_summary,file=paste0(path_tables,current_date,'_extended_current_state_per_date_summary','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_extended_current_state_',splitting_variable_write,'.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(patient_transition_counts_matrix_all_extended,file=paste0(path_tables,current_date,'_extended_transition_matrix','.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(patient_transition_summary_extended,file=paste0(path_tables,current_date,'_extended_transition_summary_',splitting_variable_write,'.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(length_of_stay_empirical_extended,file=paste0(path_dashboard_tables,current_date,'_extended_length_of_stay_empirical_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
+  write.table(length_of_stay_predicted_extended,file=paste0(path_tables,current_date,'_extended_length_of_stay_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_extended_first_state_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_extended_first_state_per_date_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_extended_summary,file=paste0(path_sensitive_tables,current_date,'_extended_first_state_per_date_summary_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
+  write.table(first_state_per_date_extended_summary_splitting_variable,file=paste0(path_sensitive_tables,current_date,'_extended_first_state_per_date_summary_splitting_variable_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
 }
 
 
