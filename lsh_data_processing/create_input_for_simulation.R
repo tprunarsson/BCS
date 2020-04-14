@@ -154,7 +154,7 @@ get_length_of_stay_empirical <- function(type=''){
     return(length_of_stay_empirical)
 }
 
-get_length_of_stay_predicted <- function(type='',states_to_predict,max_num_days_vec,splitting_variable_name,states_to_predict_labels=states_to_predict){
+get_length_of_stay_predicted <- function(type='',states_to_predict,max_num_days_vec,splitting_variable_name,states_to_predict_labels=states_to_predict,distr){
     if(type=='clinical_assessment_included'){
         transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
                                             select(.,patient_id,state_block_nr,state,censored,state_duration)
@@ -170,7 +170,12 @@ get_length_of_stay_predicted <- function(type='',states_to_predict,max_num_days_
     length_of_stay_samples <- lapply(1:length(states_to_predict),function(i){
         x <- filter(state_blocks_with_splitting_variable,state==states_to_predict[i] & !censored) %>% select(state_duration) %>% unlist() %>% unname()
         x_c <- filter(state_blocks_with_splitting_variable,state==states_to_predict[i] & censored) %>% select(state_duration) %>% unlist() %>% unname()
-        sample_from_lognormal(x,x_c,states_to_predict_labels[i],max_num_days_vec[i],splitting_variable_values)
+        if(distr=='beta'){
+            sample_from_beta(x,x_c,states_to_predict_labels[i],max_num_days_vec[i],splitting_variable_values)
+        }else{
+            sample_from_lognormal(x,x_c,states_to_predict_labels[i],max_num_days_vec[i],splitting_variable_values)
+        }
+        
     }) %>% bind_rows()
     
     length_of_stay_predicted <- filter(state_blocks_with_splitting_variable,grepl('home',state)) %>%

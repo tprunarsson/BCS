@@ -139,15 +139,7 @@ fit_lognormal <- function(x,x_c,max_num_days) {
   return(theta)
 }
 
-fit_beta <- function(x,x_c,max_num_days) {
-  objective_function <- function(theta){
-    L=sum(log(pbeta(x/max_num_days,theta[1],theta[2])-pbeta((x-1)/max_num_days,theta[1],theta[2]))) + sum(log(1-pbeta((x_c-0.5)/max_num_days,theta[1],theta[2])))
-    return(-L)
-  }
-  theta_init <- c(1,2.5)
-  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = c(0,0))$par
-  return(theta)
-}
+
 
 
 sample_from_lognormal <- function(x,x_c,s,max_num_days,splitting_variable_values,nr_samples=1e6){
@@ -163,6 +155,16 @@ sample_from_lognormal <- function(x,x_c,s,max_num_days,splitting_variable_values
     inner_join(.,length_of_stay_s_expanded,by=c('state','state_duration')) %>%
     select(state,splitting_variable,state_duration,count)
   return(length_of_stay_s)
+}
+
+fit_beta <- function(x,x_c,max_num_days) {
+  objective_function <- function(theta){
+    L=sum(log(pbeta(x/max_num_days,theta[1],theta[2])-pbeta((x-1)/max_num_days,theta[1],theta[2]))) + sum(log(1-pbeta((x_c-0.5)/max_num_days,theta[1],theta[2])))
+    return(-L)
+  }
+  theta_init <- c(1,3.5)
+  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = c(0,0))$par
+  return(theta)
 }
 
 sample_from_beta <- function(x,x_c,s,max_num_days,splitting_variable_values,nr_samples=1e6){
