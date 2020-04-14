@@ -506,7 +506,7 @@ if(write_tables_for_simulation){
 current_state_per_date_extended <- get_current_state_per_date(type='clinical_assessment_included')
 current_state_per_date_extended_summary <- group_by(current_state_per_date_extended,date,state) %>% summarize(count=n())
 current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state) %>% select(-date)
-current_state_extended_write <- filter(current_state_extended,!(days_from_diagnosis > 14 & state == 'home-green'))
+current_state_extended_write <- filter(current_state_extended,!(days_from_diagnosis > 14 & state_worst == 'home-green'))
 recovered_imputed_extended <- anti_join(select(current_state_extended,patient_id,state),select(current_state_extended_write,patient_id)) %>%
   inner_join(.,select(individs_extended,patient_id,splitting_variable),by='patient_id') %>% 
   mutate(date=current_date,state_tomorrow='recovered') %>%
