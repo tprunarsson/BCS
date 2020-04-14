@@ -102,6 +102,7 @@ date_last_known_state <- current_date-1
 path_tables <- '../input/'
 path_sensitive_tables <- '../lsh_data/'
 path_dashboard_tables <- '../dashboard/input/'
+path_outpatient_clinic <- '../outpatient_clinic_history/'
 
 file_name_lsh_data <- paste0(current_date,'_lsh_covid_data.xlsx')
 file_path_coding <- 'lsh_coding.xlsx'
@@ -483,7 +484,7 @@ if (write_table_for_report){
   prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
     summarize(prop_visits_last_week=sum(prop_visits)/window_size)
   
-  write.table(prop_outpatient_clinic_last_week, file=paste0(path_sensitive_tables,current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
+  write.table(prop_outpatient_clinic_last_week, file=paste0(path_outpatient_clinic, current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
 }
 
 test_tables_for_simulation()

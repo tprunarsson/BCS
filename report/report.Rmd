@@ -37,7 +37,7 @@ soguleg_gogn_dags <- format(current_date-1, '%d-%m-%Y')
 #Göngudeild
 window_size <- 7
 date_for_calculation <- current_date - window_size
-path_to_prop <- paste0('../lsh_data/',current_date,'_prop_outpatient_clinic.csv')
+path_to_prop <- paste0('../outpatient_clinic_history/',current_date,'_prop_outpatient_clinic.csv')
 prop_outpatient_clinic_last_week <- read_csv(file = path_to_prop)$prop_visits_last_week
 
 outpatient_clinic_sim_visits <- filter(simulation, state == "Heimaeinangrun") %>%
