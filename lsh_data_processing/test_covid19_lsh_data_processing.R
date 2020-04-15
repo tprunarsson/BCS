@@ -148,7 +148,7 @@ test_lsh_data_file <- function(){
 }
 
 get_sequences <- function(){
-  pt <- filter(patient_transitions,!is.na(state_tomorrow))
+  patient_transitions <- filter(patient_transitions,!is.na(state_tomorrow))
   
   allsequences = NULL
   for (p in unique(patient_transitions$patient_id)) {
