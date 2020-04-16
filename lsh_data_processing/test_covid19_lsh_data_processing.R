@@ -1,4 +1,5 @@
 ############ ------------- Help functions ########################
+
 write_data_health_info <- function(){
     #date of diagnosis
     interview_first_filtered <- filter(interview_first, is.finite(date_diagnosis)) 
@@ -9,8 +10,6 @@ write_data_health_info <- function(){
     
     num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
     date_diagnosis_info <- sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
-    
-    patients_hospital <- distinct(hospital_visits_filtered,patient_id)
     
     #clinical assessment
     num_with_clinical_assessment <- left_join(individs,interview_follow_up,by='patient_id') %>% filter(is.finite(date_clinical_assessment)) %>% distinct(patient_id) %>% summarize(n()) %>% unlist()
@@ -41,11 +40,49 @@ write_data_health_info <- function(){
     
     missing_info_interview_first_info <- sprintf("Number of individs with missing info in first interview: %.0f (%.1f%%)",nrow(missing_info_interview_first),100*nrow(missing_info_interview_first)/nrow(individs))
     
-                                    
+    tmp <- left_join(individs,hospital_visit_first_date,by='patient_id') %>%
+      mutate(source_date_diagnosis='hospital_visit_first') %>%
+      left_join(.,interview_extra_first_date,by='patient_id') %>%
+      mutate(.,date_diagnosis_tmp=pmin(min_date_in,min_date_clincial_assessment,na.rm=TRUE)) %>%
+      mutate_at(vars(source_date_diagnosis), 
+                ~replace(.,date_diagnosis_tmp==min_date_clincial_assessment,'interview_extra_first')) %>%
+      select(.,-min_date_clincial_assessment,-min_date_in) %>%
+      left_join(.,select(interview_first,-date_clinical_assessment,-clinical_assessment),by='patient_id') %>%
+      mutate(.,date_diagnosis=pmin(date_diagnosis_tmp,date_diagnosis,na.rm=TRUE)) %>%
+      mutate_at(vars(source_date_diagnosis),~replace(.,date_diagnosis!=date_diagnosis_tmp,'interview_first')) %>%
+      mutate_at(vars(source_date_diagnosis), ~replace(.,!is.finite(date_diagnosis),'missing'))
+    
+    
+    num_source_dod_hospital <- filter(tmp,source_date_diagnosis=='hospital_visit_first') %>% nrow()
+    source_dod_hospital_info <- sprintf("Number of individs having date of diagnosis from hospital visits: %.0f (%.1f%%)", num_source_dod_hospital,100*(num_source_dod_hospital)/nrow(individs))
+    num_source_dod_forms <- filter(tmp,source_date_diagnosis=='interview_first') %>% nrow()
+    source_dod_forms_info <- sprintf("Number of individs having date of diagnosis from forms: %.0f (%.1f%%)", num_source_dod_forms,100*(num_source_dod_forms)/nrow(individs))
+    num_source_dod_groups <- filter(tmp,source_date_diagnosis=='interview_extra_first') %>% nrow()
+    source_dod_groups_info <- sprintf("Number of individs having date of diagnosis from groups: %.0f (%.1f%%)", num_source_dod_groups,100*(num_source_dod_groups)/nrow(individs))
+    
+    num_source_dod_missing <- filter(tmp,source_date_diagnosis=='missing') %>% nrow()
+    source_dod_missing_info <- sprintf("Number of individs missing date of diagnosis: %.0f (%.1f%%)", num_source_dod_missing,100*(num_source_dod_missing)/nrow(individs))
+
+    tmp_with_outcome <- filter(tmp,is.finite(date_diagnosis)) %>%
+      mutate(outcome=ifelse(covid_group=='recovered','recovered','in_hospital_system')) %>%
+      left_join(.,hospital_outcomes,by='patient_id') %>%
+      mutate(outcome=if_else(!is.na(outcome_tmp),outcome_tmp,outcome)) %>%
+      select(-outcome_tmp) %>%
+      left_join(.,interview_last_date,by='patient_id') %>%
+      mutate(.,date_outcome=pmin(date_outcome_tmp,if_else(covid_group=='recovered',date_last_known,NULL),na.rm=TRUE))
+    
+    num_dod_same_as_interview_last <- filter(tmp_with_outcome,date_diagnosis>=date_outcome) %>% nrow()
+    dod_same_as_interview_last_info <- sprintf("Number of individs with date of diagnosis same as date of recovery (missing): %.0f (%.1f%%)", num_dod_same_as_interview_last,100*(num_dod_same_as_interview_last)/nrow(individs))
+    
     output_string <- cat('Data health information:','\n\t-',
+                         source_dod_hospital_info,'\n\t-',
+                         source_dod_forms_info,'\n\t-',
+                         source_dod_groups_info,'\n\t-',
+                         source_dod_missing_info,'\n\t-',
+                         dod_same_as_interview_last_info,'\n\t-',
+                         potential_wrong_date_diagnosis_info,'\n\t-',
                          date_diagnosis_last_info,'\n\t-',
                          date_diagnosis_info,'\n\t-',
-                         potential_wrong_date_diagnosis_info,'\n\t-',
                          missing_info_interview_first_info,'\n\t-',
                          clinical_assessment_info,'\n\t-',
                          date_interview_last_info, '\n\t-',
