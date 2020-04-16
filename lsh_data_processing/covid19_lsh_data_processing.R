@@ -9,7 +9,7 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
-current_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-15','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-08','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
@@ -27,7 +27,7 @@ text_out_category_type <- 'simple'
 #Supported clnical assessment category types: all,simple
 clinical_assessment_category_type <- 'simple_red'
 #Supported priority category types: simple
-priority_category_type <- 'simple'
+priority_category_type <- 'all'
 #Supported age group types: official,three,simple
 age_group_type <- 'simple'
 #Supported splitting variable names: age,priority
@@ -120,22 +120,33 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
 
 
+# covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
+# unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
+#                     mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
+#                            unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
+# text_out_categories <- read_excel(file_path_coding,sheet = 'lsh_text_out_categories') %>%
+#                         mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
+# 
+# clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_assessment_categories') %>%
+#                                   mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
+#                                          clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
+# priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories') %>%
+#                         mutate(priority_category=!!as.name(paste0('priority_category_',priority_category_type)),
+#                                priority_category_order=!!as.name(paste0('priority_category_order_',priority_category_type)))
+# age_groups <- read_excel(file_path_coding,sheet = 'age_groups') %>%
+#                 mutate(age_group=!!as.name(paste0('age_group_',age_group_type)),
+#                        age_group_order=!!as.name(paste0('age_group_order_',age_group_type)))
 covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
 unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
-                    mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
-                           unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
+  mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
+         unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
 text_out_categories <- read_excel(file_path_coding,sheet = 'lsh_text_out_categories') %>%
-                        mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
-
+  mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
 clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_assessment_categories') %>%
-                                  mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
-                                         clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
-priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories') %>%
-                        mutate(priority_category=!!as.name(paste0('priority_category_',priority_category_type)),
-                               priority_category_order=!!as.name(paste0('priority_category_order_',priority_category_type)))
-age_groups <- read_excel(file_path_coding,sheet = 'age_groups') %>%
-                mutate(age_group=!!as.name(paste0('age_group_',age_group_type)),
-                       age_group_order=!!as.name(paste0('age_group_order_',age_group_type)))
+  mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
+         clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
+priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories')
+age_groups <- read_excel(file_path_coding,sheet = 'age_groups')
 sheet_names <- read_excel(file_path_coding,sheet = 'lsh_sheet_names',trim_ws = FALSE)
 
 comorbidities_categories <- read_excel(file_path_coding,sheet = 8) %>%
@@ -159,8 +170,8 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                     select(.,patient_id,date_first_symptoms,date_diagnosis,priority,date_clinical_assessment,clinical_assessment,comorbidities_raw) %>%
                     mutate_at(.,vars(matches('date')),~as.Date(gsub('\\s.*','',.),"%Y-%m-%d")) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
-                    left_join(.,priority_categories,by=c('priority'='priority_category_raw')) %>%
-                    mutate(.,priority=priority_category) %>%
+                    left_join(.,priority_categories,by=c('priority'='priority_raw')) %>%
+                    mutate(.,priority=priority_all) %>%
                     left_join(.,clinical_assessment_categories,by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
                     mutate(.,clinical_assessment=clinical_assessment_category) %>%
                     group_by(.,patient_id) %>%
@@ -168,7 +179,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                                     date_diagnosis=min(date_diagnosis,na.rm=TRUE),
                                     date_clinical_assessment=min(date_clinical_assessment,na.rm=TRUE),
                                     #date_clinical_assessment=if(!any(is.finite(clinical_assessment))) NA else date_clinical_assessment[which.max(clinical_assessment_category_order)],
-                                    priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_category_order)],
+                                    priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_all_order)],
                                     clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)],
                                     comorbidities_raw=if(any(!is.na(comorbidities_raw))) paste(comorbidities_raw[!is.na(comorbidities_raw)],collapse="; ") else NA_character_ #So as to not lose data we paste together the raw comorbidities of duplictes. Deal with duplicated comorbidities below.
                               ) %>%
@@ -228,12 +239,12 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     filter(!is.na(clinical_assessment) | !is.na(priority)) %>%
                     filter(date_clinical_assessment<=date_last_known_state) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
-                    left_join(.,priority_categories,by=c('priority'='priority_category_raw')) %>%
-                    mutate(.,priority=priority_category) %>%
+                    left_join(.,priority_categories,by=c('priority'='priority_raw')) %>%
+                    mutate(.,priority=priority_all) %>%
                     left_join(.,clinical_assessment_categories,by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
                     mutate(.,clinical_assessment=clinical_assessment_category) %>%
                     group_by(.,patient_id,date_clinical_assessment) %>%
-                    summarize(.,priority=if(all(is.na(priority))) NA_character_ else min(priority,na.rm=T),
+                    summarize(.,priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_all_order)],
                               clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)]) %>%
                     select(patient_id,priority, date_clinical_assessment,clinical_assessment) 
                     
@@ -343,8 +354,17 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       #mutate(.,age_group_std=as.character(cut(age,breaks=c(-Inf,seq(10,80,by=10),Inf),labels=c('0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80+'),right=FALSE)),
                       #       age_group_simple=as.character(cut(age,breaks=c(-Inf,50,Inf),labels=c('0-50','51+'),right=TRUE)))%>%
                       #select(.,patient_id,zip_code,age,age_group_std,age_group_simple,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
-                      mutate(.,splitting_variable=get_splitting_variable(.,splitting_variable_name)) %>%
-                      select(.,patient_id,zip_code,age,splitting_variable,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+                      #mutate(.,splitting_variable=get_splitting_variable(.,splitting_variable_name)) %>%
+                      select(.,patient_id,zip_code,age,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+
+individs_splitting_variables <- select(individs_extended,patient_id,age,sex,priority) %>%
+                            left_join(age_groups,by='age') %>%
+                            mutate_at(vars(matches('age'),-matches('order')),list( ~paste0('age_',.))) %>%
+                            left_join(priority_categories,by=c('priority'='priority_all')) %>%
+                            rename(priority_all=priority) %>%
+                            mutate_at(vars(matches('priority'),-matches('order')),list( ~paste0('priority_',.))) %>%
+                            select(-matches('raw'))
+                            
                       
 
 #patient transitions.
@@ -448,9 +468,8 @@ current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>
 current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
 current_state_write <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
 recovered_imputed <- anti_join(select(current_state,patient_id,state),select(current_state_write,patient_id)) %>%
-  inner_join(.,select(individs_extended,patient_id,splitting_variable),by='patient_id') %>% 
   mutate(date=current_date,state_tomorrow='recovered') %>%
-  select(.,patient_id,splitting_variable,date,state,state_tomorrow)
+  select(.,patient_id,date,state,state_tomorrow)
 patient_transition_counts_matrix_all <- get_transition_matrix_all('',select(recovered_imputed,-splitting_variable))
 patient_transition_summary <- get_transition_summary('',recovered_imputed,splitting_variable_name)
 #patient_transition_counts_matrix_list <- get_transition_matrix_by_splitting_variable('',recovered_imputed,splitting_variable_name)
@@ -509,9 +528,8 @@ current_state_per_date_extended_summary <- group_by(current_state_per_date_exten
 current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state) %>% select(-date)
 current_state_extended_write <- filter(current_state_extended,!(days_from_diagnosis > 14 & state_worst == 'home-green'))
 recovered_imputed_extended <- anti_join(select(current_state_extended,patient_id,state),select(current_state_extended_write,patient_id)) %>%
-  inner_join(.,select(individs_extended,patient_id,splitting_variable),by='patient_id') %>% 
-  mutate(date=current_date,state_tomorrow='recovered') %>%
-  select(.,patient_id,splitting_variable,date,state,state_tomorrow)
+                                mutate(date=current_date,state_tomorrow='recovered') %>%
+                                select(.,patient_id,date,state,state_tomorrow)
 patient_transition_counts_matrix_all_extended <- get_transition_matrix_all(type='clinical_assessment_included',select(recovered_imputed_extended,-splitting_variable))
 patient_transition_summary_extended <- get_transition_summary('clinical_assessment_included',recovered_imputed,splitting_variable_name)
 #patient_transition_counts_matrix_list_extended <- get_transition_matrix_by_splitting_variable(type='clinical_assessment_included',recovered_imputed_extended,splitting_variable_name) 

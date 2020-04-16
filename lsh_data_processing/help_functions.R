@@ -142,19 +142,19 @@ fit_lognormal <- function(x,x_c,max_num_days) {
 
 
 
-sample_from_lognormal <- function(x,x_c,s,max_num_days,splitting_variable_values,nr_samples=1e6){
+sample_from_lognormal <- function(x,x_c,state_values,max_num_days,not_to_be_split,nr_samples=1e6){
   theta_s = fit_lognormal(x,x_c,max_num_days=max_num_days_inpatient_ward)
-  length_of_stay_s_expanded <- expand_grid(splitting_variable=splitting_variable_values,state_duration=1:max_num_days) %>%
-    mutate(state=s,splitting_variable=factor(splitting_variable,levels=splitting_variable_values,labels=splitting_variable_values))
-  length_of_stay_s <- rlnorm(nr_samples,theta_s[1],theta_s[2]) %>%
+  length_of_stay_expanded <- expand_grid(state=state_values,splitting_variable=not_to_be_split,state_duration=1:max_num_days) %>%
+    mutate(splitting_variable=factor(splitting_variable,levels=not_to_be_split,labels=not_to_be_split))
+  length_of_stay_samples <- rlnorm(nr_samples,theta_s[1],theta_s[2]) %>%
     round() %>%
     table() %>%
     as.numeric() %>%
-    tibble(state=s,state_duration=0:(length(.)-1),count=.) %>%
+    tibble(state_duration=0:(length(.)-1),count=.) %>%
     filter(state_duration>0 & state_duration<=max_num_days) %>%
-    inner_join(.,length_of_stay_s_expanded,by=c('state','state_duration')) %>%
+    inner_join(.,length_of_stay_expanded,by=c('state_duration')) %>%
     select(state,splitting_variable,state_duration,count)
-  return(length_of_stay_s)
+  return(length_of_stay_samples)
 }
 
 fit_beta <- function(x,x_c,max_num_days) {
@@ -167,19 +167,19 @@ fit_beta <- function(x,x_c,max_num_days) {
   return(theta)
 }
 
-sample_from_beta <- function(x,x_c,s,max_num_days,splitting_variable_values,nr_samples=1e6){
-  theta_s = fit_beta(x,x_c,max_num_days=max_num_days_inpatient_ward)
-  length_of_stay_s_expanded <- expand_grid(splitting_variable=splitting_variable_values,state_duration=1:max_num_days) %>%
-    mutate(state=s,splitting_variable=factor(splitting_variable,levels=splitting_variable_values,labels=splitting_variable_values))
-  length_of_stay_s <- (max_num_days*(rbeta(nr_samples,theta_s[1],theta_s[2])+0.5)) %>%
-                        round() %>%
-                        table() %>%
-                        as.numeric() %>%
-                        tibble(state=s,state_duration=0:(length(.)-1),count=.) %>%
-                        filter(state_duration>0 & state_duration<=max_num_days) %>%
-                        inner_join(.,length_of_stay_s_expanded,by=c('state','state_duration')) %>%
-                        select(state,splitting_variable,state_duration,count)
-  return(length_of_stay_s)
+sample_from_beta <- function(x,x_c,state_values,max_num_days,not_to_be_split,nr_samples=1e6){
+  theta_s = fit_beta(x,x_c,max_num_days=max_num_days)
+  length_of_stay_expanded <- expand_grid(state=state_values,splitting_variable=not_to_be_split,state_duration=1:max_num_days) %>%
+                                mutate(splitting_variable=factor(splitting_variable,levels=not_to_be_split,labels=not_to_be_split))
+  length_of_stay_samples <- (max_num_days*(rbeta(nr_samples,theta_s[1],theta_s[2])+0.5)) %>%
+                              round() %>%
+                              table() %>%
+                              as.numeric() %>%
+                              tibble(state_duration=0:(length(.)-1),count=.) %>%
+                              filter(state_duration>0 & state_duration<=max_num_days) %>%
+                              inner_join(.,length_of_stay_expanded,by=c('state_duration')) %>%
+                              select(state,splitting_variable,state_duration,count)
+  return(length_of_stay_samples)
 }
 
 
