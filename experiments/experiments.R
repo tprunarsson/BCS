@@ -125,12 +125,11 @@ get_transition_summary <- function(type='',recovered_imputed,states,splitting_va
                                                     right_join(.,all_transitions_by_splitting_variable,by=c('splitting_variable','general_state','state_tomorrow')) %>%
                                                     mutate(count=if_else(is.na(count),0,count)) %>%
                                                     select(max_splitting,state,state_tomorrow,count) %>%
-                                                    rename(splitting_variable=max_splitting) %>%
-                                                    arrange(splitting_variable,state,state_tomorrow)
+                                                    rename(splitting_variable=max_splitting)
                                                     
         
     }
-    return(bind_rows(transition_summary_list))
+    return(bind_rows(transition_summary_list) %>% arrange(splitting_variable,state,state_tomorrow))
 }
 
 
@@ -143,7 +142,8 @@ get_length_of_stay_predicted <- function(type='',states,splitting_variable_names
             summarize(censored=censored[which.max(state_with_severity_block_nr)],state_duration=sum(state_duration)) %>%
             ungroup()
     }
-    
+    all_states <- get_states_in_order(type,active=F)
+    all_active_states <- get_states_in_order(type,active=T)
     length_of_stay_list <- list()
     max_splitting_name <- select(individs_splitting_variables,matches(paste(unique(splitting_variable_names),sep='|')),-matches('order')) %>%
                             summarise_all(.,~length(unique(.))) %>%
@@ -152,6 +152,14 @@ get_length_of_stay_predicted <- function(type='',states,splitting_variable_names
                             select(splitting_variable) %>%
                             unlist() %>%
                             unname()
+    max_splitting_values <- mutate(individs_splitting_variables,
+                                   max_splitting=!!as.name(max_splitting_name),
+                                   max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
+        filter(.,!duplicated(max_splitting)) %>%
+        arrange(max_splitting_order) %>%
+        select(max_splitting,-matches('order')) %>%
+        unlist() %>%
+        unname()
     for(i in 1:length(states)){
         state_blocks_with_splitting_variable <- inner_join(select(individs_splitting_variables,patient_id,matches(splitting_variable_names[i])),
                                                            select(transitions_state_blocks_summary,patient_id,state,censored,state_duration),
@@ -196,13 +204,19 @@ get_length_of_stay_predicted <- function(type='',states,splitting_variable_names
         state_values=states_mapping$state
     
         if(grepl('home',states[i])){
+            length_of_stay_extended <- expand_grid(max_splitting=splitting_variable_mapping$max_splitting,general_state=states[i],state=state_values) %>%
+                                                        inner_join(.,splitting_variable_mapping,by='max_splitting') %>%
+                                                        mutate(splitting_variable=factor(splitting_variable,levels=splitting_variable_values),
+                                                               max_splitting=factor(max_splitting,levels=max_splitting_values),
+                                                               state=factor(state,levels=all_active_states))
             length_of_stay_list[[states[i]]] <- filter(state_blocks_with_splitting_variable,!censored) %>%
                                                     group_by(.,general_state,splitting_variable,state_duration) %>%
                                                     summarize(count=n()) %>%
                                                     ungroup() %>%
-                                                    inner_join(states_mapping,by='general_state') %>%
-                                                    select(state,splitting_variable,state_duration,count) %>%
-                                                    arrange(state,splitting_variable,state_duration) 
+                                                    inner_join(.,length_of_stay_extended,by=c('splitting_variable','general_state')) %>%
+                                                    select(state,max_splitting,state_duration,count) %>%
+                                                    rename(splitting_variable=max_splitting)
+                                                    
         }else{
             length_of_stay_list[[states[i]]]  <- lapply(1:length(splitting_variable_values),function(j){
                 x <- filter(state_blocks_with_splitting_variable,splitting_variable==splitting_variable_values[j] & general_state==states[i] & !censored) %>% select(state_duration) %>% unlist() %>% unname()
@@ -216,5 +230,5 @@ get_length_of_stay_predicted <- function(type='',states,splitting_variable_names
             }) %>% bind_rows()
         }
     }
-    return(bind_rows(length_of_stay_list))
+    return(bind_rows(length_of_stay_list) %>% arrange(state,splitting_variable,state_duration))
 }
