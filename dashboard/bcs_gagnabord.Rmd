@@ -4,20 +4,22 @@ author: ''
 runtime: shiny
 output:
   flexdashboard::flex_dashboard:
-    orientation: columns
+    orientation: rows
+    css: styles.css
 ---
 
 ```{r global, include=FALSE, warning=FALSE}
 library(flexdashboard)
 library(shiny)
-library(ggplot2)
 library(plotly)
+library(ggplot2)
 library(stringr)
 library(dplyr)
 library(readr)
+library(tidyr)
 
 # Functions
-load_git_data <- function(type = c('length_of_stay_with_imputed', 'length_of_stay_empirical', 'transition_matrix', 'covid_simulation'),
+load_git_data <- function(type = c('length_of_stay_with_imputed', 'length_of_stay_empirical', 'transition_matrix', 'covid_simulation', 'prop_outpatient_clinic'),
                           data_folder = 'dashboard/input', 
                           start_date = '2020-04-02') {
   # Create URLs to csv files
@@ -34,11 +36,11 @@ load_git_data <- function(type = c('length_of_stay_with_imputed', 'length_of_sta
     if (grepl('transition', type)) {
       data_list[[file]]$state <- names(data_list[[file]])
     }
-    # Delete from list if csv does not exist add date col if file existed
-    if (length(data_list[[file]]) < 2) {
-      data_list[[file]] <- NULL
-    } else {
+    # Add date column if file existed. Remove crom list if file didn't exist
+    if (typeof(data_list[[file]]) == 'list') {
       data_list[[file]]$date <- as.Date(str_extract(file, '\\d{4}-\\d{2}-\\d{2}'))
+    } else {
+      data_list[[file]] <- NULL
     }
   }
   bind_rows(data_list)
@@ -51,11 +53,15 @@ recode_states <- function(df_with_state) {
                                     inpatient_ward='Legudeild',
                                     intensive_care_unit='Gjörgæsla'))
 }
-# Load csv data
-data_length_of_stay <- load_git_data('length_of_stay_empirical') %>% 
+
+############ Load csv data
+data_length_of_stay <- load_git_data('length_of_stay_empirical', start_date = '2020-04-08') %>% 
     recode_states()
 
-data_transition <- load_git_data('transition_matrix', data_folder = 'input')
+data_all_simulation <- load_git_data('covid_simulation', data_folder = 'simulation_history', start_date = '2020-04-09') %>% 
+  dplyr::rename(sim_date = date) 
+
+# data_transition <- load_git_data('transition_matrix', data_folder = 'input')
 
 # Set constants
 start_date <- min(data_length_of_stay$date) # as.Date('2020-04-02')
@@ -65,12 +71,226 @@ aldurshopar <- unique(data_length_of_stay$age_group_simple) #list('0-50', '51+')
 states <- unique(data_length_of_stay$state)
 ```
 
-Stillingar {.sidebar}
+
+Skýrslur {id=skyrslur data-icon="fa-th-large"}
 =======================================================================
 
+Stillingar {.sidebar}
+-------------------------------------------------------------
+
 ```{r}
-sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = end_date,
+helpText('Veljið dagsetningu til að birta skýrslu fyrir')
+sliderInput('dagsetning_sk', 'Dagsetning:', min = start_date, max = max(data_all_simulation$sim_date),
             value = end_date, step = 1, timeFormat = "%d %b")
+
+```
+
+
+Skýrslutexti {data-height=30}
+-----------------------------------------------------------
+
+#### Spá um fjölda smitaðra einstaklinga í hverri stöðu á hverjum degi
+
+
+```{r simulation_data}
+data_simulation_quantiles <- reactive({
+  data_all_simulation %>% 
+    filter(sim_date == input$dagsetning_sk) %>%
+    mutate(date = sim_date + day) %>%
+    gather(key = 'state', value = 'count', 2:6) %>% 
+    recode_states() %>% 
+    group_by(date, state) %>% 
+    summarize(median = round(median(count)), 
+              quantile975 = round(quantile(count, probs=0.975))) %>%
+    ungroup()
+})
+
+plot_simulation <- function(state) {
+  if(nrow(data_simulation_quantiles()[data_simulation_quantiles()$state==state, ]) < 1) {
+    ggplot() + 
+      geom_text(aes(x=10, y = 10, label = 'Spá vantar')) + 
+      lims(x=c(0,30), y=c(0,100)) +
+      theme_minimal()
+    stop()
+  }
+  p_data <- data_simulation_quantiles()[data_simulation_quantiles()$state==state, ] %>% 
+    gather('key', 'value', -date, -state) %>% 
+    mutate(key = key %>% recode(median = "Líkleg spá", 
+                                quantile975 = "Svartsýn spá"))
+  ggplot(data = p_data, aes(x = date, y = value)) +
+    geom_line(aes(linetype = key, alpha = key), col = "blue4") +
+    # scale_x_date(date_breaks = "2 days", date_labels = "%m-%d", expand = c(0,0.5)) +
+    labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
+    scale_alpha_manual(values = c(1, 0.7)) +
+    theme_minimal()
+}
+
+# # Göngudeild
+# prop_visits <- load_git_data('prop_outpatient_clinic', 
+#                              data_folder = 'outpatient_clinic_history', 
+#                              start_date = '2020-04-08')
+# 
+# window_size <- 7
+# # prop_visit_for_date <- reactive(
+# #   prop_visits %>% 
+# #     filter(date == input$dagsetning - window_size) %>% 
+# #     select(prop_visits_last_week) %>% 
+# #     as.numeric()
+# # )
+# 
+# outpatient_clinic_sim_visits <- reactive({
+#   prop_visit_for_date <- prop_visits %>% 
+#     filter(date == input$dagsetning - window_size) %>% 
+#     select(prop_visits_last_week) %>% 
+#     as.numeric()
+#   data_all_simulation %>%
+#     mutate(count_visits = home * prop_visit_for_date) %>% 
+#     group_by(date) %>% 
+#     summarise(median = round(median(count_visits)),
+#               quantile975 = round(quantile(count_visits,probs=0.975))) %>%
+#     ungroup()
+# })
+```
+
+skyrsla-efri-röð
+--------------------------------------
+
+### Heimaeinangrun
+
+```{r}
+renderPlotly({
+    p <- plot_simulation('Heimaeinangrun')
+    p <- p + ylim(0,1300)
+    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+})
+```
+
+
+### Göngudeild
+
+```{r}
+renderPlotly({
+    p <- ggplot() + theme_minimal()
+    ggplotly(p)
+})
+# renderPlotly({
+#     p_data <- outpatient_clinic_sim_visits() %>% 
+#     gather('key', 'value', -date) %>% 
+#     mutate(key = key %>% recode(median = "Líkleg spá", 
+#                                 quantile975 = "Svartsýn spá"))
+#   ggplot(data = p_data,
+#          aes(x = date, y = value)) +
+#     geom_line(aes(lty = key), col = "blue4", size = 0.7) +
+#     labs(x = '', y = 'Fjöldi') +
+#     theme_minimal() +
+#     theme(legend.position = "top",
+#           legend.title = element_blank())
+# })
+```
+
+skyrsla-neðri-röð
+------------------------------
+
+### Legudeild
+```{r}
+renderPlotly({
+    p <- plot_simulation('Legudeild')
+    p <- p + ylim(0, 100)
+    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+})
+```
+
+
+### Gjörgæsla
+```{r}
+renderPlotly({
+    p <- plot_simulation('Gjörgæsla')
+    p <- p + ylim(0, 50)
+    ggplotly(p, tooltip = c("value", "date", "key"))
+})
+```
+
+<!-- Skýrsla footer {data-height=30} -->
+<!-- ------------------------- -->
+<!-- - Þetta spálíkan spáir fyrir um fjölda einstaklinga fjórar vikur fram í tímann.  -->
+<!-- - Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni covid.hi.is og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.  -->
+<!-- - Komur á göngudeild eru áætlaðar út frá spáðum fjölda í heimaeinangrun og hlutfalli þeirra sem voru í heimaeinangrun í síðustu viku og komu á göngudeild. -->
+
+
+Sviðsmyndir {id=svidsmyndir data-icon="fa-project-diagram"}
+===============================================
+
+Stillingar {.sidebar}
+---------------------------------------------------
+<style>
+#groupInputs > div {
+  width: 45% !important;
+  float: left !important;
+  margin: 2px !important;
+}
+</style>
+
+```{r}
+# sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = end_date,
+#             value = end_date, step = 1, timeFormat = "%d %b")
+helpText('Sláið inn nýjar auka forsendur og veljið "Keyra hermun". 
+         Nokkurn tíma gæti tekið fyrir keyrsluna að klárast.')
+dateInput('sv_date', 'Dagsetning', value = '2020-03-01', min = '2020-03-01', max = Sys.Date() + 30)
+
+div(numericInput('sv_fjoldi', 'Fjöldi', min = 0, max = 100, step = 1, value = 0, width = 20),  selectInput('sv_age', 'Aldursbil', choices = c('0-50', '51-75', '>75'), selected = '0-50', width = 20), id='groupInputs')
+div(numericInput('sv_fjoldi', 'Fjöldi', min = 0, max = 100, step = 1, value = 0, width = 20),  selectInput('sv_age', 'Aldursbil', choices = c('0-50', '51-75', '>75'), selected = '51-75', width = 20), id='groupInputs')
+div(numericInput('sv_fjoldi', 'Fjöldi', min = 0, max = 100, step = 1, value = 0, width = 20),  selectInput('sv_age', 'Aldursbil', choices = c('0-50', '51-75', '>75'), selected = '+75', width = 20), id='groupInputs')
+
+actionButton("sv_keyra", "Keyra hermun")
+
+```
+
+
+sviðsmynir-legudeild
+-------------------------------
+
+### Legudeild
+
+```{r}
+renderPlotly({
+  p <- plot_simulation('Legudeild') + ylim(0, 100)
+  ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+  observeEvent(input$sv_keyra, {
+    p <- p + geom_line(aes(y = value + 5, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
+    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+  })    
+  ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+})
+
+```
+
+sviðsmyndir-gjörgæsla
+------------------------------
+
+### Gjörgæsla
+
+```{r}
+renderPlotly({
+    p <- plot_simulation('Gjörgæsla') + ylim(0, 50)
+    if (input$sv_fjoldi > 0) {
+    p <- p + 
+      geom_line(aes(y = value + 2, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
+    }
+    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+})
+```
+
+
+Forsendur {data-icon="fa-chart-bar"}
+=======================================================================
+
+Stillingar {.sidebar}
+---------------------------------------------------
+
+```{r}
+sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = max(data_length_of_stay$date),
+            value = end_date, step = 1, timeFormat = "%d %b")
+checkboxInput('festa_asa', 'Festa ása', value = FALSE)
 checkboxGroupInput('aldur', label = 'Aldurshópar:', 
                    choices = aldurshopar, selected = aldurshopar)
 checkboxGroupInput('state', label = 'Staða:', 
@@ -82,13 +302,8 @@ selectInput('facet', 'Facet eftir:', c('-', names(data_length_of_stay)[1:3]))
 
 ```
 
-
-Dreifingar {data-icon="fa-signal"}
-=======================================================================
-
-column {.tabset .tabset-fade}
+dreifinga-tabs {.tabset .tabset-fade}
 -----------------------------------------------------------------------
-
 
 ### Length of Stay 
 
@@ -105,21 +320,19 @@ dataset <- reactive({
 renderPlot({
   p <- ggplot(dataset(), aes(x=state_duration, y=count, fill = censored)) + 
     geom_col(position = 'dodge') +
-    scale_fill_viridis_d() +
+    scale_fill_viridis_d(begin = 0.1, end = 0.6) +
     theme_minimal()
   
   p <- p + aes_string(fill = input$fill_by)
   
   if (input$facet != '-')
     p <- p + facet_wrap(paste0('~', input$facet), scales = 'free')
-  
+  if(input$festa_asa)
+    p <- p + lims(x = c(0, 35), y = c(0, max(data_length_of_stay$count)))
   print(p)
 })
 ```
 
-
-<!-- Row -->
-<!-- ----------------------------------------------------------------------- -->
 
 ### Transition Matrix Test [WIP]
 
@@ -158,42 +371,9 @@ fig
 ```
 
 
-### ggPlotly test
+<!-- Gagnagæði {data-icon="fa-tasks"} -->
+<!-- ======================================================================= -->
 
-```{r}
-n <- 20
-x1 <- rnorm(n); x2 <- rnorm(n)
-y1 <- 2 * x1 + rnorm(n)
-y2 <- 3 * x2 + (2 + rnorm(n))
-A <- as.factor(rep(c(1, 2), each = n))
-df <- data.frame(x = c(x1, x2), y = c(y1, y2), A = A)
-fm <- lm(y ~ x + A, data = df)
+<!-- Stillingar {.sidebar} -->
+<!-- --------------------------------------------------- -->
 
-p <- ggplot(data = cbind(df, pred = predict(fm)), aes(x = x, y = y, color = A))
-p <- p + geom_point() + geom_line(aes(y = pred))
-ggplotly(p)
-```
-
-Gagnagæði {data-icon="fa-tasks"}
-=======================================================================
-
-
-Skýrslur {id=skyrslur data-icon="fa-file-alt"}
-=======================================================================
-
-Column {width=100%}
------------------------
-<iframe style="position: absolute; height: 100%; border: none"></iframe>
-```{r, echo=FALSE}
-htmlbase_url <- 'https://htmlpreview.github.io/?https://raw.githubusercontent.com/tprunarsson/BCS/master/daily_report/'
-this_report <- function() {
-  URLencode(paste0(
-    htmlbase_url, input$dagsetning, '-Flæði COVID-19 sjúklinga LSH.html'))
-}
-renderUI(
-  htmltools::tags$iframe(height='1080', width='100%', title = "Skýrsla valins dags",
-    src = this_report())
-)
-```
-
-> Dagleg skýrsla - Veljið dagsetningu í stillingum
