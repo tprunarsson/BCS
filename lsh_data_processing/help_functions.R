@@ -250,4 +250,32 @@ sample_from_beta <- function(x,x_c,state_values,max_num_days,not_to_be_split,nr_
 # }) %>% bind_rows()
 # 
 # group_by(distr_table,patient_id) %>% summarise(n=n()) %>% ungroup() %>% mutate(not_zero=(n-1)/n,zero=1/n) %>% summarise(exp_nr_zeros=sum(zero),prob_no_zero=prod(not_zero))
-#   
+# 
+# prop red at home
+# home_first_without_children <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+#   summarize(censored=censored[which.max(state_with_severity_block_nr)],state_block_nr_start=min(state_block_nr_start),state_block_nr_end=max(state_block_nr_end)+1,state_duration=sum(state_duration),state_next=tail(state_next,1)) %>%
+#   ungroup() %>% inner_join(select(individs_extended,patient_id,age,splitting_variable),.,by='patient_id') %>%
+#   mutate(state_next=if_else(state_next=='recovered',state_next,'not_recovered')) %>%
+#   filter(!censored,state_block_nr==1,state=='home',age>18)
+# #filter(!censored,state=='home')
+# 
+# 
+# LOS_plot_dat <- group_by(home_first_without_children,state,state_next,state_duration) %>%
+#   summarize(count=n()) %>%
+#   arrange(state,state_next,state_duration)
+# ggplot(LOS_plot_dat,aes(state_duration,count,fill=state_next)) + geom_col(position='dodge')
+# 
+# 
+# dates_vec <- seq(min(home_first_without_children$state_block_nr_end),max(home_first_without_children$state_block_nr_end),by=1)
+# state_next_vec <- c('not_recovered','recovered')
+# splitting_variable_values <- get_splitting_variable_values_in_order('age')
+# prop_red_plot_dat <- group_by(home_first_without_children,state_block_nr_end,state_next,splitting_variable) %>%
+#   summarise(count=n()) %>%
+#   left_join(expand_grid(date=dates_vec,outcome=state_next_vec,splitting_variable=splitting_variable_values),.,by=c('date'='state_block_nr_end','outcome'='state_next','splitting_variable')) %>%
+#   mutate(count=if_else(is.na(count),0,as.numeric(count))) %>%
+#   group_by(outcome,splitting_variable) %>%
+#   mutate(cumulative_counts=cumsum(count)) %>%
+#   group_by(date,splitting_variable) %>%
+#   arrange(outcome) %>%
+#   summarise(prop_red=cumulative_counts[1]/(cumulative_counts[1]+cumulative_counts[2]))
+# ggplot(prop_red_plot_dat,aes(date,prop_red)) + geom_line() + ylim(0,1) + facet_wrap(~splitting_variable)
