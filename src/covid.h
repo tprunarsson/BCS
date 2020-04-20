@@ -1,4 +1,4 @@
-#define VERSION     "5-April-2020 (Sunday Release)"
+#define VERSION     "10-April-2020 Good Friday"
 
 #define MAXINFECTED 65536 /* estimated MAX value infected! */
 #define MAX_INFECTED_PER_DAY 8192 /* estimated MAX value infected! */
@@ -7,12 +7,14 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-#define MAX_AGE_GROUPS       2
 #define MAX_LOS_DAYS        60
-#define MAX_SIM_TIME        28
+#define MAX_SIM_TIME        84
 
-#define EVENT_ARRIVAL        1
-#define EVENT_DEPARTURE      2
+#define EVENT_ARRIVAL       10
+#define EVENT_DEPARTURE     12
+#define EVENT_REINITIALIZE  13
+#define EVENT_SCENARIO      14
+#define EVENT_PRINT_STATS   15
 
 #define STREAM_LOS          1  /* Random-number stream for interarrivals. */
 #define STREAM_AGE          2  /* Random-number stream for service times. */
@@ -26,9 +28,36 @@
 #define ATTR_NEXTLOCATION   8
 #define ATTR_LASTWORSTLOC   9
 
-/* home,emergency_room,outpatient_clinic,inpatient_ward,intensive_care_unit,death,recovered */
-#define HOME                0
-#define INPATIENT_WARD      1
-#define INTENSIVE_CARE_UNIT 2
-#define DEATH               3
-#define RECOVERED           4
+// "home", "home-green", "home-red", "inpatient_ward", "inpatient_ward-green", "inpatient_ward-red", "intensive_care_unit", "intensive_care_unit-green","intensive_care_unit-red", "death", "recovered"
+#define HOME                      0
+#define HOME_GREEN                1
+#define HOME_RED                  2
+#define INPATIENT_WARD            3
+#define INPATIENT_WARD_GREEN      4
+#define INPATIENT_WARD_RED        5
+#define INTENSIVE_CARE_UNIT       6
+#define INTENSIVE_CARE_UNIT_GREEN 7
+#define INTENSIVE_CARE_UNIT_RED   8
+#define DEATH                     9
+#define RECOVERED                10
+
+#define MAX_SPLITTING_VARIABLE    2
+#define MAX_STATE_VARIABLE       11
+
+typedef struct {
+  int person_id; /* let simulated persons take negative values */
+  int age_group;
+  char szDate[12]; /* the date of entry */
+  int start_day;
+  int real_location[MAX_SIM_TIME]; /* use -1 when not in system */
+  int real_location_worst[MAX_SIM_TIME]; /* use -1 when not in system */
+  int simulated_location[MAX_SIM_TIME];
+  double simulated_location_mean[RECOVERED-HOME+1][MAX_SIM_TIME];
+  int simulated_location_worst[MAX_SIM_TIME];
+  int real_days_in_location[MAX_SIM_TIME];
+  int simulated_days_in_location[MAX_SIM_TIME];
+  int real_days_from_diagnosis[MAX_SIM_TIME];
+  int simulated_days_from_diagnosis[MAX_SIM_TIME];
+  int first_state_indicator[MAX_SIM_TIME];
+} person;
+

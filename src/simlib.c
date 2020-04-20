@@ -82,11 +82,11 @@ void reset_simlib(void) {
   int i;
 
   for (i = 0; i < MAX_LIST+1; i++) {
-      while (list_size[i] > 0) {
-        list_remove(FIRST, i);
-      }
+    while (list_size[i] > 0) {
+      list_remove(FIRST, i);
     }
-    sim_time = 0.0;
+  }
+  sim_time = 0.0;
 }
 
 void list_file(int option, int list) {
