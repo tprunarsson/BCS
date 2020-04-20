@@ -17,51 +17,14 @@ library(stringr)
 library(dplyr)
 library(readr)
 library(tidyr)
+source('dashboard_functions.R')
 
-# Functions
-load_git_data <- function(type = c('length_of_stay_with_imputed', 'length_of_stay_empirical', 'transition_matrix', 'covid_simulation', 'prop_outpatient_clinic'),
-                          data_folder = 'dashboard/input', 
-                          start_date = '2020-04-02') {
-  # Create URLs to csv files
-  root_path <- 'https://raw.githubusercontent.com/tprunarsson/BCS/master'
-  files <- sprintf('%s_%s.csv', seq.Date(from = as.Date(start_date), to = Sys.Date(), by = 1), type)
+#Load csv data
+bcs_data <- readRDS('input/bcs_data.rds')
+data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
+data_all_simulation <- bcs_data$data_all_simulation
 
-  #Get csv data to a list and row-bind all non-null results
-  data_list <- list()
-  for (file in files) {
-    data_list[[file]] <- try(
-      read.csv(file.path(root_path, data_folder, file)), silent = TRUE
-    )
-    # Add state column for transition data
-    if (grepl('transition', type)) {
-      data_list[[file]]$state <- names(data_list[[file]])
-    }
-    # Add date column if file existed. Remove crom list if file didn't exist
-    if (typeof(data_list[[file]]) == 'list') {
-      data_list[[file]]$date <- as.Date(str_extract(file, '\\d{4}-\\d{2}-\\d{2}'))
-    } else {
-      data_list[[file]] <- NULL
-    }
-  }
-  bind_rows(data_list)
-}
-
-recode_states <- function(df_with_state) {
-  stopifnot('state' %in% names(df_with_state))
-  df_with_state %>% 
-    mutate(state = state %>% recode(home='Heimaeinangrun',
-                                    inpatient_ward='Legudeild',
-                                    intensive_care_unit='Gjörgæsla'))
-}
-
-############ Load csv data
-data_length_of_stay <- load_git_data('length_of_stay_empirical', start_date = '2020-04-08') %>% 
-    recode_states()
-
-data_all_simulation <- load_git_data('covid_simulation', data_folder = 'simulation_history', start_date = '2020-04-09') %>% 
-  dplyr::rename(sim_date = date) 
-
-# data_transition <- load_git_data('transition_matrix', data_folder = 'input')
+get_and_save_if_new_data(bcs_data)
 
 # Set constants
 start_date <- min(data_length_of_stay$date) # as.Date('2020-04-02')
@@ -80,49 +43,51 @@ Stillingar {.sidebar}
 
 ```{r}
 helpText('Veljið dagsetningu til að birta skýrslu fyrir')
-sliderInput('dagsetning_sk', 'Dagsetning:', min = start_date, max = max(data_all_simulation$sim_date),
+sliderInput('dagsetning_sk', 'Dagsetning:', min = start_date, max = max(data_all_simulation$date),
             value = end_date, step = 1, timeFormat = "%d %b")
 
 ```
 
 
-Skýrslutexti {data-height=30}
+skyrsla-header {data-height=50px}
 -----------------------------------------------------------
 
 #### Spá um fjölda smitaðra einstaklinga í hverri stöðu á hverjum degi
 
 
 ```{r simulation_data}
+# Make the simulation data reactive on date slider
 data_simulation_quantiles <- reactive({
   data_all_simulation %>% 
-    filter(sim_date == input$dagsetning_sk) %>%
-    mutate(date = sim_date + day) %>%
+    filter(date == input$dagsetning_sk) %>%
+    mutate(date_spa = date + day) %>%
     gather(key = 'state', value = 'count', 2:6) %>% 
     recode_states() %>% 
-    group_by(date, state) %>% 
+    group_by(date_spa, state) %>% 
     summarize(median = round(median(count)), 
               quantile975 = round(quantile(count, probs=0.975))) %>%
     ungroup()
 })
 
+#' Plot plots from the forecast report. Requires the data_simulation_quantiles reactive to exist
 plot_simulation <- function(state) {
-  if(nrow(data_simulation_quantiles()[data_simulation_quantiles()$state==state, ]) < 1) {
-    ggplot() + 
-      geom_text(aes(x=10, y = 10, label = 'Spá vantar')) + 
-      lims(x=c(0,30), y=c(0,100)) +
-      theme_minimal()
-    stop()
-  }
-  p_data <- data_simulation_quantiles()[data_simulation_quantiles()$state==state, ] %>% 
-    gather('key', 'value', -date, -state) %>% 
-    mutate(key = key %>% recode(median = "Líkleg spá", 
-                                quantile975 = "Svartsýn spá"))
-  ggplot(data = p_data, aes(x = date, y = value)) +
-    geom_line(aes(linetype = key, alpha = key), col = "blue4") +
-    # scale_x_date(date_breaks = "2 days", date_labels = "%m-%d", expand = c(0,0.5)) +
-    labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
-    scale_alpha_manual(values = c(1, 0.7)) +
-    theme_minimal()
+    if(nrow(data_simulation_quantiles()[data_simulation_quantiles()$state==state, ]) < 1) {
+        ggplot() +
+            geom_text(aes(x=10, y = 10, label = 'Spá vantar')) +
+            lims(x=c(0,30), y=c(0,100)) +
+            theme_minimal()
+        stop()
+    }
+    p_data <- data_simulation_quantiles()[data_simulation_quantiles()$state==state, ] %>% 
+        gather('key', 'value', -date_spa, -state) %>%
+        mutate(key = key %>% recode(median = "Líkleg spá",
+                                    quantile975 = "Svartsýn spá"))
+    ggplot(data = p_data, aes(x = date_spa, y = value)) +
+        geom_line(aes(linetype = key, alpha = key), col = "blue4") +
+        # scale_x_date(date_breaks = "2 days", date_labels = "%m-%d", expand = c(0,0.5)) +
+        labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
+        scale_alpha_manual(values = c(1, 0.7)) +
+        theme_minimal()
 }
 
 # # Göngudeild
@@ -160,7 +125,7 @@ skyrsla-efri-röð
 ```{r}
 renderPlotly({
     p <- plot_simulation('Heimaeinangrun')
-    p <- p + ylim(0,1300)
+    p <- p + ylim(0,1000)
     ggplotly(p, tooltip = list('linetype', 'date', 'value'))
 })
 ```
@@ -195,7 +160,7 @@ skyrsla-neðri-röð
 ```{r}
 renderPlotly({
     p <- plot_simulation('Legudeild')
-    p <- p + ylim(0, 100)
+    p <- p + ylim(0, 50)
     ggplotly(p, tooltip = list('linetype', 'date', 'value'))
 })
 ```
@@ -205,7 +170,7 @@ renderPlotly({
 ```{r}
 renderPlotly({
     p <- plot_simulation('Gjörgæsla')
-    p <- p + ylim(0, 50)
+    p <- p + ylim(0, 20)
     ggplotly(p, tooltip = c("value", "date", "key"))
 })
 ```
@@ -246,7 +211,7 @@ actionButton("sv_keyra", "Keyra hermun")
 ```
 
 
-sviðsmynir-legudeild
+sviðsmyndir-legudeild
 -------------------------------
 
 ### Legudeild
@@ -320,7 +285,8 @@ dataset <- reactive({
 renderPlot({
   p <- ggplot(dataset(), aes(x=state_duration, y=count, fill = censored)) + 
     geom_col(position = 'dodge') +
-    scale_fill_viridis_d(begin = 0.1, end = 0.6) +
+    scale_fill_manual(values = palette1) +
+    # scale_fill_viridis_d(begin = 0.1, end = 0.6) +
     theme_minimal()
   
   p <- p + aes_string(fill = input$fill_by)
