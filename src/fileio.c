@@ -504,15 +504,15 @@ int readTransitionCDF(char *fname) {
     }
   for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) 
     for (j = 0; j < MAX_STATE_VARIABLE; j++) {
-      CDF[i][j][0] = P[i][j][0];
+      transitionCDF[i][j][0] = P[i][j][0];
       for (k = 1; k < MAX_STATE_VARIABLE; k++) 
-        CDF[i][j][k] = CDF[i][j][k-1] + P[i][j][k];
+        transitionCDF[i][j][k] = transitionCDF[i][j][k-1] + P[i][j][k];
     }
   for (k = 0; k < MAX_SPLITTING_VARIABLE; k++) {
     fprintf(outfile, "CDF[%s] = \n", szSplittingVariable[k]);
     for (i = 0; i < MAX_STATE_VARIABLE; i++) {
       for (j = 0; j < MAX_STATE_VARIABLE; j++)
-        fprintf(outfile, "%.4g ", CDF[k][i][j]);
+        fprintf(outfile, "%.4g ", transitionCDF[k][i][j]);
       fprintf(outfile, "\n");
     }
   }
