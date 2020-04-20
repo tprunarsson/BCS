@@ -1,6 +1,6 @@
 ################# ----- Current state of individuals with ongoing COVID-19 infectoin ---- #############
 get_current_state_per_date <- function(model){
-    if(type=='extended'){
+    if(model=='extended'){
         transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
                               state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
                                                        is.na(severity_tomorrow) ~ state_tomorrow,
@@ -23,7 +23,7 @@ get_current_state_per_date <- function(model){
         inner_join(select(individs_extended,patient_id,date_diagnosis),.,by='patient_id') %>%
         mutate(days_from_diagnosis=as.numeric(date-date_diagnosis)+1) %>%
         inner_join(.,state_worst_case_per_date,by=c('patient_id','date')) %>%
-        mutate(state_worst=if(type=='extended') paste0(state_worst,'-',state_worst_severity) else state_worst) %>%
+        mutate(state_worst=if(model=='extended') paste0(state_worst,'-',state_worst_severity) else state_worst) %>%
         inner_join(.,individs_splitting_variables,by='patient_id') %>%
         select(-state_tomorrow,-date_diagnosis,-matches('severity'),-matches('state_block_nr'),-matches('order'))
     return(current_state_per_date)
@@ -31,7 +31,7 @@ get_current_state_per_date <- function(model){
 
 ################# ----- First state of individuals diagnosed with COVID-19 infection ---- #############
 get_first_state <- function(model){
-    if(type=='extended'){
+    if(model=='extended'){
         transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
                               state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
                                                        is.na(severity_tomorrow) ~ state_tomorrow,
@@ -49,240 +49,82 @@ get_first_state <- function(model){
     return(first_state)
 }
 
-
-write_tables_for_experiment(){
-    if(type=='clinical_assessment_included'){
-        transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
-                                            select(.,patient_id,state_block_nr,state,censored,state_duration)
-        transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
-                              state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
-                                                       is.na(severity_tomorrow) ~ state_tomorrow,
-                                                       TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow))
-                        ) %>%
-                        select(.,patient_id,date,state,state_tomorrow)
-    }else{
-        transitions <- select(patient_transitions,patient_id,date,state,state_tomorrow)
-    }
-    transitions <- bind_rows(transitions,recovered_imputed)
-    all_states <- get_states_in_order(type,active=F)
-    all_active_states <- get_states_in_order(type,active=T)
-    max_splitting_name <- select(individs_splitting_variables,matches(paste(unique(splitting_variable_names),sep='|')),-matches('order')) %>%
-        summarise_all(.,~length(unique(.))) %>%
-        gather(key='splitting_variable',value='nr_levels') %>%
-        slice(which.max(nr_levels)) %>%
-        select(splitting_variable) %>%
-        unlist() %>%
-        unname()
-    max_splitting_values <- mutate(individs_splitting_variables,
-                                   max_splitting=!!as.name(max_splitting_name),
-                                   max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
-        filter(.,!duplicated(max_splitting)) %>%
-        arrange(max_splitting_order) %>%
-        select(max_splitting,-matches('order')) %>%
-        unlist() %>%
-        unname()
-    transition_summary_list <- list()
-}
-
 ################# ----- Transition counts between states ---- #############
-get_transition_summary <- function(type='',recovered_imputed,states,splitting_variable_names){
-    if(type=='clinical_assessment_included'){
-        transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
-                              state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
-                                                       is.na(severity_tomorrow) ~ state_tomorrow,
-                                                       TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow))
-        ) %>%
-            select(.,patient_id,date,state,state_tomorrow)
+get_transition_summary <- function(model,transitions,s,splitting_variable_name,max_splitting_dat){
+    all_states <- get_states_in_order(model,active=F)
+    all_active_states <- get_states_in_order(model,active=T)
+    if(splitting_variable_name %in% names(individs_splitting_variables)){
+        transitions_with_splitting_variable <- filter(transitions,grepl(s,state)) %>%
+            inner_join(.,select(individs_splitting_variables,patient_id,matches(splitting_variable_name),-matches('order')),by='patient_id') %>%
+            rename(splitting_variable=!!splitting_variable_name)
     }else{
-        transitions <- select(patient_transitions,patient_id,date,state,state_tomorrow)
+        transitions_with_splitting_variable <- filter(transitions,grepl(s,state)) %>%
+                                                mutate(splitting_variable='none')
     }
-    transitions <- bind_rows(transitions,recovered_imputed)
-    all_states <- get_states_in_order(type,active=F)
-    all_active_states <- get_states_in_order(type,active=T)
-    #full_patient_transition_experiment_dat <- tibble(state=all_active_states)%>%
-    #                                        left_join(.,patient_transition_experiment_dat,by='state') %>%
-    #                                        mutate(value=if_else(is.na(value),'none',value))
-    #states <- full_patient_transition_experiment_dat$state
-    #splitting_variable_names <- full_patient_transition_experiment_dat$value
-    max_splitting_name <- select(individs_splitting_variables,matches(paste(unique(splitting_variable_names),sep='|')),-matches('order')) %>%
-        summarise_all(.,~length(unique(.))) %>%
-        gather(key='splitting_variable',value='nr_levels') %>%
-        slice(which.max(nr_levels)) %>%
-        select(splitting_variable) %>%
-        unlist() %>%
-        unname()
-    max_splitting_values <- mutate(individs_splitting_variables,
-                                   max_splitting=!!as.name(max_splitting_name),
-                                   max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
-        filter(.,!duplicated(max_splitting)) %>%
-        arrange(max_splitting_order) %>%
-        select(max_splitting,-matches('order')) %>%
-        unlist() %>%
-        unname()
-    transition_summary_list <- list()
-    for(i in 1:length(states)){
-        transitions_with_splitting_variable <- filter(transitions,grepl(states[i],state)) %>%
-            inner_join(.,select(individs_splitting_variables,patient_id,matches(splitting_variable_names[i])),by='patient_id') %>%
-            mutate(state=factor(state,levels=all_active_states),state_tomorrow=factor(state_tomorrow,levels=all_states)) %>%
-            mutate(general_state=states[i]) 
-        states_mapping <- filter(transitions_with_splitting_variable,!duplicated(state)) %>%
-            select(general_state,state) %>%
-            mutate(state=factor(state,levels=all_active_states)) %>%
-            arrange(state) 
-        state_values=states_mapping$state
-        if(splitting_variable_names[i] %in% names(transitions_with_splitting_variable)){
-            splitting_variable_mapping <- mutate(individs_splitting_variables,
-                                                 max_splitting=!!as.name(max_splitting_name),
-                                                 splitting_variable=!!as.name(splitting_variable_names[i]),
-                                                 max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
-                filter(.,!duplicated(max_splitting)) %>%
-                arrange(max_splitting_order) %>%
-                select(splitting_variable,max_splitting,-matches('order'))
-            
-            splitting_variable_values <- mutate(individs_splitting_variables,
-                                                splitting_variable=!!as.name(splitting_variable_names[i]),
-                                                splitting_variable_order=!!as.name(paste0(splitting_variable_names[i],'_order'))) %>%
-                filter(.,!duplicated(splitting_variable)) %>%
-                arrange(splitting_variable_order) %>%
-                select(splitting_variable,-matches('order')) %>%
-                unlist() %>%
-                unname()
-            transitions_with_splitting_variable <- mutate(transitions_with_splitting_variable,
-                                                          splitting_variable=factor(!!as.name(splitting_variable_names[i]),levels=splitting_variable_values)) %>%
-                select(patient_id,date,splitting_variable,general_state,state,state_tomorrow)
-        }else{
-            splitting_variable_mapping <- mutate(individs_splitting_variables,
-                                                 max_splitting=!!as.name(max_splitting_name),
-                                                 max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
-                filter(.,!duplicated(max_splitting)) %>%
-                arrange(max_splitting_order) %>%
-                mutate(splitting_variable=factor('none',levels='none')) %>%
-                select(splitting_variable,max_splitting,-matches('order'))
-            splitting_variable_values <- 'none'
-            transitions_with_splitting_variable <- mutate(transitions_with_splitting_variable,
-                                                          splitting_variable=factor('none',levels='none')) %>%
-                select(patient_id,date,splitting_variable,general_state,state,state_tomorrow)
-        }
-        
-        all_transitions_by_splitting_variable <- expand_grid(max_splitting=splitting_variable_mapping$max_splitting,general_state=states[i],state=state_values,state_tomorrow=all_states[!grepl(states[i],all_states)]) %>%
-            inner_join(.,splitting_variable_mapping,by='max_splitting') %>%
-            mutate(splitting_variable=factor(splitting_variable,levels=splitting_variable_values),
-                   max_splitting=factor(max_splitting,levels=max_splitting_values),
-                   state=factor(state,levels=all_active_states),
-                   state_tomorrow=factor(state_tomorrow,levels=all_states))
-        transition_summary_list[[states[i]]] <- filter(transitions_with_splitting_variable,!is.na(state_tomorrow)) %>%
-            group_by(.,splitting_variable,general_state,state_tomorrow) %>%
-            summarize(count=as.numeric(n())) %>%
-            ungroup() %>%
-            right_join(.,all_transitions_by_splitting_variable,by=c('splitting_variable','general_state','state_tomorrow')) %>%
-            mutate(count=if_else(is.na(count),0,count)) %>%
-            select(max_splitting,state,state_tomorrow,count) %>%
-            rename(splitting_variable=max_splitting)
-        
-        
-    }
-    return(bind_rows(transition_summary_list) %>% arrange(splitting_variable,state,state_tomorrow))
+    splitting_variable_mapping <- get_splitting_variable_mapping(splitting_variable_name,max_splitting_dat)
+    splitting_variable_values <- unique(splitting_variable_mapping$splitting_variable)
+    
+    transition_summary_extended <- expand_grid(max_splitting_values=splitting_variable_mapping$max_splitting_values,
+                                               state=s,state_tomorrow=all_states[!grepl(s,all_states)]) %>%
+                                    inner_join(.,splitting_variable_mapping,by='max_splitting_values')
+
+    transition_summary_state <- filter(transitions_with_splitting_variable,!is.na(state_tomorrow)) %>%
+        group_by(.,splitting_variable,state,state_tomorrow) %>%
+        summarize(count=as.numeric(n())) %>%
+        ungroup() %>%
+        right_join(.,transition_summary_extended,by=c('splitting_variable','state','state_tomorrow')) %>%
+        mutate(count=if_else(is.na(count),0,count)) %>%
+        mutate(state=factor(state,levels=all_active_states),
+               state_tomorrow=factor(state_tomorrow,levels=all_states)) %>%
+        select(max_splitting_values,state,state_tomorrow,count) %>%
+        rename(splitting_variable=max_splitting_values)
+    return(transition_summary_state)
 }
 
 ################# ----- Statistical inference of length of stay distributions ---- #############
-get_length_of_stay_predicted <- function(type='',states,splitting_variable_names,distr,max_num_days){
-    if(type=='clinical_assessment_included'){
-        transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
-            select(.,patient_id,state_block_nr,state,censored,state_duration)
+get_length_of_stay_predicted <- function(model,transitions_state_blocks_summary,s,splitting_variable_name,max_splitting_dat,distr='lognormal',max_num_days=28){
+    all_active_states <- get_states_in_order(model,active=T)
+    splitting_variable_mapping <- get_splitting_variable_mapping(splitting_variable_name,max_splitting_dat)
+    splitting_variable_values <- unique(splitting_variable_mapping$splitting_variable)
+    if(splitting_variable_name %in% names(individs_splitting_variables)){
+        state_blocks_with_splitting_variable <- filter(transitions_state_blocks_summary,grepl(s,state)) %>%
+                                                inner_join(.,select(individs_splitting_variables,patient_id,matches(splitting_variable_name),-matches('order')),by='patient_id') %>%
+                                                mutate(general_state=s) %>%
+                                                rename(splitting_variable=!!splitting_variable_name)
     }else{
-        transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
-            summarize(censored=censored[which.max(state_with_severity_block_nr)],state_duration=sum(state_duration)) %>%
-            ungroup()
+        state_blocks_with_splitting_variable <- filter(transitions_state_blocks_summary,grepl(s,state)) %>%
+                                                mutate(.,splitting_variable='none') %>%
+                                                mutate(general_state=s)
     }
-    all_states <- get_states_in_order(type,active=F)
-    all_active_states <- get_states_in_order(type,active=T)
-    length_of_stay_list <- list()
-    max_splitting_name <- select(individs_splitting_variables,matches(paste(unique(splitting_variable_names),sep='|')),-matches('order')) %>%
-        summarise_all(.,~length(unique(.))) %>%
-        gather(key='splitting_variable',value='nr_levels') %>%
-        slice(which.max(nr_levels)) %>%
-        select(splitting_variable) %>%
-        unlist() %>%
-        unname()
-    max_splitting_values <- mutate(individs_splitting_variables,
-                                   max_splitting=!!as.name(max_splitting_name),
-                                   max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
-        filter(.,!duplicated(max_splitting)) %>%
-        arrange(max_splitting_order) %>%
-        select(max_splitting,-matches('order')) %>%
-        unlist() %>%
-        unname()
-    for(i in 1:length(states)){
-        state_blocks_with_splitting_variable <- inner_join(select(individs_splitting_variables,patient_id,matches(splitting_variable_names[i])),
-                                                           select(transitions_state_blocks_summary,patient_id,state,censored,state_duration),
-                                                           by='patient_id') %>% filter(grepl(states[i],state)) %>% mutate(general_state=states[i])
-        if(splitting_variable_names[i] %in% names(state_blocks_with_splitting_variable)){
-            splitting_variable_mapping <- mutate(individs_splitting_variables,
-                                                 max_splitting=!!as.name(max_splitting_name),
-                                                 splitting_variable=!!as.name(splitting_variable_names[i]),
-                                                 max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
-                filter(.,!duplicated(max_splitting)) %>%
-                arrange(max_splitting_order) %>%
-                select(splitting_variable,max_splitting,-matches('order'))
-            
-            splitting_variable_values <- mutate(individs_splitting_variables,
-                                                splitting_variable=!!as.name(splitting_variable_names[i]),
-                                                splitting_variable_order=!!as.name(paste0(splitting_variable_names[i],'_order'))) %>%
-                filter(.,!duplicated(splitting_variable)) %>%
-                arrange(splitting_variable_order) %>%
-                select(splitting_variable,-matches('order')) %>%
-                unlist() %>%
-                unname()
-            state_blocks_with_splitting_variable <- mutate(state_blocks_with_splitting_variable,
-                                                           splitting_variable=factor(!!as.name(splitting_variable_names[i]),levels=splitting_variable_values)) %>%
-                select(patient_id,splitting_variable,general_state,state,censored,state_duration)
-            
-        }else{
-            splitting_variable_mapping <- mutate(individs_splitting_variables,
-                                                 max_splitting=!!as.name(max_splitting_name),
-                                                 max_splitting_order=!!as.name(paste0(max_splitting_name,'_order'))) %>%
-                filter(.,!duplicated(max_splitting)) %>%
-                arrange(max_splitting_order) %>%
-                mutate(splitting_variable=factor('none',levels='none')) %>%
-                select(splitting_variable,max_splitting,-matches('order'))
-            splitting_variable_values <- 'none'
-            state_blocks_with_splitting_variable <- mutate(state_blocks_with_splitting_variable,
-                                                           splitting_variable='none') %>%
-                select(patient_id,splitting_variable,general_state,state,censored,state_duration)
-            
-        }
-        all_states_in_order <- get_states_in_order(type)
-        states_mapping <- filter(state_blocks_with_splitting_variable,!duplicated(state)) %>% select(general_state,state) %>% mutate(state=factor(state,levels=all_states_in_order)) %>% arrange(state) 
-        state_values=states_mapping$state
+    states_mapping <- filter(state_blocks_with_splitting_variable,!duplicated(state)) %>% select(general_state,state) %>% mutate(state=factor(state,levels=all_active_states)) %>% arrange(state) 
+    state_values=states_mapping$state
+    if(grepl('home',s)){
+        length_of_stay_extended <- expand_grid(max_splitting_values=splitting_variable_mapping$max_splitting_values,general_state=s,state=state_values) %>%
+            inner_join(.,splitting_variable_mapping,by='max_splitting_values')
+        length_of_stay_in_state <- filter(state_blocks_with_splitting_variable,!censored) %>%
+            group_by(.,general_state,splitting_variable,state_duration) %>%
+            summarize(count=n()) %>%
+            ungroup() %>%
+            inner_join(.,length_of_stay_extended,by=c('splitting_variable','general_state')) %>%
+            select(state,max_splitting_values,state_duration,count) %>%
+            rename(splitting_variable=max_splitting_values)
         
-        if(grepl('home',states[i])){
-            length_of_stay_extended <- expand_grid(max_splitting=splitting_variable_mapping$max_splitting,general_state=states[i],state=state_values) %>%
-                inner_join(.,splitting_variable_mapping,by='max_splitting') %>%
-                mutate(splitting_variable=factor(splitting_variable,levels=splitting_variable_values),
-                       max_splitting=factor(max_splitting,levels=max_splitting_values),
-                       state=factor(state,levels=all_active_states))
-            length_of_stay_list[[states[i]]] <- filter(state_blocks_with_splitting_variable,!censored) %>%
-                group_by(.,general_state,splitting_variable,state_duration) %>%
-                summarize(count=n()) %>%
-                ungroup() %>%
-                inner_join(.,length_of_stay_extended,by=c('splitting_variable','general_state')) %>%
-                select(state,max_splitting,state_duration,count) %>%
-                rename(splitting_variable=max_splitting)
-            
-        }else{
-            length_of_stay_list[[states[i]]]  <- lapply(1:length(splitting_variable_values),function(j){
-                x <- filter(state_blocks_with_splitting_variable,splitting_variable==splitting_variable_values[j] & general_state==states[i] & !censored) %>% select(state_duration) %>% unlist() %>% unname()
-                x_c <- filter(state_blocks_with_splitting_variable,splitting_variable==splitting_variable_values[j] & general_state==states[i] & censored) %>% select(state_duration) %>% unlist() %>% unname()
-                not_to_be_split <- filter(splitting_variable_mapping,splitting_variable==splitting_variable_values[j]) %>% select(.,max_splitting) %>% unlist() %>% unname()  
-                if(distr=='beta'){
-                    sample_from_beta(x,x_c,state_values,max_num_days,not_to_be_split)
-                }else{
-                    sample_from_lognormal(x,x_c,state_values,max_num_days,not_to_be_split)
-                }
-            }) %>% bind_rows()
-        }
+    }else{
+        length_of_stay_in_state  <- lapply(1:length(splitting_variable_values),function(j){
+                                        x <- filter(state_blocks_with_splitting_variable,splitting_variable==splitting_variable_values[j] & !censored) %>% select(state_duration) %>% unlist() %>% unname()
+                                        x_c <- filter(state_blocks_with_splitting_variable,splitting_variable==splitting_variable_values[j] & censored) %>% select(state_duration) %>% unlist() %>% unname()
+                                        not_to_be_split <- filter(splitting_variable_mapping,splitting_variable==splitting_variable_values[j]) %>% select(.,max_splitting_values) %>% unlist() %>% unname()  
+                                        length_of_stay_expanded <- expand_grid(state=state_values,splitting_variable=not_to_be_split,state_duration=1:max_num_days)
+                                        if(distr=='beta'){
+                                            samples <- sample_from_beta(x,x_c,max_num_days)
+                                        }else{
+                                            samples <- sample_from_lognormal(x,x_c,max_num_days)
+                                        }
+                                        length_of_stay_splitting_variable <- inner_join(length_of_stay_expanded,samples,by=c('state_duration'))
+                                        return(length_of_stay_splitting_variable)
+                                    }) %>% bind_rows()
     }
-    return(bind_rows(length_of_stay_list) %>% arrange(state,splitting_variable,state_duration))
+    return(length_of_stay_in_state)
 }
 
 
@@ -305,24 +147,90 @@ get_infections_predicted_per_date <- function(source,date_prediction){
     return()
 }
 
-# recovered_imputed <- anti_join(select(current_state,patient_id,state),select(current_state_write,patient_id)) %>%
-#     mutate(date=current_date,state_tomorrow='recovered') %>%
-#     select(.,patient_id,date,state,state_tomorrow)
+################# ----- Get information on the current run of a batch of experiments --------
+get_run_info <- function(current_run_id){
+    experiment_ids <- filter(run_specification,run_id==current_run_id) %>%
+                        inner_join(.,experiment_description,by='experiment_id') %>%
+                        select(experiment_id) %>%
+                        unlist() %>%
+                        unname()
+    run_info <- lapply(experiment_ids,function(id){
+        splitting_variable_names <- filter(experiment_specification,experiment_id==id,type!='heuristic') %>%
+                                    select(value) %>%
+                                    unlist() %>%
+                                    unname()
+        max_splitting_info <- get_max_splitting_dat(splitting_variable_names) %>% 
+            select(max_splitting_name,max_splitting_values) %>%
+            summarize(max_splitting_name=min(max_splitting_name),max_splitting_values=paste(max_splitting_values,collapse=';')) %>%
+            mutate(experiment_id=id) %>%
+            select(experiment_id,max_splitting_name,max_splitting_values)
+        heuristics_info <- filter(experiment_specification,experiment_id==id,type=='heuristic') %>%
+                            select(-type,-state) %>%
+                            right_join(heuristics_description,by=c('value'='heuristic_id')) %>%
+                            mutate(heuristic_in_use=as.numeric(!is.na(experiment_id))) %>%
+                            mutate(experiment_id=id) %>%
+                            pivot_wider(id_cols='experiment_id',names_from = value,values_from = heuristic_in_use)
+        
+        filter(experiment_description,experiment_id==id) %>%
+            select(experiment_id,model) %>%
+            inner_join(max_splitting_info,by='experiment_id') %>%
+            inner_join(heuristics_info,by='experiment_id')
+    }) %>% bind_rows()
+    return(run_info)
+}
 
-# recovered_imputed_extended <- anti_join(select(current_state_extended,patient_id,state),select(current_state_extended_write,patient_id)) %>%
-#     mutate(date=current_date,state_tomorrow='recovered') %>%
-#     select(.,patient_id,date,state,state_tomorrow)
-
-# first_state_per_date_extended_summary_splitting_variable <- inner_join(first_state_extended,select(individs_extended,patient_id,splitting_variable),by=c('patient_id','splitting_variable')) %>%
-#     select(date_diagnosis,splitting_variable,initial_state) %>%
-#     group_by(date_diagnosis,initial_state,splitting_variable) %>%
-#     summarize(count=n())
-
-# first_state_per_date_summary_splitting_variable <- inner_join(first_state,select(individs_extended,patient_id,splitting_variable),by=c('patient_id','splitting_variable')) %>%
-#     select(date_diagnosis,splitting_variable,initial_state) %>%
-#     group_by(date_diagnosis,initial_state,splitting_variable) %>%
-#     summarize(count=n())
-
-#first_state_per_date_summary <- group_by(first_state,date_diagnosis,initial_state) %>% summarize(count=n())
-
-#current_state_per_date_summary <- group_by(current_state_per_date,date,state) %>% summarize(count=n())
+############### ------- get tables specific for experiment ------------------
+get_tables_for_experiment <- function(id){
+    experiment_info <- filter(run_info,experiment_id==id)
+    model <- experiment_info$model
+    max_splitting_names <- unlist(strsplit(experiment_info$max_splitting_name,split=':'))
+    max_splitting_dat <- get_max_splitting_dat(max_splitting_names)
+    experiment <- filter(experiment_specification,experiment_id==id)
+    length_of_stay_states <- filter(experiment,type=='length_of_stay')$state
+    length_of_stay_splitting_variable_names <- filter(experiment,type=='length_of_stay')$value
+    transition_states <- filter(experiment,type=='transition')$state
+    transition_splitting_variable_names <- filter(experiment,type=='transition')$value 
+    if(model=='extended'){
+        transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
+            select(.,patient_id,state_block_nr,state,censored,state_duration)
+        recovered_imputed_extended <- anti_join(select(current_state_extended,patient_id,state),select(current_state_extended_filtered,patient_id),by='patient_id') %>%
+                                        mutate(date=current_date,state_tomorrow='recovered') %>%
+                                        select(.,patient_id,date,state,state_tomorrow)
+        transitions <- mutate(patient_transitions,state=paste0(state,'-',severity),
+                              state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
+                                                       is.na(severity_tomorrow) ~ state_tomorrow,
+                                                       TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow))) %>%
+                       select(.,patient_id,date,state,state_tomorrow) %>%
+                       bind_rows(.,recovered_imputed_extended)
+        first_state_per_date_summary <- select(first_state_extended,patient_id,matches(paste(max_splitting_names,collapse='|')),date_diagnosis,initial_state) %>%
+            group_by(date_diagnosis,initial_state) %>% summarize(count=n())
+        current_state_per_date_summary <- select(current_state_per_date_extended,patient_id,matches(paste(max_splitting_names,collapse='|')),date,state) %>%
+            group_by(date,state) %>% summarize(count=n())
+    }else{
+        transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+                                            summarize(censored=censored[which.max(state_with_severity_block_nr)],
+                                                      state_duration=sum(state_duration)) %>%
+                                            ungroup()
+        recovered_imputed <- anti_join(select(current_state,patient_id,state),select(current_state_filtered,patient_id),by='patient_id') %>%
+            mutate(date=current_date,state_tomorrow='recovered') %>%
+            select(.,patient_id,date,state,state_tomorrow)
+        transitions <- select(patient_transitions,patient_id,date,state,state_tomorrow)%>%
+                       bind_rows(.,recovered_imputed)
+        first_state_per_date_summary <- select(first_state,patient_id,matches(paste(max_splitting_names,collapse='|')),date_diagnosis,initial_state) %>%
+            group_by(date_diagnosis,initial_state) %>% summarize(count=n())
+        current_state_per_date_summary <- select(current_state_per_date,patient_id,matches(paste(max_splitting_names,collapse='|')),date,state) %>%
+            group_by(date,state) %>% summarize(count=n())
+    }
+    transition_summary <-lapply(1:length(transition_states),function(i){
+        get_transition_summary(model,transitions,transition_states[i],transition_splitting_variable_names[i],max_splitting_dat)
+    }) %>% bind_rows() %>% arrange(splitting_variable,state,state_tomorrow)
+    length_of_stay <-lapply(1:length(length_of_stay_states),function(i){
+        get_length_of_stay_predicted(model,transitions_state_blocks_summary,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_dat,distr='lognormal',max_num_days = 28)
+    }) %>% bind_rows() %>% arrange(state,splitting_variable)
+    
+    
+    return(list('length_of_stay'=length_of_stay,
+                'transition_summary'=transition_summary,
+                'current_state_per_date_summary'=current_state_per_date_summary,
+                'first_state_per_date_summary'=first_state_per_date_summary))
+}

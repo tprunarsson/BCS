@@ -17,6 +17,10 @@ path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 write_tables_for_simulation_tmp <- TRUE
 write_table_for_report_tmp <- FALSE
 print_report_tmp <- "none"
+
+run_id <- 1
+
+
 max_num_days_inpatient_ward <- 28
 max_num_days_intensive_care_unit <- 28
 
@@ -107,7 +111,7 @@ path_outpatient_clinic <- '../outpatient_clinic_history/'
 file_name_lsh_data <- paste0(current_date,'_lsh_covid_data.xlsx')
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
-file_path_experiment <- 'experiment_template.xlsx'
+file_path_experiment_template <- 'experiment_template.xlsx'
 
 ################## ----- Read LSH data and coding data ----- ########################################
 
@@ -120,42 +124,26 @@ interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl ú
 NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
 
-experiment_description <- read_excel(paste0(path_experiments,experiment_file_name),sheet='experiment-description')
-experiment_specification <- read_excel(paste0(path_experiments,experiment_file_name),sheet='experiment-specification')
-run_description <- read_excel(paste0(path_experiments,experiment_file_name),sheet='run-description')
-run_specification <- read_excel(paste0(path_experiments,experiment_file_name),sheet='run-specification')
-
-# covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
-# unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
-#                     mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
-#                            unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
-# text_out_categories <- read_excel(file_path_coding,sheet = 'lsh_text_out_categories') %>%
-#                         mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
-# 
-# clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_assessment_categories') %>%
-#                                   mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
-#                                          clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
-# priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories') %>%
-#                         mutate(priority_category=!!as.name(paste0('priority_category_',priority_category_type)),
-#                                priority_category_order=!!as.name(paste0('priority_category_order_',priority_category_type)))
-# age_groups <- read_excel(file_path_coding,sheet = 'age_groups') %>%
-#                 mutate(age_group=!!as.name(paste0('age_group_',age_group_type)),
-#                        age_group_order=!!as.name(paste0('age_group_order_',age_group_type)))
 covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
 unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
-  mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
-         unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
+                    mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
+                           unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
 text_out_categories <- read_excel(file_path_coding,sheet = 'lsh_text_out_categories') %>%
-  mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
+                        mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
 clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_assessment_categories') %>%
-  mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
-         clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
+                                  mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
+                                         clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
 priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories')
 age_groups <- read_excel(file_path_coding,sheet = 'age_groups')
+comorbidities_categories <- read_excel(file_path_coding,sheet = 'comorbidities') %>%
+                              arrange(comorbidities_raw)
 sheet_names <- read_excel(file_path_coding,sheet = 'lsh_sheet_names',trim_ws = FALSE)
 
-comorbidities_categories <- read_excel(file_path_coding,sheet = 8) %>%
-                              arrange(comorbidities_raw)
+experiment_description <- read_excel(file_path_experiment_template,sheet='experiment_description')
+experiment_specification <- read_excel(file_path_experiment_template,sheet='experiment_specification')
+run_description <- read_excel(file_path_experiment_template,sheet='run_description')
+run_specification <- read_excel(file_path_experiment_template,sheet='run_specification')
+heuristics_description <- read_excel(file_path_experiment_template,sheet='heuristics_description')
 
 
 test_lsh_data_file()
@@ -473,21 +461,23 @@ test_data_processing()
 
 #For base model
 current_state_per_date <- get_current_state_per_date(model='base')
-current_state <- filter(current_state_per_date,date==date_last_known_state,!(days_from_diagnosis > 14 & state_worst == 'home')) %>% select(-date)
+current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
+current_state_filtered <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
 first_state <- get_first_state(model='base')  
 
 #For extended model
 current_state_per_date_extended <- get_current_state_per_date(model='extended')
-current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state,!(days_from_diagnosis > 14 & state_worst == 'home-green')) %>% select(-date)
+current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state) %>% select(-date)
+current_state_extended_filtered <- filter(current_state_extended,!(days_from_diagnosis > 14 & state_worst == 'home-green'))
 first_state_extended <- get_first_state(model='extended')
 
 ############### ----- Write historical state information  ----- ############################
 if(write_tables_for_simulation){
   write.table(current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_base_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(current_state,file=paste0(path_sensitive_tables,current_date,'_base_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_filtered,file=paste0(path_sensitive_tables,current_date,'_base_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_base_first_state.csv'),sep=',',row.names=F,quote=F)
   write.table(current_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_extended_current_state_per_date','.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(current_state_extended_write,file=paste0(path_sensitive_tables,current_date,'_extended_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
+  write.table(current_state_extended_filtered,file=paste0(path_sensitive_tables,current_date,'_extended_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(first_state_extended,file=paste0(path_sensitive_tables,current_date,'_extended_first_state.csv'),sep=',',row.names=F,quote=F)
 }
 
@@ -499,32 +489,19 @@ if(write_tables_for_simulation){
 }
 
 ################# ----- Transition summary and length of stay distribution for all experiments ------ ##############################
-models <- experiment_description$model
-experiment_ids <- experiment_description$experiment_id
-write_experiment_run <- function(experiment_specification,experiment_ids,models){
+run_info <- get_run_info(run_id) 
   
-  lapply(1:length(experiment_ids),function(id){
-    get_output_table(models[i],filter(experiment_specification,experiment_id==experiment_ids[i]))
-  })
-  
+for(id in run_info$experiment_id){
+  experiment_table_list <- get_tables_for_experiment(id)
+  #test_tables_for_experiment()
   if(write_tables_for_simulation){
-    write.table(patient_transition_summary,file=paste0(path_tables,current_date,'_transition_summary_',splitting_variable_write,'.csv'),sep=',',row.names=FALSE,quote=FALSE)
-    write.table(length_of_stay_predicted,file=paste0(path_tables,current_date,'_length_of_stay_',splitting_variable_write,'.csv'),sep=',',row.names=F,quote=F)
+    write.table(experiment_table_list$transition_summary,file=paste0(path_tables,current_date,'_',id,'_transition_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(experiment_table_list$length_of_stay,file=paste0(path_tables,current_date,'_',id,'_length_of_stay.csv'),sep=',',row.names=F,quote=F)
+    write.table(experiment_table_list$current_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_current_state_per_date_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(experiment_table_list$first_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_first_state_per_date_summary.csv'),sep=',',row.names=F,quote=F)
   }
 }
 
-get_output_tables <- function(model,specification_dat){
-  if(model=='clinical_assessment_included'){
-    recovered_imputed_model <- recovered_imputed_extended
-  }else{
-    recovered_imputed_model <- recovered_imputed
-  }
-  patient_transition_experiment_dat <- filter(specification_dat,type=='transition')
-  patient_transition_summary <- get_transition_summary(model,recovered_imputed_model,patient_transition_experiment_dat$state,patient_transition_experiment_dat$value)
-  length_of_stay_experiment_dat <- filter(specification_dat,type=='length_of_stay')
-  length_of_stay_predicted <- get_length_of_stay_predicted(model,length_of_stay_experiment_dat$state,length_of_stay_experiment_dat$value,distr='lognormal',max_num_days=28) 
-  test_tables_for_simulation()
-}
 
 
 #Write tables for outpatient clinic for report
@@ -546,4 +523,3 @@ if (write_table_for_report){
   write.table(prop_outpatient_clinic_last_week, file=paste0(path_outpatient_clinic, current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
 }
 
-test_tables_for_simulation()

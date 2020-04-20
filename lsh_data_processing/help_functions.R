@@ -1,10 +1,10 @@
-get_states_in_order <- function(type='',active=F){
+get_states_in_order <- function(model='',active=F){
   states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
     arrange(unit_category_order) %>%
     select(unit_category) %>%
     unlist() %>%
     unname() 
-  if(type=='clinical_assessment_included'){
+  if(model=='extended'){
     clinical_assessment_active <- c('green','red')
     states_active <- sapply(states_active,function(x) paste0(x,'-',clinical_assessment_active)) %>% c()
   }
@@ -140,20 +140,15 @@ fit_lognormal <- function(x,x_c,max_num_days) {
 }
 
 
-
-
-sample_from_lognormal <- function(x,x_c,state_values,max_num_days,not_to_be_split,nr_samples=1e6){
+sample_from_lognormal <- function(x,x_c,max_num_days,nr_samples=1e6){
   theta_s = fit_lognormal(x,x_c,max_num_days=max_num_days_inpatient_ward)
-  length_of_stay_expanded <- expand_grid(state=state_values,splitting_variable=not_to_be_split,state_duration=1:max_num_days) %>%
-    mutate(splitting_variable=factor(splitting_variable,levels=not_to_be_split,labels=not_to_be_split))
   length_of_stay_samples <- rlnorm(nr_samples,theta_s[1],theta_s[2]) %>%
-    round() %>%
-    table() %>%
-    as.numeric() %>%
-    tibble(state_duration=0:(length(.)-1),count=.) %>%
-    filter(state_duration>0 & state_duration<=max_num_days) %>%
-    inner_join(.,length_of_stay_expanded,by=c('state_duration')) %>%
-    select(state,splitting_variable,state_duration,count)
+                            round() %>%
+                            table() %>%
+                            as.numeric() %>%
+                            tibble(state_duration=0:(length(.)-1),count=.) %>%
+                            filter(state_duration>0 & state_duration<=max_num_days) %>%
+                            select(state_duration,count)
   return(length_of_stay_samples)
 }
 
@@ -167,19 +162,46 @@ fit_beta <- function(x,x_c,max_num_days) {
   return(theta)
 }
 
-sample_from_beta <- function(x,x_c,state_values,max_num_days,not_to_be_split,nr_samples=1e6){
+sample_from_beta <- function(x,x_c,max_num_days,nr_samples=1e6){
   theta_s = fit_beta(x,x_c,max_num_days=max_num_days)
-  length_of_stay_expanded <- expand_grid(state=state_values,splitting_variable=not_to_be_split,state_duration=1:max_num_days) %>%
-                                mutate(splitting_variable=factor(splitting_variable,levels=not_to_be_split,labels=not_to_be_split))
   length_of_stay_samples <- (max_num_days*(rbeta(nr_samples,theta_s[1],theta_s[2])+0.5)) %>%
                               round() %>%
                               table() %>%
                               as.numeric() %>%
                               tibble(state_duration=0:(length(.)-1),count=.) %>%
-                              filter(state_duration>0 & state_duration<=max_num_days) %>%
-                              inner_join(.,length_of_stay_expanded,by=c('state_duration')) %>%
-                              select(state,splitting_variable,state_duration,count)
+                              filter(state_duration>0 & state_duration<=max_num_days)%>%
+                              select(state_duration,count)
   return(length_of_stay_samples)
+}
+
+get_max_splitting_dat <- function(splitting_variable_names){
+  max_splitting_dat <- select(individs_splitting_variables,patient_id,matches(paste(unique(splitting_variable_names),sep='|'))) %>%
+    pivot_longer(.,-matches('patient_id|order'),names_to='splitting_variable',values_to='value') %>%
+    pivot_longer(.,matches('order'),names_to='splitting_variable_order_name',values_to='splitting_variable_order') %>%
+    filter(.,paste0(splitting_variable,'_order')==splitting_variable_order_name) %>%
+    group_by(patient_id) %>%
+    arrange(splitting_variable) %>%
+    mutate(max_splitting_name=paste(splitting_variable,collapse=':'),
+           max_splitting_values=paste(value,collapse=':'),
+           max_splitting_order=paste(splitting_variable_order,collapse=':')) %>%
+    ungroup() %>%
+    pivot_wider(.,id_cols = c('patient_id','max_splitting_name','max_splitting_values','max_splitting_order'),names_from = 'splitting_variable',values_from = 'value') %>%
+    filter(.,!duplicated(max_splitting_values)) %>%
+    arrange(max_splitting_order) %>%
+    select(-patient_id)
+  
+  return(max_splitting_dat)
+}
+
+get_splitting_variable_mapping <- function(splitting_variable_name,max_splitting_dat){
+  if(splitting_variable_name %in% names(max_splitting_dat)){
+    splitting_variable_mapping <- select(max_splitting_dat,matches(splitting_variable_name),max_splitting_values) %>%
+      rename(splitting_variable=!!splitting_variable_name)
+  }else{
+    splitting_variable_mapping <- mutate(max_splitting_dat,splitting_variable='none') %>% select(.,splitting_variable,max_splitting_values)
+  }
+  splitting_variable_mapping <- mutate(splitting_variable_mapping,max_splitting_values=factor(max_splitting_values,levels=max_splitting_values))
+  return(splitting_variable_mapping)
 }
 
 
