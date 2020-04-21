@@ -9,12 +9,12 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
-current_date_tmp <- as.Date('2020-04-16','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
 
-write_tables_for_simulation_tmp <- TRUE
+write_tables_for_simulation_tmp <- FALSE
 write_table_for_report_tmp <- FALSE
 print_report_tmp <- "none"
 max_num_days_inpatient_ward <- 28
@@ -245,6 +245,7 @@ hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`
                     mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
                     inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
                     filter(!(unit_category_all=='inpatient_ward_geriatric' & is.na(date_diagnosis_hospital))) %>%
+                    filter(!(unit_category_all=='inpatient_ward_geriatric' & date_time_out<date_diagnosis_hospital)) %>%
                     mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital-1,date_time_in)) %>%
                     filter(!(unit_category_all %in% c('maternity_clinic','endoscopy_clinic','inpatient_ward_maternity'))) %>%
                     separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
