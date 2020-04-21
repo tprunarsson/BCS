@@ -67,22 +67,22 @@ int countStatistics(int max_sim_time) {
         countStatsFalse[i][k] = 0.0;
         countNumberFalse[i][k] = 0.0;
         for (j = 0; j < numInfected; j++)
-          iPerson[j].simulated_location_mean[k][i] = 0.0;
+          iPerson[j].simulated_state_mean[k][i] = 0.0;
       }
     }
     return 0;
   }
   for (j = 0; j < max_sim_time; j++) {
     for (k = 0; k < numInfected; k++) {
-      if (iPerson[k].real_location[j] >= 0) {
-        if (iPerson[k].real_location[j] == iPerson[k].simulated_location[j])
-          countStats[j][iPerson[k].real_location[j]] += 1.0;
-        countNumber[j][iPerson[k].real_location[j]] += 1.0;
+      if (iPerson[k].real_state[j] >= 0) {
+        if (iPerson[k].real_state[j] == iPerson[k].simulated_state[j])
+          countStats[j][iPerson[k].real_state[j]] += 1.0;
+        countNumber[j][iPerson[k].real_state[j]] += 1.0;
       }
-      if (iPerson[k].simulated_location[j] >= 0) {
-        if (iPerson[k].real_location[j] == iPerson[k].simulated_location[j])
-          countStatsFalse[j][iPerson[k].simulated_location[j]] += 1.0;
-        countNumberFalse[j][iPerson[k].simulated_location[j]] += 1.0;
+      if (iPerson[k].simulated_state[j] >= 0) {
+        if (iPerson[k].real_state[j] == iPerson[k].simulated_state[j])
+          countStatsFalse[j][iPerson[k].simulated_state[j]] += 1.0;
+        countNumberFalse[j][iPerson[k].simulated_state[j]] += 1.0;
       }
     }
   }
@@ -94,7 +94,7 @@ int clearSimStatsLocation(int max_sim_time) {
  
   for (i = 0; i < max_sim_time; i++) {
     for (k = 0; k < numInfected; k++) {
-      iPerson[k].simulated_location[i] = -1;
+      iPerson[k].simulated_state[i] = -1;
     }
   }
   return 1;
@@ -110,16 +110,16 @@ int setSimulationLocation(int person_id, int day, int los, int location) {
   #endif
   /* in case there is a reset from current day we need to clear the previous simulation set */
   for (i = day; i < MIN(MAX_SIM_TIME,(day+los)); i++) {
-    if (iPerson[person_idx].simulated_location[i] >= 0) {
-      iPerson[person_idx].simulated_location[i] = -1;
-      iPerson[person_idx].simulated_location_mean[location][i] -= 1.0;
+    if (iPerson[person_idx].simulated_state[i] >= 0) {
+      iPerson[person_idx].simulated_state[i] = -1;
+      iPerson[person_idx].simulated_state_mean[location][i] -= 1.0;
     }
     else
       break;
   }
   for (i = day; i < MIN(MAX_SIM_TIME,(day+los)); i++) {
-    iPerson[person_idx].simulated_location[i] = location;
-    iPerson[person_idx].simulated_location_mean[location][i] += 1.0;
+    iPerson[person_idx].simulated_state[i] = location;
+    iPerson[person_idx].simulated_state_mean[location][i] += 1.0;
   } 
   return 1;
 }
@@ -129,6 +129,6 @@ void printPersons(person thePerson[MAXINFECTED], int n) {
 
   for (i = 0; i < n; i++) {
     day = thePerson[i].start_day;
-    printf("person-%d arrived at %s in %s(%d) in group %s\n", thePerson[i].person_id, thePerson[i].szDate, szStateVariable[thePerson[i].real_location[day]], thePerson[i].real_location[day], szSplittingVariable[thePerson[i].age_group]);
+    printf("person-%d arrived at %s in %s(%d) in group %s\n", thePerson[i].person_id, thePerson[i].szDate, szStateVariable[thePerson[i].real_state[day]], thePerson[i].real_state[day], szSplittingVariable[thePerson[i].splitting]);
   }
 }

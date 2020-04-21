@@ -16,17 +16,20 @@
 #define EVENT_SCENARIO      14
 #define EVENT_PRINT_STATS   15
 
-#define STREAM_LOS          1  /* Random-number stream for interarrivals. */
-#define STREAM_AGE          2  /* Random-number stream for service times. */
+#define STREAM_LOS          1  /* Random-number stream for length of stay. */
+#define STREAM_SPLITTING    2  /* Random-number stream for splitting variables. */
+#define STREAM_FIRST_STATE  3  /* Random-number stream for first state. */
+#define STREAM_TRANSITION   4  /* Random-number stream for state transitions. */
+#define STREAM_FORECAST     5  /* Random-number stream for covid.hi.is forecasts. */
 
-#define ATTR_AGEGROUP       2 /* index in transfer for this attribute */
-#define ATTR_DAYSDIAG       3 
-#define ATTR_DAYSINLOC      4
-#define ATTR_LOCATION       5
+#define ATTR_SPLITTING      2 /* index in transfer for this attribute */
+#define ATTR_DAYSDIAGNOSIS  3 
+#define ATTR_DAYSINSTATE    4
+#define ATTR_STATE          5
 #define ATTR_DEPARTDAY      6
 #define ATTR_PERSON         7
-#define ATTR_NEXTLOCATION   8
-#define ATTR_LASTWORSTLOC   9
+#define ATTR_NEXTSTATE      8
+#define ATTR_WORSTSTATE     9
 
 // "home", "home-green", "home-red", "inpatient_ward", "inpatient_ward-green", "inpatient_ward-red", "intensive_care_unit", "intensive_care_unit-green","intensive_care_unit-red", "death", "recovered"
 #define HOME                      0
@@ -46,16 +49,16 @@
 
 typedef struct {
   int person_id; /* let simulated persons take negative values */
-  int age_group;
+  int splitting;
   char szDate[12]; /* the date of entry */
   int start_day;
-  int real_location[MAX_SIM_TIME]; /* use -1 when not in system */
-  int real_location_worst[MAX_SIM_TIME]; /* use -1 when not in system */
-  int simulated_location[MAX_SIM_TIME];
-  double simulated_location_mean[RECOVERED-HOME+1][MAX_SIM_TIME];
-  int simulated_location_worst[MAX_SIM_TIME];
-  int real_days_in_location[MAX_SIM_TIME];
-  int simulated_days_in_location[MAX_SIM_TIME];
+  int real_state[MAX_SIM_TIME]; /* use -1 when not in system */
+  int real_state_worst[MAX_SIM_TIME]; /* use -1 when not in system */
+  int simulated_state[MAX_SIM_TIME];
+  double simulated_state_mean[RECOVERED-HOME+1][MAX_SIM_TIME];
+  int simulated_state_worst[MAX_SIM_TIME];
+  int real_days_in_state[MAX_SIM_TIME];
+  int simulated_days_in_state[MAX_SIM_TIME];
   int real_days_from_diagnosis[MAX_SIM_TIME];
   int simulated_days_from_diagnosis[MAX_SIM_TIME];
   int first_state_indicator[MAX_SIM_TIME];
