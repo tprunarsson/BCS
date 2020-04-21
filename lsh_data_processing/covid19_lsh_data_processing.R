@@ -478,22 +478,23 @@ for(id in run_info$experiment_id){
     write.table(experiment_table_list$first_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_first_state_per_date_summary.csv'),sep=',',row.names=F,quote=F)
   }
 }
-
-#Write tables for outpatient clinic for report
-window_size <- 7
-nr_at_home_per_day <- filter(current_state_per_date_summary,state=='home') %>% rename(nr_at_home=count)
-outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
-  select(patient_id,date_in) %>%
-  arrange(patient_id,date_in) %>%
-  group_by(.,date_in) %>%
-  summarize(nr_visits=n()) %>% ungroup() %>%
-  left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
-  mutate(prop_visits=nr_visits/nr_at_home)
-
-date_for_calculation <- current_date-window_size
-prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
-  summarize(prop_visits_last_week=sum(prop_visits)/window_size)
-
-write.table(prop_outpatient_clinic_last_week, file=paste0(path_outpatient_clinic, current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
+if(write_tables){
+  #Write tables for outpatient clinic for report
+  window_size <- 7
+  nr_at_home_per_day <- filter(current_state_per_date_summary,state=='home') %>% rename(nr_at_home=count)
+  outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
+    select(patient_id,date_in) %>%
+    arrange(patient_id,date_in) %>%
+    group_by(.,date_in) %>%
+    summarize(nr_visits=n()) %>% ungroup() %>%
+    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
+    mutate(prop_visits=nr_visits/nr_at_home)
+  
+  date_for_calculation <- current_date-window_size
+  prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
+    summarize(prop_visits_last_week=sum(prop_visits)/window_size)
+  
+  write.table(prop_outpatient_clinic_last_week, file=paste0(path_outpatient_clinic, current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
+}
 
 
