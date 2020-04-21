@@ -13,7 +13,6 @@ extern double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 extern int historicalData[MAXINFECTED][MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE];
 
 extern FILE *outfile;
-extern double ProbUnder50;
 
 extern char *szSplittingVariable[MAX_SPLITTING_VARIABLE];
 extern char *szStateVariable[MAX_STATE_VARIABLE];
@@ -105,9 +104,9 @@ int readScenarioData(char *fname, char *szDate, int max_sim_time) {
   FILE *fid;
   char sztmp[64], sztmpdate[32], szstate[128], szsplitting[128];
   char buffer[8192];
-  int i, day, location;
+  int i, day, state;
   char *token;
-  int person_index, fake_person_index = 0, agegroup, number;
+  int person_index, fake_person_index = 0, splitting, number;
   int y, m, d;
   struct tm  t = { 0 };
 
@@ -119,16 +118,14 @@ int readScenarioData(char *fname, char *szDate, int max_sim_time) {
     printf(" reading scenario data file %s ... ", fname);
   }
 
-  for (person_index = 0; person_index < MAXINFECTED; person_index++) {
+    for (person_index = 0; person_index < MAXINFECTED; person_index++) {
     for (day = 0; day < max_sim_time; day++) {
       fPerson[person_index].person_id = 0;
-      fPerson[person_index].age_group = 0;  
-      fPerson[person_index].real_location[day] = -1;
-      fPerson[person_index].real_location_worst[day] = -1;
-      fPerson[person_index].real_days_in_location[day] = -1;
-      fPerson[person_index].real_days_from_diagnosis[day] = -1;
+      fPerson[person_index].splitting = 0;  
+      fPerson[person_index].real_state[day] = -1;
+      fPerson[person_index].real_state_worst[day] = -1;
+      fPerson[person_index].real_days_in_state[day] = -1;
       fPerson[person_index].real_days_from_diagnosis[day] = 0;
-      fPerson[person_index].real_location[day] = -1;
       fPerson[person_index].first_state_indicator[day] = 0;
     }
   }
@@ -155,17 +152,17 @@ int readScenarioData(char *fname, char *szDate, int max_sim_time) {
       if (0 == strcmp(sztmp, sztmpdate)) {
         token = strtok(NULL, ",");
         sscanf(token, "%s", szstate);
-        location = get_state(szstate);
+        state = get_state(szstate);
         token = strtok(NULL, ",");
         sscanf(token, "%s", szsplitting);
-        agegroup = get_splitting_variable(szsplitting);
+        splitting = get_splitting_variable(szsplitting);
         token = strtok(NULL, ",");
         sscanf(token, "%d", &number);
         for (i = 0; i < number; i++, fake_person_index++) {
           fPerson[fake_person_index].person_id = fake_person_index;
           fPerson[fake_person_index].first_state_indicator[day] = 1;
-          fPerson[fake_person_index].real_location[day] = location;
-          fPerson[fake_person_index].age_group = agegroup;
+          fPerson[fake_person_index].real_state[day] = state;
+          fPerson[fake_person_index].splitting = splitting;
           strcpy(fPerson[fake_person_index].szDate, sztmpdate);
           fPerson[fake_person_index].start_day = day;
         }
@@ -181,11 +178,11 @@ int readScenarioData(char *fname, char *szDate, int max_sim_time) {
 */
 int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
   FILE *fid;
-  char sztmp[64], sztmpdate[32], szage[32], szlocation[128], szworstlocation[128];
+  char sztmp[64], sztmpdate[32], szsplitting[32], szstate[128], szworststate[128];
   char buffer[8192];
-  int day, days_found, date_found = 0, location;
+  int day, days_found, date_found = 0, state;
   char *token;
-  int person_index, person_id, agegroup, days_in_state, days_from_diagnosis;
+  int person_index, person_id, splitting, days_in_state, days_from_diagnosis;
   int y, m, d;
   struct tm  t = { 0 };
 
@@ -198,13 +195,11 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
   for (person_index = 0; person_index < MAXINFECTED; person_index++) {
     for (day = 0; day < max_sim_time; day++) {
       iPerson[person_index].person_id = 0;
-      iPerson[person_index].age_group = 0;  
-      iPerson[person_index].real_location[day] = -1;
-      iPerson[person_index].real_location_worst[day] = -1;
-      iPerson[person_index].real_days_in_location[day] = -1;
-      iPerson[person_index].real_days_from_diagnosis[day] = -1;
+      iPerson[person_index].splitting = 0;  
+      iPerson[person_index].real_state[day] = -1;
+      iPerson[person_index].real_state_worst[day] = -1;
+      iPerson[person_index].real_days_in_state[day] = -1;
       iPerson[person_index].real_days_from_diagnosis[day] = 0;
-      iPerson[person_index].real_location[day] = -1;
       iPerson[person_index].first_state_indicator[day] = 0;
     }
   }
@@ -239,18 +234,18 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
        
        // printf("historical data read for person_index=%d, with id=%d\n", person_index, person_id);
         token = strtok(NULL, ",");
-        sscanf(token, "%s", szage);
-        agegroup = get_splitting_variable(szage);
-        iPerson[person_index].age_group = agegroup;
+        sscanf(token, "%s", szsplitting);
+        splitting = get_splitting_variable(szsplitting);
+        iPerson[person_index].splitting = splitting;
         token = strtok(NULL, ",");
-        sscanf(token, "%s", szlocation);
-        location = get_state(szlocation);
-        iPerson[person_index].real_location[day] = location;
-        if ((day == 0) && (iPerson[person_index].real_location[day] != -1)) {
+        sscanf(token, "%s", szstate);
+        state = get_state(szstate);
+        iPerson[person_index].real_state[day] = state;
+        if ((day == 0) && (iPerson[person_index].real_state[day] != -1)) {
           iPerson[person_index].first_state_indicator[day] = 1;
         }
-        else if ((iPerson[person_index].real_location[day-1] != iPerson[person_index].real_location[day])
-                && (iPerson[person_index].real_location[day-1] == -1)) {
+        else if ((iPerson[person_index].real_state[day-1] != iPerson[person_index].real_state[day])
+                && (iPerson[person_index].real_state[day-1] == -1)) {
           iPerson[person_index].first_state_indicator[day] = 1;
         }
         else
@@ -258,13 +253,13 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
         strcpy(iPerson[person_index].szDate, sztmpdate);
         token = strtok(NULL, ",");
         sscanf(token, "%d", &days_in_state);
-        iPerson[person_index].real_days_in_location[day] = days_in_state;
+        iPerson[person_index].real_days_in_state[day] = days_in_state;
         token = strtok(NULL, ",");
         sscanf(token, "%d", &days_from_diagnosis);
         iPerson[person_index].real_days_from_diagnosis[day] = days_from_diagnosis;
         token = strtok(NULL, ",");
-        sscanf(token, "%s", szworstlocation);
-        iPerson[person_index].real_location_worst[day] = get_state(szworstlocation);
+        sscanf(token, "%s", szworststate);
+        iPerson[person_index].real_state_worst[day] = get_state(szworststate);
         iPerson[person_index].start_day = day;
       }
     }
@@ -328,7 +323,7 @@ int readHIposteriors(char *fname, char *szDate, int day, double *dbl) { /* TODO 
 }
 
 /*
-  Computes the CDF for the different locations 
+  Computes the CDF for the different states 
 */
 int readFirstCDF(char *fname) {
   FILE *fid;
