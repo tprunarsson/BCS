@@ -185,11 +185,7 @@ get_max_splitting_dat <- function(splitting_variable_names){
            max_splitting_values=paste(value,collapse=':'),
            max_splitting_order=paste(splitting_variable_order,collapse=':')) %>%
     ungroup() %>%
-    pivot_wider(.,id_cols = c('patient_id','max_splitting_name','max_splitting_values','max_splitting_order'),names_from = 'splitting_variable',values_from = 'value') %>%
-    filter(.,!duplicated(max_splitting_values)) %>%
-    arrange(max_splitting_order) %>%
-    select(-patient_id)
-  
+    pivot_wider(.,id_cols = c('patient_id','max_splitting_name','max_splitting_values','max_splitting_order'),names_from = 'splitting_variable',values_from = 'value') 
   return(max_splitting_dat)
 }
 
