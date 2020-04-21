@@ -11,16 +11,10 @@ source('help_functions.R')
 
 current_date_tmp <- as.Date('2020-04-21','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
-
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
-
-write_tables_for_simulation_tmp <- TRUE
-write_table_for_report_tmp <- FALSE
-print_report_tmp <- "none"
-
-run_id <- 1
-
+write_tables_tmp <- FALSE
+run_id_tmp <- 1
 
 max_num_days_inpatient_ward <- 28
 max_num_days_intensive_care_unit <- 28
@@ -31,29 +25,17 @@ unit_category_type <- 'simple'
 text_out_category_type <- 'simple'
 #Supported clnical assessment category types: all,simple
 clinical_assessment_category_type <- 'simple_red'
-#Supported priority category types: simple
-priority_category_type <- 'all'
-#Supported age group types: official,three,simple
-age_group_type <- 'simple'
-#Supported splitting variable names: age,priority
-splitting_variable_name <- 'age'
-#splitting variable name write
-if(splitting_variable_name=='age'){
-  splitting_variable_write=paste(splitting_variable_name,age_group_type,sep='_')
-}else if(splitting_variable=='priority'){
-  splitting_variable_write=paste(splitting_variable_name,priority_category_type,sep='_')
-}else{
-  splitting_variable_write=''
-}
+
 option_list <-  list(
   make_option(c("-c", "--current_date"), type="character", default=NULL, 
               help="current date of data being used", metavar="character"),
   make_option(c("-p", "--prediction_date"), type="character", default=NULL, 
               help="date of prediction from covid.hi.is", metavar="character"),
-  make_option(c("-d", "--path_to_lsh_data"), type="character", default=path_to_lsh_data_tmp, 
-              help="path to data from LSH", metavar="character"),
-  make_option(c("-r", "--print_report"), type="character", default=print_report_tmp, 
-              help="none for no report, tmp for report in report_tmp, final for daily_report official, none is default", metavar="character")
+  make_option(c("-r", "--run_id"), type="integer", default=NULL, 
+              help="run_id to identify run of a set of experiments", metavar="integer"),
+  make_option(c("-d", "--path_to_lsh_data"), type="character", default="", 
+              help="path to data from LSH", metavar="character")
+  
 )
 
 opt_parser <-  OptionParser(option_list=option_list);
@@ -68,7 +50,7 @@ if(is.null(opt[['current_date']])){
 
 if(is.null(opt[['prediction_date']])){
   prediction_date <- prediction_date_tmp 
-  warning(paste0('You did not provide a prediction date.',prediction_date,' will be used'))
+  warning(paste0('You did not provide a prediction date. ',prediction_date,' will be used'))
 }else{
   prediction_date <- as.Date(as.character(opt[['prediction_date']]),'%Y-%m-%d')
 }
@@ -79,21 +61,15 @@ if(opt[['path_to_lsh_data']] == ""){
   path_to_lsh_data <- opt[['path_to_lsh_data']]
 }
 
-if(opt[['print_report']] == ""){
-  print_report <- print_report_tmp
+if(is.null(opt[['run_id']])){
+  run_id=run_id_tmp
+  warning(paste0('You did not provide a run_id. ',run_id_tmp,' will be used'))
 }else{
-  print_report <- opt[['print_report']]
+  path_to_lsh_data <- opt[['run_id']]
 }
 
-if(print_report == "final" | print_report == "tmp"){
-  write_tables_for_simulation <- TRUE
-  write_table_for_report <- TRUE
-}else if (length(opt)>1){
-  write_tables_for_simulation <- TRUE
-  write_table_for_report <- write_table_for_report_tmp
-}else{
-  write_tables_for_simulation <- write_tables_for_simulation_tmp
-  write_table_for_report <- write_table_for_report_tmp
+if (length(opt)>1){
+  write_tables <- TRUE
 }
 
 
@@ -474,9 +450,6 @@ first_state_extended <- get_first_state(model='extended')
 
 ############### ----- Write historical state information  ----- ############################
 if(write_tables_for_simulation){
-  write.table(current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_base_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(current_state_filtered,file=paste0(path_sensitive_tables,current_date,'_base_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_base_first_state.csv'),sep=',',row.names=F,quote=F)
   write.table(current_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_extended_current_state_per_date','.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(current_state_extended_filtered,file=paste0(path_sensitive_tables,current_date,'_extended_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
   write.table(first_state_extended,file=paste0(path_sensitive_tables,current_date,'_extended_first_state.csv'),sep=',',row.names=F,quote=F)
@@ -495,18 +468,18 @@ run_info <- get_run_info(run_id)
 for(id in run_info$experiment_id){
   experiment_table_list <- get_tables_for_experiment(id)
   #test_tables_for_experiment()
-  if(write_tables_for_simulation){
+  if(write_tables){
     write.table(experiment_table_list$transition_summary,file=paste0(path_tables,current_date,'_',id,'_transition_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$length_of_stay,file=paste0(path_tables,current_date,'_',id,'_length_of_stay.csv'),sep=',',row.names=F,quote=F)
+    write.table(experiment_table_list$current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(experiment_table_list$current_state_filtered,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$current_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_current_state_per_date_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_',id,'_first_state.csv'),sep=',',row.names=F,quote=F)
     write.table(experiment_table_list$first_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_first_state_per_date_summary.csv'),sep=',',row.names=F,quote=F)
   }
 }
-
-
-
-#Write tables for outpatient clinic for report
-if (write_table_for_report){
+if(write_tables){
+  #Write tables for outpatient clinic for report
   window_size <- 7
   nr_at_home_per_day <- filter(current_state_per_date_summary,state=='home') %>% rename(nr_at_home=count)
   outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
@@ -523,4 +496,5 @@ if (write_table_for_report){
   
   write.table(prop_outpatient_clinic_last_week, file=paste0(path_outpatient_clinic, current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
 }
+
 
