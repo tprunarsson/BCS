@@ -9,7 +9,7 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
-current_date_tmp <- as.Date('2020-04-15','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
@@ -431,34 +431,10 @@ patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
 
 test_data_processing()
 
-
-
-
-############# ---- Historical state information (first and current)  ----- ##############################
-
-#For base model
-current_state_per_date <- get_current_state_per_date(model='base')
-current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
-current_state_filtered <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
-first_state <- get_first_state(model='base')  
-
-#For extended model
-current_state_per_date_extended <- get_current_state_per_date(model='extended')
-current_state_extended <- filter(current_state_per_date_extended,date==date_last_known_state) %>% select(-date)
-current_state_extended_filtered <- filter(current_state_extended,!(days_from_diagnosis > 14 & state_worst == 'home-green'))
-first_state_extended <- get_first_state(model='extended')
-
-############### ----- Write historical state information  ----- ############################
-if(write_tables_for_simulation){
-  write.table(current_state_per_date_extended,file=paste0(path_sensitive_tables,current_date,'_extended_current_state_per_date','.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(current_state_extended_filtered,file=paste0(path_sensitive_tables,current_date,'_extended_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
-  write.table(first_state_extended,file=paste0(path_sensitive_tables,current_date,'_extended_first_state.csv'),sep=',',row.names=F,quote=F)
-}
-
 ################# ----- Predicted number of infections ------ ##############################
 infections_predicted_per_date <- get_infections_predicted_per_date(source='hi',prediction_date)
 
-if(write_tables_for_simulation){
+if(write_tables){
   write.csv(infections_predicted_per_date, file = paste0(path_tables,current_date,'_infections_predicted.csv'), quote = F)
 }
 
@@ -474,27 +450,7 @@ for(id in run_info$experiment_id){
     write.table(experiment_table_list$current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$current_state_filtered,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$current_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_current_state_per_date_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
-    write.table(first_state,file=paste0(path_sensitive_tables,current_date,'_',id,'_first_state.csv'),sep=',',row.names=F,quote=F)
-    write.table(experiment_table_list$first_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_first_state_per_date_summary.csv'),sep=',',row.names=F,quote=F)
+    write.table(experiment_table_list$first_state,file=paste0(path_sensitive_tables,current_date,'_',id,'_first_state.csv'),sep=',',row.names=F,quote=F)
+    write.table(experiment_table_list$prop_outpatient_clinic,file=paste0(path_outpatient_clinic,current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
   }
 }
-if(write_tables){
-  #Write tables for outpatient clinic for report
-  window_size <- 7
-  nr_at_home_per_day <- filter(current_state_per_date_summary,state=='home') %>% rename(nr_at_home=count)
-  outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
-    select(patient_id,date_in) %>%
-    arrange(patient_id,date_in) %>%
-    group_by(.,date_in) %>%
-    summarize(nr_visits=n()) %>% ungroup() %>%
-    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
-    mutate(prop_visits=nr_visits/nr_at_home)
-  
-  date_for_calculation <- current_date-window_size
-  prop_outpatient_clinic_last_week <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
-    summarize(prop_visits_last_week=sum(prop_visits)/window_size)
-  
-  write.table(prop_outpatient_clinic_last_week, file=paste0(path_outpatient_clinic, current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
-}
-
-
