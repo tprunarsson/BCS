@@ -116,7 +116,7 @@ int init_model(char *fname) {
     printf("[fatal error]: in init_model() the file %s seems to be corrupt (1)\n", fname);
     exit(1);
   }   
-  if (5 != clear_symbol(buffer,',')) {
+  if (COLS_FILE_CURRENT_STATE-1 != clear_symbol(buffer,',')) {
     printf("[fatal error]: in init_model() the file %s seems to be corrupt (2)\n", fname);
     exit(1);
   }
@@ -539,10 +539,10 @@ int main(int argc, char *argv[]) {
     fprintf(outfile, "\n");
   }
 
-/* load true states at all locations from the current date onwards */
-  sprintf(fname, "%s%s%s_current_state_per_date.csv", path_lsh_data, szDateHistory, szExt);
+/* load historical data about people in the Covid system */
+  sprintf(fname, "%s%s%s_current_state.csv", path_lsh_data, szDateHistory, szExt);
   fprintf(outfile,"trueStates[%s] = \n", szDate);
-  availTrueStateDays = readHistoricalData(fname, szDate, max_sim_time);
+  availTrueStateDays = readHistoricalData(fname, szDate, max_sim_time); // RJS: Do we need to read this if szDate==szDateLatest
   availHistory = availTrueStateDays;
   for (k = 0; k < numInfected; k++) {
     fprintf(outfile,"\n Person[%d]: %d\n", k, iPerson[k].person_id);
@@ -574,7 +574,7 @@ int main(int argc, char *argv[]) {
     printProgress((double)repeat / (MAX_REPEAT-1));
     #endif
     /* Initialize the model and fire up departure event for this in system */
-    sprintf(fname, "%s%s%s_current_state.csv", path_lsh_data, szDate, szExt);
+    sprintf(fname, "%s%s%s_current_state.csv", path_lsh_data, szDate, szExt); // RJS this file is now read as historical data
     init_model(fname);
     //event_schedule(sim_time, EVENT_REINITIALIZE); /* used for validation purposes only */
     event_schedule(sim_time + 0.25, EVENT_ARRIVAL); /* schedule also new arrivals */
