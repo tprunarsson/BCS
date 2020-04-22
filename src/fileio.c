@@ -327,10 +327,10 @@ int readHIposteriors(char *fname, char *szDate, int day, double *dbl) { /* TODO 
 */
 int readFirstCDF(char *fname) {
   FILE *fid;
-  int splitting, state;
+  int id, splitting, state;
   int i, j;
   double sumSplitting,sumState;
-  char buffer[1024], szsplitting[128], szstate[128];
+  char buffer[1024], szdate[128], szsplitting[128], szstate[128];
  
   /* zero the losCDF */
   for (i = 0; i < MAX_SPLITTING_VARIABLE; i++)
@@ -348,7 +348,7 @@ int readFirstCDF(char *fname) {
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_symbol(buffer,',');
-    sscanf(buffer, "%s %s", szsplitting, szstate);
+    sscanf(buffer, "%d %s %s %s", &id, szdate,szsplitting, szstate); // Read id and date, but is not used yet
     splitting = get_splitting_variable(szsplitting);
     state = get_state(szstate);
     firstSplittingCDF[splitting] = firstSplittingCDF[splitting] + 1.0;
@@ -392,7 +392,7 @@ int readFirstCDF(char *fname) {
 
 int readLosP(char *fname) {
   FILE *fid;
-  int splitting, state, day, value;
+  int splitting, state, days, value;
   int i, j, k;
   double sum;
   char buffer[1024], szsplitting[128], szstate[128];
@@ -412,10 +412,10 @@ int readLosP(char *fname) {
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_symbol(buffer,',');
-    sscanf(buffer, "%s %s %d %d", szstate, szsplitting, &day, &value);
+    sscanf(buffer, "%s %s %d %d", szstate, szsplitting, &days, &value);
     splitting = get_splitting_variable(szsplitting);
     state = get_state(szstate);
-    losCDF[splitting][state][day] = (double)value;
+    losCDF[splitting][state][days] = (double)value;
   }
   for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) {
     for (j = 0; j < MAX_STATE_VARIABLE; j++){
