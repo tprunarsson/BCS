@@ -434,7 +434,7 @@ test_data_processing()
 ################# ----- Predicted number of infections ------ ##############################
 infections_predicted_per_date <- get_infections_predicted_per_date(source='hi',prediction_date)
 
-if(write_tables_for_simulation){
+if(write_tables){
   write.csv(infections_predicted_per_date, file = paste0(path_tables,current_date,'_infections_predicted.csv'), quote = F)
 }
 
