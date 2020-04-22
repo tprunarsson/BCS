@@ -1,13 +1,17 @@
 
 library(ggplot2)
 library(readr)
-current_date=as.Date('2020-03-02','%Y-%m-%d')
-path_data_upper <- paste0('../output/',current_date,'_covid_simulation.csv')
+date_start=as.Date('2020-03-02','%Y-%m-%d')
+date_data=as.Date('2020-04-15','%Y-%m-%d')
+experiment_id <- 1
+path_data_sim <- paste0('../output/',date_start,'_',experiment_id,'_covid_simulation.csv')
+path_data_hist <- paste0('../input/',date_data,'_',experiment_id,'_current_state_per_date_summary.csv')
+#path_data_upper <- paste0('../output/',current_date,'_covid_simulation.csv')
 states_in_order <- c('home','inpatient_ward','intensive_care_unit')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
 
-simulation_run <- read_csv(file = path_data_upper) %>%
-                mutate(.,date=as.factor(current_date+day)) %>%
+simulation_run <- read_csv(file = path_data_sim) %>%
+                mutate(.,date=as.factor(date_start+day)) %>%
                 gather(.,key='state',value='count',-date,-day) %>%
                 filter(.,state %in% c('home','inpatient_ward','intensive_care_unit')) %>%
                 mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
@@ -18,9 +22,9 @@ f <- function(x) {
     r
 }
 
-df <- current_state_per_date %>% ungroup() %>% mutate(.,date=as.factor(date), state=factor(state,levels=states_in_order,labels=states_labels_in_order))
+df <- read_csv(path_data_hist) %>% ungroup() %>% mutate(.,date=as.factor(date), state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
-#brk <- levels(simulation_run$date); brk[seq(2,length(brk),2)] <- " "; 
+brk <- levels(simulation_run$date); brk[seq(2,length(brk),2)] <- " "; 
 brk[seq(2,length(brk),3)] <- " "; brk[seq(3,length(brk),3)] <- " "
 brk <- c(brk," ")
 p = ggplot(simulation_run, aes(x = date, y = count)) + stat_summary(fun.data = f, geom="boxplot") + geom_boxplot(color = "gray", alpha = 0.3, outlier.shape = NA)  +
