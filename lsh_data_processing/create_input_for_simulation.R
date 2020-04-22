@@ -238,7 +238,7 @@ get_tables_for_experiment <- function(id){
     return(list('length_of_stay'=length_of_stay,
                 'transition_summary'=transition_summary,
                 'current_state_per_date'=current_state_per_date,
-                'current_state_filtered'=current_state_per_date,
+                'current_state_filtered'=current_state_filtered,
                 'current_state_per_date_summary'=current_state_per_date_summary,
                 'first_state'=first_state,
                 'first_state_per_date_summary'=first_state_per_date_summary))
