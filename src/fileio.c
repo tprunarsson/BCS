@@ -188,10 +188,18 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
 
   fid = fopen(fname, "r");
   if (fid == NULL) {
-    printf("fatal: could not open historical data file %s\n", fname);
+    printf("fatal: could not open current state file %s\n", fname);
     exit(1);
   }
-
+  if (NULL == fgets(buffer, 2048, fid)) {
+    printf("[fatal error]: current state file %s is corrupt (1)\n", fname);
+    exit(1);
+  }
+  /* count the number of commas */
+  if (COLS_FILE_CURRENT_STATE-1 != clear_symbol(buffer,',')) {
+     printf("[fatal error]: current state file %s is corrupt (2)\n", fname);
+     exit(1);
+  }
   for (person_index = 0; person_index < MAXINFECTED; person_index++) {
     for (day = 0; day < max_sim_time; day++) {
       iPerson[person_index].person_id = 0;
@@ -344,11 +352,12 @@ int readFirstCDF(char *fname) {
     printf("fatal: could not open first historical data file %s\n", fname);
     exit(1);
   }
+    // RJS check if corrupted
   if (NULL == fgets(buffer, 1024, fid)) /* remove the header! */
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_symbol(buffer,',');
-    sscanf(buffer, "%d %s %s %s", &id, szdate,szsplitting, szstate); // Read id and date, but is not used yet
+    sscanf(buffer, "%d %s %s %s", &id, szsplitting, szdate, szstate); // Read id and date, but is not used yet
     splitting = get_splitting_variable(szsplitting);
     state = get_state(szstate);
     firstSplittingCDF[splitting] = firstSplittingCDF[splitting] + 1.0;
@@ -408,6 +417,7 @@ int readLosP(char *fname) {
     printf("fatal: could not open length of stay histogram file %s\n", fname);
     exit(1);
   }
+    // RJS: Check if corrupted
   if (NULL == fgets(buffer, 1024, fid)) /* remove the header! */
     return 1;
   while (NULL != fgets(buffer, 1024, fid)) {
@@ -464,7 +474,7 @@ int readTransitionCDF(char *fname) {
     exit(1);
   }
   /* count the number of commas */
-  if (3 != clear_symbol(buffer,',')) {
+  if (COLS_FILE_TRANSITIONS-1 != clear_symbol(buffer,',')) {
     printf("[fatal error]: state transition by split file %s is corrupt (2)\n", fname);
     exit(1);
   }
