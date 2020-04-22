@@ -47,10 +47,11 @@
 #define MAX_SPLITTING_VARIABLE    2
 #define MAX_STATE_VARIABLE       11
 
-#define COLS_FILE_FIRST_STATE       4
-#define COLS_FILE_CURRENT_STATE     7
-#define COLS_FILE_LOS               4
-#define COLS_FILE_TRANSITIONS       4
+#define COLS_FILE_FIRST_STATE                   4
+#define COLS_FILE_CURRENT_STATE                 6
+#define COLS_FILE_CURRENT_STATE_PER_DATE        7
+#define COLS_FILE_LOS                           4
+#define COLS_FILE_TRANSITIONS                   4
 
 typedef struct {
   int person_id; /* let simulated persons take negative values */

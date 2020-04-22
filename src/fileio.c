@@ -89,6 +89,22 @@ int get_person_index(int person_id) {
   return i;
 }
 
+int is_date_before(char *date_str, int comp_year, int comp_month, int comp_day)
+{
+    int before=0;
+    int year, month, day;
+    
+    scanf(date_str,"%d-%d-%d", &year, &month, &day);
+    
+    if (year<comp_year)
+        before=1;
+    else if (month<comp_month)
+        before=1;
+    else if (day<comp_day)
+        before=1;
+        
+    return before;
+}
 /* 
   Read additional numbers as possible scenarios
 date_diagnosis,initial_state,age_simple,count
@@ -174,7 +190,7 @@ int readScenarioData(char *fname, char *szDate, int max_sim_time) {
 }
 
 /* 
-  Read real historical data from the start
+  Read real historical data from szDate onward
 */
 int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
   FILE *fid;
@@ -191,26 +207,19 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
     printf("fatal: could not open current state file %s\n", fname);
     exit(1);
   }
-  if (NULL == fgets(buffer, 2048, fid)) {
-    printf("[fatal error]: current state file %s is corrupt (1)\n", fname);
-    exit(1);
-  }
-  /* count the number of commas */
-  if (COLS_FILE_CURRENT_STATE-1 != clear_symbol(buffer,',')) {
-     printf("[fatal error]: current state file %s is corrupt (2)\n", fname);
-     exit(1);
-  }
+ 
   for (person_index = 0; person_index < MAXINFECTED; person_index++) {
     for (day = 0; day < max_sim_time; day++) {
-      iPerson[person_index].person_id = 0;
-      iPerson[person_index].splitting = 0;  
-      iPerson[person_index].real_state[day] = -1;
-      iPerson[person_index].real_state_worst[day] = -1;
-      iPerson[person_index].real_days_in_state[day] = -1;
-      iPerson[person_index].real_days_from_diagnosis[day] = 0;
-      iPerson[person_index].first_state_indicator[day] = 0;
+        iPerson[person_index].person_id = 0;
+        iPerson[person_index].splitting = 0;
+        iPerson[person_index].real_state[day] = -1;
+        iPerson[person_index].real_state_worst[day] = -1;
+        iPerson[person_index].real_days_in_state[day] = -1;
+        iPerson[person_index].real_days_from_diagnosis[day] = 0;
+        iPerson[person_index].first_state_indicator[day] = 0;
     }
   }
+    
   sscanf(szDate,"%d-%d-%d", &y, &m, &d);
   days_found = 0;
   for (day = 0; day < max_sim_time; day++) {
@@ -225,8 +234,8 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
       printf("fatal: historical data file %s corrupt (1)\n", fname);
       exit(1);
     } /* remove the header! */
-    if (6 != clear_symbol(buffer,',')) {
-      printf("fatal: historical data file %s corrupt (2)\n", fname);
+    if (COLS_FILE_CURRENT_STATE_PER_DATE-1 != clear_symbol(buffer,',')) {
+      printf("fatal: current state data file %s corrupt (2)\n", fname);
       exit(1);
     }
     date_found = 0;

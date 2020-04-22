@@ -540,7 +540,7 @@ int main(int argc, char *argv[]) {
   }
 
 /* load historical data about people in the Covid system */
-  sprintf(fname, "%s%s%s_current_state.csv", path_lsh_data, szDateHistory, szExt);
+  sprintf(fname, "%s%s%s_current_state_per_date.csv", path_lsh_data, szDateHistory, szExt);
   fprintf(outfile,"trueStates[%s] = \n", szDate);
   availTrueStateDays = readHistoricalData(fname, szDate, max_sim_time); // RJS: Do we need to read this if szDate==szDateLatest
   availHistory = availTrueStateDays;
