@@ -529,7 +529,7 @@ int main(int argc, char *argv[]) {
   readFirstCDF(fname);
 
   /* load posterior predicted values on current date and day number */
-  sprintf(fname, "%s%s_iceland_posterior.csv", path_input, szDateLatest);
+  sprintf(fname, "%s%s_infections_predicted.csv", path_input, szDateLatest);
   fprintf(outfile,"CDFposterior[%s] = \n", szDate);
   for (i = 0; i < MAX_SIM_TIME; i++) {
     n = readHIposteriors(fname, szDate, i, CDFposterior[i]);

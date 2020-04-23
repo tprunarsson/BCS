@@ -33,7 +33,7 @@ option_list <-  list(
               help="date of prediction from covid.hi.is", metavar="character"),
   make_option(c("-r", "--run_id"), type="integer", default=NULL, 
               help="run_id to identify run of a set of experiments", metavar="integer"),
-  make_option(c("-d", "--path_to_lsh_data"), type="character", default="", 
+  make_option(c("-d", "--path_to_lsh_data"), type="character", default=NULL, 
               help="path to data from LSH", metavar="character")
   
 )
@@ -55,7 +55,7 @@ if(is.null(opt[['prediction_date']])){
   prediction_date <- as.Date(as.character(opt[['prediction_date']]),'%Y-%m-%d')
 }
 
-if(opt[['path_to_lsh_data']] == ""){
+if(is.null(opt[['path_to_lsh_data']])){
   path_to_lsh_data <- path_to_lsh_data_tmp
 }else{
   path_to_lsh_data <- opt[['path_to_lsh_data']]
@@ -65,7 +65,7 @@ if(is.null(opt[['run_id']])){
   run_id=run_id_tmp
   warning(paste0('You did not provide a run_id. ',run_id_tmp,' will be used'))
 }else{
-  path_to_lsh_data <- opt[['run_id']]
+  run_id <- opt[['run_id']]
 }
 
 if (length(opt)>1){
@@ -440,7 +440,11 @@ if(write_tables){
 
 ################# ----- Transition summary and length of stay distribution for all experiments ------ ##############################
 run_info <- get_run_info(run_id) 
-  
+
+if(write_tables){
+  write.table(run_info, file = paste0(path_tables,current_date,'_',run_id,'_run_info.csv'), quote = F,row.names=F,sep='\t',col.names=F)
+}
+
 for(id in run_info$experiment_id){
   experiment_table_list <- get_tables_for_experiment(id)
   #test_tables_for_experiment()

@@ -46,7 +46,7 @@ get_first_state <- function(model,max_splitting_dat){
     ungroup() %>%
     inner_join(.,select(max_splitting_dat,patient_id,max_splitting_values) %>% rename(splitting_variable=max_splitting_values),by='patient_id') %>%
     select(-matches('severity'),-matches('state_block_nr')) %>%
-    select(patient_id,date_diagnosis,splitting_variable,initial_state)
+    select(patient_id,splitting_variable,date_diagnosis,initial_state)
     
     return(first_state)
 }
