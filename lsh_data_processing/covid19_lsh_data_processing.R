@@ -9,7 +9,7 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
-current_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-04-23','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
@@ -239,6 +239,17 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     
 
 #hospital_visits
+#hardcode date_diagnosis_hospital for geriatic patients while confusion in how they are registered.
+hospital_visits_raw <- mutate_at(hospital_visits_raw, vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==13173,as.Date('2020-03-29 00:00:00'))) %>%
+                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==56481,as.Date('2020-03-29 00:00:00'))) %>%
+                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==78970,as.Date('2020-03-29 00:00:00'))) %>%
+                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==94463,as.Date('2020-03-29 00:00:00'))) %>%
+                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==205678,as.Date('2020-03-29 00:00:00'))) %>%
+                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==217960,as.Date('2020-03-31 00:00:00'))) %>%
+                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==358268,as.Date('2020-03-26 00:00:00'))) %>%
+                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==381951,as.Date('2020-04-10 00:00:00')))
+  
+          
 hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
                           text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
                     select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital,ventilator) %>%
