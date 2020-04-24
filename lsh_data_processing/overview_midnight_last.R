@@ -108,7 +108,7 @@ print('Turnover from the day before')
 #print(sys_turn)
 print(sim_hosp_turn)
 
-save(sys_covid_all,sim_home,sim_ward,sim_icu,sys_released,sim_total_age_groups,sim_total_state_worst,sim_dfd_dis,sim_hosp_turn,file=overview_midnight_path)
+#save(sys_covid_all,sim_home,sim_ward,sim_icu,sys_released,sim_total_age_groups,sim_total_state_worst,sim_dfd_dis,sim_hosp_turn,file=overview_midnight_path)
 
 # hospital <- filter(hospital_visits, !is.finite(date_out)) %>% left_join(., unit_categories, by=c('unit_in'='unit_category_raw')) %>%
 #             select(patient_id, unit_in, unit_category) 
