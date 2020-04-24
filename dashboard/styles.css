@@ -4,3 +4,18 @@
 .iris-bar, .iris-single {
   background: #2B4995;
 }
+.btn-default {
+  color: #ddd;
+  background-color: #2B4995 !important;
+  border-radius: 15px;
+  margin: 20px 0 0 0;
+  padding: 3px 3px 3px 3px;
+  width: 60%;
+  margin-left: 20%;
+  margin-right: 20%
+}
+#groupInputs > div {
+  width: 45% !important;
+  float: left !important;
+  margin: 2px !important;
+}

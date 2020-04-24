@@ -17,21 +17,19 @@ library(stringr)
 library(dplyr)
 library(readr)
 library(tidyr)
+library(RCurl)
 source('dashboard_functions.R')
 
 #Load csv data
 bcs_data <- readRDS('input/bcs_data.rds')
-data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
-data_all_simulation <- bcs_data$data_all_simulation
-
-get_and_save_if_new_data(bcs_data)
+bcs_data$data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
 
 # Set constants
-start_date <- min(data_length_of_stay$date) # as.Date('2020-04-02')
+start_date <- min(bcs_data$data_length_of_stay$date) # as.Date('2020-04-02')
 end_date <- Sys.Date()
-gagnagerdir <- unique(data_length_of_stay$censored)
-aldurshopar <- unique(data_length_of_stay$age_group_simple) #list('0-50', '51+')
-states <- unique(data_length_of_stay$state)
+gagnagerdir <- unique(bcs_data$data_length_of_stay$censored)
+aldurshopar <- unique(bcs_data$data_length_of_stay$age_group_simple) #list('0-50', '51+')
+states <- unique(bcs_data$data_length_of_stay$state)
 ```
 
 
@@ -43,9 +41,15 @@ Stillingar {.sidebar}
 
 ```{r}
 helpText('Veljið dagsetningu til að birta skýrslu fyrir')
-sliderInput('dagsetning_sk', 'Dagsetning:', min = start_date, max = max(data_all_simulation$date),
+sliderInput('dagsetning_sk', 'Dagsetning:', min = start_date, max = max(bcs_data$data_all_simulation$date),
             value = end_date, step = 1, timeFormat = "%d %b")
-
+actionButton('saekja_gogn', label = 'Sækja ný gögn')
+observeEvent(input$saekja_gogn, {
+  msg <- get_and_save_new_data(bcs_data)
+  showNotification(msg, duration = 4, id = 'msg_saekja_gogn', type = 'message')
+  bcs_data <- readRDS('input/bcs_data.rds')
+  bcs_data$data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
+})
 ```
 
 
@@ -58,7 +62,7 @@ skyrsla-header {data-height=50px}
 ```{r simulation_data}
 # Make the simulation data reactive on date slider
 data_simulation_quantiles <- reactive({
-  data_all_simulation %>% 
+  bcs_data$data_all_simulation %>% 
     filter(date == input$dagsetning_sk) %>%
     mutate(date_spa = date + day) %>%
     gather(key = 'state', value = 'count', 2:6) %>% 
@@ -90,31 +94,21 @@ plot_simulation <- function(state) {
         theme_minimal()
 }
 
-# # Göngudeild
-# prop_visits <- load_git_data('prop_outpatient_clinic', 
-#                              data_folder = 'outpatient_clinic_history', 
-#                              start_date = '2020-04-08')
-# 
-# window_size <- 7
-# # prop_visit_for_date <- reactive(
-# #   prop_visits %>% 
-# #     filter(date == input$dagsetning - window_size) %>% 
-# #     select(prop_visits_last_week) %>% 
-# #     as.numeric()
-# # )
-# 
-# outpatient_clinic_sim_visits <- reactive({
-#   prop_visit_for_date <- prop_visits %>% 
-#     filter(date == input$dagsetning - window_size) %>% 
-#     select(prop_visits_last_week) %>% 
-#     as.numeric()
-#   data_all_simulation %>%
-#     mutate(count_visits = home * prop_visit_for_date) %>% 
-#     group_by(date) %>% 
-#     summarise(median = round(median(count_visits)),
-#               quantile975 = round(quantile(count_visits,probs=0.975))) %>%
-#     ungroup()
-# })
+# Göngudeild
+window_size <- 7
+
+outpatient_clinic_sim_visits <- reactive({
+  prop_visit_for_date <- data_prop_visits %>%
+    filter(date == input$dagsetning_sk - window_size) %>%
+    select(prop_visits_last_week) %>%
+    as.numeric()
+  bcs_data$data_all_simulation %>%
+    mutate(count_visits = home * prop_visit_for_date) %>%
+    group_by(date) %>%
+    summarise(median = round(median(count_visits)),
+              quantile975 = round(quantile(count_visits,probs=0.975))) %>%
+    ungroup()
+})
 ```
 
 skyrsla-efri-röð
@@ -139,9 +133,9 @@ renderPlotly({
     ggplotly(p)
 })
 # renderPlotly({
-#     p_data <- outpatient_clinic_sim_visits() %>% 
-#     gather('key', 'value', -date) %>% 
-#     mutate(key = key %>% recode(median = "Líkleg spá", 
+#     p_data <- outpatient_clinic_sim_visits() %>%
+#     gather('key', 'value', -date) %>%
+#     mutate(key = key %>% recode(median = "Líkleg spá",
 #                                 quantile975 = "Svartsýn spá"))
 #   ggplot(data = p_data,
 #          aes(x = date, y = value)) +
@@ -187,13 +181,6 @@ Sviðsmyndir {id=svidsmyndir data-icon="fa-project-diagram"}
 
 Stillingar {.sidebar}
 ---------------------------------------------------
-<style>
-#groupInputs > div {
-  width: 45% !important;
-  float: left !important;
-  margin: 2px !important;
-}
-</style>
 
 ```{r}
 # sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = end_date,
@@ -253,7 +240,7 @@ Stillingar {.sidebar}
 ---------------------------------------------------
 
 ```{r}
-sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = max(data_length_of_stay$date),
+sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = max(bcs_data$data_length_of_stay$date),
             value = end_date, step = 1, timeFormat = "%d %b")
 checkboxInput('festa_asa', 'Festa ása', value = FALSE)
 checkboxGroupInput('aldur', label = 'Aldurshópar:', 
@@ -262,8 +249,8 @@ checkboxGroupInput('state', label = 'Staða:',
                    choices = states, selected = states)
 checkboxGroupInput('gagnagerd', label = 'Censored:',
                    choices = gagnagerdir, selected = gagnagerdir)
-selectInput('fill_by', 'Lita eftir:', c(names(data_length_of_stay)[1:3]), selected = 'censored')
-selectInput('facet', 'Facet eftir:', c('-', names(data_length_of_stay)[1:3]))
+selectInput('fill_by', 'Lita eftir:', c(names(bcs_data$data_length_of_stay)[1:3]), selected = 'censored')
+selectInput('facet', 'Facet eftir:', c('-', names(bcs_data$data_length_of_stay)[1:3]))
 
 ```
 
@@ -274,7 +261,7 @@ dreifinga-tabs {.tabset .tabset-fade}
 
 ```{r}
 dataset <- reactive({
-  data_length_of_stay %>%  
+  bcs_data$data_length_of_stay %>%  
     filter(date == input$dagsetning,
            state %in% input$state,
            age_group_simple %in% input$aldur, 
@@ -294,7 +281,7 @@ renderPlot({
   if (input$facet != '-')
     p <- p + facet_wrap(paste0('~', input$facet), scales = 'free')
   if(input$festa_asa)
-    p <- p + lims(x = c(0, 35), y = c(0, max(data_length_of_stay$count)))
+    p <- p + lims(x = c(0, 35), y = c(0, max(bcs_data$data_length_of_stay$count)))
   print(p)
 })
 ```
