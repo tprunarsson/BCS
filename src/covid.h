@@ -32,20 +32,26 @@
 #define ATTR_WORSTSTATE     9
 
 // "home", "home-green", "home-red", "inpatient_ward", "inpatient_ward-green", "inpatient_ward-red", "intensive_care_unit", "intensive_care_unit-green","intensive_care_unit-red", "death", "recovered"
-#define HOME                      0
-#define HOME_GREEN                1
-#define HOME_RED                  2
-#define INPATIENT_WARD            3
-#define INPATIENT_WARD_GREEN      4
-#define INPATIENT_WARD_RED        5
-#define INTENSIVE_CARE_UNIT       6
-#define INTENSIVE_CARE_UNIT_GREEN 7
-#define INTENSIVE_CARE_UNIT_RED   8
-#define DEATH                     9
-#define RECOVERED                10
+#define HOME                            0
+#define HOME_GREEN                      1
+#define HOME_RED                        2
+#define INPATIENT_WARD                  3
+#define INPATIENT_WARD_GREEN            4
+#define INPATIENT_WARD_RED              5
+#define INTENSIVE_CARE_UNIT             6
+#define INTENSIVE_CARE_UNIT_GREEN       7
+#define INTENSIVE_CARE_UNIT_RED         8
+#define DEATH                           9
+#define RECOVERED                       10
 
-#define MAX_SPLITTING_VARIABLE    2
-#define MAX_STATE_VARIABLE       11
+#define MAX_NUM_SPLITTING_VALUES        12
+#define MAX_NUM_STATES                  11
+
+#define NO_REENTER_ICU                  0
+#define RECOVER_MIN_14_DAYS             1
+#define IMPUTE_RECOVERED                2
+
+#define NUM_HEURISTICS                  3
 
 #define COLS_FILE_FIRST_STATE                   4
 #define COLS_FILE_CURRENT_STATE                 6

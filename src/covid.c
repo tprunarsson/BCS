@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "simlib.h" /* Required for use of simlib.c. */
 #include "rndlib.h" /* Required for use of rndlib.c. */
@@ -21,9 +22,11 @@
 #include "fileio.h" /* all reading/writing of files located here */
 #include "utils.h"  /* utility function used */
 
+int heuristics[NUM_HEURISTICS];
+
 /* define the different splitting variable and new states */
-char *szSplittingVariable[MAX_SPLITTING_VARIABLE] = {"age_0-50", "age_51+"};
-char *szStateVariable[MAX_STATE_VARIABLE] = {"home", "home-green", "home-red", "inpatient_ward", "inpatient_ward-green", "inpatient_ward-red", "intensive_care_unit", "intensive_care_unit-green","intensive_care_unit-red", "death", "recovered"};
+char *szSplittingVariable[MAX_NUM_SPLITTING_VALUES];
+char *szStateVariable[MAX_NUM_STATES] = {"home", "home-green", "home-red", "inpatient_ward", "inpatient_ward-green", "inpatient_ward-red", "intensive_care_unit", "intensive_care_unit-green","intensive_care_unit-red", "death", "recovered"};
 
 /* Define the person with all of its properties in a structure */
 person iPerson[MAXINFECTED];
@@ -35,18 +38,18 @@ int numInfected = 0;
    location/state to the next, length of stay for different agegroups
    and location, and location/state on first arrival for different age
    groups. */
-double transitionCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE][MAX_STATE_VARIABLE];
-double losCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE][MAX_LOS_DAYS];
-double firstSplittingCDF[MAX_SPLITTING_VARIABLE];
-double firstStateCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE];
+double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
+double losCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS];
+double firstSplittingCDF[MAX_NUM_SPLITTING_VALUES];
+double firstStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
-int historicalData[MAXINFECTED][MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE];
+int historicalData[MAXINFECTED][MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 
 /* count statistics for analysing the dynamics of the model */
-double countStats[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
-double countStatsFalse[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
-double countNumber[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
-double countNumberFalse[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
+double countStats[MAX_SIM_TIME+1][MAX_NUM_STATES];
+double countStatsFalse[MAX_SIM_TIME+1][MAX_NUM_STATES];
+double countNumber[MAX_SIM_TIME+1][MAX_NUM_STATES];
+double countNumberFalse[MAX_SIM_TIME+1][MAX_NUM_STATES];
 
 /* The real dates for each day of the simulation */ 
 char szAllDates[MAX_SIM_TIME][32];
@@ -58,6 +61,7 @@ int PatientId; /* used for trace */
 int availHistory, availTrueStateDays, availScenarios;
 
 FILE *outfile; /* global file pointers for report writing */
+
 
 /*
   A randomly sampled length of stay for the different states based on an empirical distribution
@@ -82,15 +86,15 @@ double lengthOfStay(int splitting, int state, int days_from_diagnosis, int new_s
 int whereToNext(int splitting, int state, int days_from_diagnosis, int worst_state) {
   int new_state;
 
-  new_state = discrete_empirical(transitionCDF[splitting][state], MAX_STATE_VARIABLE, STREAM_TRANSITION);
+  new_state = discrete_empirical(transitionCDF[splitting][state], MAX_NUM_STATES, STREAM_TRANSITION);
 
   /* this first check will only activate in case we are using the simple model */
   while ( (new_state == INTENSIVE_CARE_UNIT) && (worst_state == INTENSIVE_CARE_UNIT) )
-    new_state = discrete_empirical(transitionCDF[splitting][state], MAX_STATE_VARIABLE, STREAM_TRANSITION);
+    new_state = discrete_empirical(transitionCDF[splitting][state], MAX_NUM_STATES, STREAM_TRANSITION);
 
   /* this second check will only activate when we are using the clinical assessment */
   while ( (new_state == INTENSIVE_CARE_UNIT_RED) && (worst_state == INTENSIVE_CARE_UNIT_RED) )
-    new_state = discrete_empirical(transitionCDF[splitting][state], MAX_STATE_VARIABLE, STREAM_TRANSITION);
+    new_state = discrete_empirical(transitionCDF[splitting][state], MAX_NUM_STATES, STREAM_TRANSITION);
 
   return new_state;
 }
@@ -273,9 +277,9 @@ void arrive(int n) {
   double departure_day, length_of_stay;
 
   for (i = 0; i < n; i++) {
-    splitting=discrete_empirical(firstSplittingCDF,MAX_SPLITTING_VARIABLE,STREAM_SPLITTING);
+    splitting=discrete_empirical(firstSplittingCDF,MAX_NUM_SPLITTING_VALUES,STREAM_SPLITTING);
     /* we need a strategy for selecting which location we enter */
-    first_state = discrete_empirical(firstStateCDF[splitting], MAX_STATE_VARIABLE, STREAM_FIRST_STATE);
+    first_state = discrete_empirical(firstStateCDF[splitting], MAX_NUM_STATES, STREAM_FIRST_STATE);
     new_state = whereToNext(splitting, first_state, 0, first_state); /* fresh arrival */
     length_of_stay = lengthOfStay(splitting, first_state, 0, new_state);
     transfer[ATTR_PERSON] = (double)--PatientId; /* dummy ID for prediced patients IDs */
@@ -313,7 +317,7 @@ void real_arrive(int day) {
       agegroup = (u > ProbUnder50);
       //agegroup = iPerson[i].age_group;
       //we need a strategy for selecting which location we enter 
-      location = discrete_empirical(firstLocCDF[agegroup], MAX_STATE_VARIABLE, STREAM_AGE);
+      location = discrete_empirical(firstLocCDF[agegroup], MAX_NUM_STATES, STREAM_AGE);
       //location = iPerson[i].real_location[day];
       newlocation = where_to_next(agegroup, location, 0, location); // fresh arrival
       los = lengthOfStay(splitting, state, 0, new_state);
@@ -455,58 +459,85 @@ void report(FILE *fid, int day, int append) {
  */
 int main(int argc, char *argv[]) {
  
-  int listid, i, j, k, n, max_sim_time = MIN(28,MAX_SIM_TIME);
-  char szDate[12], szDateLatest[12], szDateHistory[12], fname[8192];
-  char path[1023], path_input[2048], path_output[2048], path_lsh_data[2048];
-  char szExt[128];
+	int listid, i, j, k, n;
+	char fname[8192], opt;
   FILE *statfid;
+	char path_input[2048], path_output[2048], path_lsh_data[2048];
+	char *item;
+	
+	int	max_sim_time = MIN(28,MAX_SIM_TIME);
+	char date_start[12]="";
+	char date_data[12]="";
+	char experiment_id[4]="1";
+	char model[20]="base";
+	char heuristics_tmp[1024]="1;1;1";
+	char splitting_values_tmp[2048]="age_0-50;age_51+";
+	char path[1023]="..";
 
   maxatr = 15; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
-
+	
+	while ((opt = getopt(argc, argv, "s:i:m:h:v:d:n:p:")) != -1) {
+			switch (opt) {
+			case 's': strcpy(date_start,optarg); break;
+			case 'i': strcpy(experiment_id,optarg); break;
+			case 'm': strcpy(model,optarg); break;
+			case 'h': strcpy(heuristics_tmp,optarg); break;
+			case 'v': strcpy(splitting_values_tmp,optarg); break;
+			case 'd': strcpy(date_data,optarg); break;
+			case 'n': max_sim_time=MIN(MAX_SIM_TIME, atoi(optarg)); break;
+			case 'p': strcpy(path,optarg); break;
+			default:
+// RJS add help + check date formats
+					fprintf(stderr, "Usage: ./%s [-simhvdnp]\n", argv[0]);
+					exit(EXIT_FAILURE);
+			}
+	}
+	
+	if (strcmp(date_start,"")==0)
+		exit(EXIT_FAILURE);
+	else if (strcmp(date_data,"")==0)
+		strcpy(date_data,date_start);
+	
   /* check user input arguments number */
-  printf("\nCovid: Discrete Event Simulator (%s)\n\n", VERSION);
+/*  printf("\nCovid: Discrete Event Simulator (%s)\n\n", VERSION);
   if (argc < 3) {
     printf("usage: %s YYYY-MM-DD PATH_TO_DATA CA (DATA_YYYY-MM-DD HISTORY_YYYY-MM-DD MAX_SIM_TIME\n\nThe simulation starts on the YYYY-MM-DD and uses data in the PATH_TO_DATA\nThe optional DATA_YYYY-MM-DD date can be used to read data from another time period\nFinally you can set the number of days to simulate to a value less than %d (default %d)\n\n", argv[0], MAX_SIM_TIME, max_sim_time);
     printf("note: historical data (from HISTORY_YYYY-MM__DD) will be used when available for new arrivals (used for model validation),\nwhen not available new arrivals are predicted from the posterior distribution @ covid.hi.is\n\n");
     return 1;
-  }
-  strcpy(path, argv[2]);
+  }*/
+  
+	item=strtok(heuristics_tmp,";");
+	i=0;
+	
+	while (item!=NULL) {
+		heuristics[i]=atoi(item);
+		i++;
+		item=strtok(NULL,";");
+	}
+	
+	item=strtok(splitting_values_tmp,";");
+	i=0;
+	
+	while (item!=NULL) {
+		szSplittingVariable[i]=item;
+		i++;
+		item=strtok(NULL,";");
+	}
+	
   sprintf(path_input, "%s/input/", path);
   sprintf(path_lsh_data,"%s/lsh_data/", path);
   sprintf(path_output,"%s/output/", path);
-
-  /* get the date for the simulation run */
-  sprintf(szDate,"%s", argv[1]);
-  sprintf(szDateLatest,"%s", argv[1]);
-  sprintf(szDateHistory,"%s", argv[1]);
-  if (argc > 4) { /* this is a workaround in case we want to get a newer data file and are simulating from a previous date */
-    sprintf(szDateLatest,"%s", argv[4]);
-    sprintf(szDateHistory,"%s", argv[4]);
-  }
-  if (argc > 5) 
-    sprintf(szDateHistory,"%s", argv[5]);
-  if (argc > 6) {
-    max_sim_time = atoi(argv[6]);
-    max_sim_time =  MIN(MAX_SIM_TIME,max_sim_time);
-  } 
-  /* by default we will use the simple extension */
-  strcpy(szExt,"");
-  if (argc > 3)
-    if (0 == strcmp(argv[4],"CA"))
-      strcpy(szExt,"_extended");
-
-  strcat(szExt,"_1");
     
   /* get string name for all possible dates */
-  get_all_dates(szDate);
+  get_all_dates(date_start);
 
   /* The file covid.out is used to report on the setting used for the run */
-  sprintf(fname, "%s%s%s_covid.out", path_output, szDate, szExt);
+  sprintf(fname, "%s%s_%s_covid.out", path_output, date_start, experiment_id);
   outfile = fopen (fname, "w");
   
   /* Generate output run file name and pointer */
-  sprintf(fname, "%s%s%s_covid_simulation.csv",path_output, szDate, szExt);
-  printf(" reading files from %s%s%s*.csv\n reading files from %s%s%s*.csv\n writing result in: %s\n and run data into: %s%s%s_covid.out\n\n",path_input, szDate, szExt, path_lsh_data, szDate, szExt, fname, path_output, szDate, szExt);
+  sprintf(fname, "%s%s_%s_covid_simulation.csv",path_output, date_start, experiment_id);
+  printf(" reading files from %s%s_%s*.csv\n reading files from %s%s_%s*.csv\n writing result in: %s\n and run data into: %s%s_%s_covid.out\n\n",path_input, date_start, experiment_id, path_lsh_data, date_start, experiment_id, fname, path_output, date_start, experiment_id);
   statfid = fopen (fname, "w");
 
   /* Initialize simlib */
@@ -517,22 +548,22 @@ int main(int argc, char *argv[]) {
 
   /* Initialize a list for each location from HOMELOC..RECOLOC 
      The list is ranked exactly the same way as the event list INCREASING */
-  for (listid = 0; listid < MAX_STATE_VARIABLE; listid++)
+  for (listid = 0; listid < MAX_NUM_STATES; listid++)
     list_rank[listid] = ATTR_DEPARTDAY;
 
   /* read the length of stay data */
-  sprintf(fname, "%s%s%s_length_of_stay.csv", path_input, szDateLatest, szExt);
+  sprintf(fname, "%s%s_%s_length_of_stay.csv", path_input, date_data, experiment_id);
   readLosP(fname);
 
   /* load first location for new persons arrivals */
-  sprintf(fname, "%s%s%s_first_state.csv", path_lsh_data, szDateLatest, szExt);
+  sprintf(fname, "%s%s_%s_first_state.csv", path_lsh_data, date_data,experiment_id);
   readFirstCDF(fname);
 
   /* load posterior predicted values on current date and day number */
-  sprintf(fname, "%s%s_infections_predicted.csv", path_input, szDateLatest);
-  fprintf(outfile,"CDFposterior[%s] = \n", szDate);
+  sprintf(fname, "%s%s_iceland_posterior.csv", path_input, date_data);
+  fprintf(outfile,"CDFposterior[%s] = \n", date_data);
   for (i = 0; i < MAX_SIM_TIME; i++) {
-    n = readHIposteriors(fname, szDate, i, CDFposterior[i]);
+    n = readHIposteriors(fname, date_data, i, CDFposterior[i]);
     fprintf(outfile,"Day-%d", i);
     for (j = 0; j < n; j++)
       fprintf(outfile,",%.4g", CDFposterior[i][j]);
@@ -540,9 +571,9 @@ int main(int argc, char *argv[]) {
   }
 
 /* load historical data about people in the Covid system */
-  sprintf(fname, "%s%s%s_current_state_per_date.csv", path_lsh_data, szDateHistory, szExt);
-  fprintf(outfile,"trueStates[%s] = \n", szDate);
-  availTrueStateDays = readHistoricalData(fname, szDate, max_sim_time); // RJS: Do we need to read this if szDate==szDateLatest
+  sprintf(fname, "%s%s_%s_current_state_per_date.csv", path_lsh_data, date_data, experiment_id);
+  fprintf(outfile,"trueStates[%s] = \n", date_start);
+  availTrueStateDays = readHistoricalData(fname, date_start, max_sim_time); // RJS: Do we need to read this if szDate==szDateLatest
   availHistory = availTrueStateDays;
   for (k = 0; k < numInfected; k++) {
     fprintf(outfile,"\n Person[%d]: %d\n", k, iPerson[k].person_id);
@@ -550,31 +581,31 @@ int main(int argc, char *argv[]) {
       fprintf(outfile,"%02d ", iPerson[k].real_state[j]);
     fprintf(outfile, "\n");
   }
-  fprintf(outfile, "available historical true states days for simulation from date %s is %d, taken from file %s\n", szDate, availTrueStateDays, fname);
+  fprintf(outfile, "available historical true states days for simulation from date %s is %d, taken from file %s\n", date_start, availTrueStateDays, fname);
 
 /* load fake states too create different scenarios */
-  sprintf(fname, "%s%s%s_additional_infected.csv", path_input, szDateHistory, szExt);
-  availScenarios = readScenarioData(fname, szDate, max_sim_time);
+  sprintf(fname, "%s%s_%s_additional_infected.csv", path_input, date_data, experiment_id);
+  availScenarios = readScenarioData(fname, date_start, max_sim_time);
   if (availScenarios > 0) {
-    fprintf(outfile, "available scenarios for simulation from date %s is %d, taken from file %s\n", szDate, availScenarios, fname);
+    fprintf(outfile, "available scenarios for simulation from date %s is %d, taken from file %s\n", date_start, availScenarios, fname);
     //printPersons(fPerson, availScenarios);
   }
 
   /* Read the transition probability matrix */
-  sprintf(fname, "%s%s%s_transition_summary.csv", path_input, szDateLatest, szExt);
+  sprintf(fname, "%s%s_%s_transition_summary.csv", path_input, date_data, experiment_id);
   readTransitionCDF(fname);
 
   report(statfid,0,0); /* write header in output stats file */
   countStatistics(-1);
   if (availHistory > 0)
-    printf(" available history %d days from %s\n", availHistory, szDate);
+    printf(" available history %d days from %s\n", availHistory, date_start);
   for (repeat = 0; repeat < MAX_REPEAT; repeat++) {
     /* progress bar added for the slower machines */
     #ifndef TRACE
     printProgress((double)repeat / (MAX_REPEAT-1));
     #endif
     /* Initialize the model and fire up departure event for this in system */
-    sprintf(fname, "%s%s%s_current_state.csv", path_lsh_data, szDate, szExt); // RJS this file is now read as historical data
+    sprintf(fname, "%s%s_%s_current_state.csv", path_lsh_data, date_start, experiment_id);
     init_model(fname);
     //event_schedule(sim_time, EVENT_REINITIALIZE); /* used for validation purposes only */
     event_schedule(sim_time + 0.25, EVENT_ARRIVAL); /* schedule also new arrivals */
@@ -660,7 +691,7 @@ int main(int argc, char *argv[]) {
     #ifdef TRACE
       printf("correctly prediced days per location: ");
       for (k = 0; k < max_sim_time; k++) {
-        for (i = 0; i < MAX_STATE_VARIABLE-2; i++)
+        for (i = 0; i < MAX_NUM_STATES-2; i++)
           printf("%d, %d, %g, %g\n", k, i, countStats[k][i],countNumber[k][i]);
       }
       printf("\n");
@@ -678,7 +709,7 @@ int main(int argc, char *argv[]) {
   outfile = fopen(fname, "w");
   fprintf(outfile, "day,state,correct,total\n");
   for (k = 0; k < max_sim_time; k++) {
-    for (i = 0; i < MAX_STATE_VARIABLE-2; i++)
+    for (i = 0; i < MAX_NUM_STATES-2; i++)
       if (countNumber[k][i] > 0)
         fprintf(outfile, "%d,%s,%.6g,%.0f\n", k, szStateVariable[i], (double)countStats[k][i] / (double)countNumber[k][i], countNumber[k][i]/MAX_REPEAT);
       else 
@@ -689,7 +720,7 @@ int main(int argc, char *argv[]) {
   outfile = fopen(fname, "w");
   fprintf(outfile, "day,state,correct,total\n");
   for (k = 0; k < max_sim_time; k++) {
-    for (i = 0; i < MAX_STATE_VARIABLE-2; i++)
+    for (i = 0; i < MAX_NUM_STATES-2; i++)
       if (countNumberFalse[k][i] > 0)
         fprintf(outfile, "%d,%s,%.6g,%.0f\n", k, szStateVariable[i], (double)countStatsFalse[k][i] / (double)countNumberFalse[k][i], countNumberFalse[k][i]/MAX_REPEAT);
       else 
@@ -701,7 +732,7 @@ int main(int argc, char *argv[]) {
   fprintf(outfile, "person_id,day,state,average,real,first\n");
   for (k = 0; k < numInfected; k++) {
     for (j = 0; j < max_sim_time; j++)
-      for (i = 0; i < MAX_STATE_VARIABLE-2; i++) {
+      for (i = 0; i < MAX_NUM_STATES-2; i++) {
         fprintf(outfile, "%d,%s,%s,%.6g", iPerson[k].person_id, szAllDates[j], szStateVariable[i], iPerson[k].simulated_state_mean[i][j]/MAX_REPEAT);
         fprintf(outfile,",%d,%d\n",(iPerson[k].real_state[j] == i), (iPerson[k].first_state_indicator[j] == 1) && (iPerson[k].real_state[j] == i));
       }

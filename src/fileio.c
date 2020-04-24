@@ -5,17 +5,17 @@
 #include <time.h>
 #include "covid.h"
 
-extern double transitionCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE][MAX_STATE_VARIABLE];
-extern double losCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE][MAX_LOS_DAYS];
-extern double firstSplittingCDF[MAX_SPLITTING_VARIABLE];
-extern double firstStateCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE];
+extern double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
+extern double losCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS];
+extern double firstSplittingCDF[MAX_NUM_SPLITTING_VALUES];
+extern double firstStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 extern double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
-extern int historicalData[MAXINFECTED][MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE];
+extern int historicalData[MAXINFECTED][MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 
 extern FILE *outfile;
 
-extern char *szSplittingVariable[MAX_SPLITTING_VARIABLE];
-extern char *szStateVariable[MAX_STATE_VARIABLE];
+extern char *szSplittingVariable[MAX_NUM_SPLITTING_VALUES];
+extern char *szStateVariable[MAX_NUM_STATES];
 
 extern person iPerson[MAXINFECTED];
 extern person fPerson[MAXINFECTED];
@@ -44,7 +44,7 @@ int clear_symbol(char *buffer, char s) {
 int get_splitting_variable(char *sz_splitting_variable) {
   int i, splitting_variable = -1;
 
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++)
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
     if (0 == strcmp(sz_splitting_variable,szSplittingVariable[i])) {
       splitting_variable = i;
       break;
@@ -59,14 +59,14 @@ int get_splitting_variable(char *sz_splitting_variable) {
 int get_state(char *sz_state) {
   int i, state = -1;
 
-  for (i = 0; i < MAX_STATE_VARIABLE; i++)
+  for (i = 0; i < MAX_NUM_STATES; i++)
     if (0 == strcmp(sz_state,szStateVariable[i])) {
       state = i;
       break;
     }
   if (state < 0) {
     printf("[fatal error]: unknown state named %s\n available states are: ", sz_state);
-    for (i = 0; i < MAX_STATE_VARIABLE-1; i++)
+    for (i = 0; i < MAX_NUM_STATES-1; i++)
       printf("%s,",szStateVariable[i]);
     printf("%s\n",szStateVariable[i]);
     exit(1);
@@ -350,9 +350,9 @@ int readFirstCDF(char *fname) {
   char buffer[1024], szdate[128], szsplitting[128], szstate[128];
  
   /* zero the losCDF */
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++)
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
     firstSplittingCDF[i] = 0.0;
-    for (j = 0; j < MAX_STATE_VARIABLE; j++)
+    for (j = 0; j < MAX_NUM_STATES; j++)
       firstStateCDF[i][j] = 0.0;
       
 
@@ -373,34 +373,34 @@ int readFirstCDF(char *fname) {
     firstStateCDF[splitting][state] = firstStateCDF[splitting][state] + 1.0;
   }
   sumSplitting=0;
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) {
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
     sumSplitting=sumSplitting + firstSplittingCDF[i];
     firstSplittingCDF[i] = firstSplittingCDF[i-1] + firstSplittingCDF[i];
     sumState = firstStateCDF[i][0];
-    for (j = 1; j < MAX_STATE_VARIABLE; j++) {
+    for (j = 1; j < MAX_NUM_STATES; j++) {
       sumState = sumState + firstStateCDF[i][j];
       firstStateCDF[i][j] = firstStateCDF[i][j-1] + firstStateCDF[i][j];
     }
     if (sumState > 0) {
-      for (j = 0; j < MAX_STATE_VARIABLE; j++) {
+      for (j = 0; j < MAX_NUM_STATES; j++) {
         firstStateCDF[i][j] = firstStateCDF[i][j]/sumState;
       }
     }
   }
   if(sumSplitting>0){
-    for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) {
+    for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
     firstSplittingCDF[i] = firstSplittingCDF[i]/sumSplitting;
     }
   }
   fprintf(outfile, "firstSplittingCDF = ");
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) {
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
     fprintf(outfile, "%.4g ",firstSplittingCDF[i]);
   }
   fprintf(outfile, "\n");
   
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) {
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
     fprintf(outfile, "firstStateCDF[%d] = ", i);
-    for (j = 0; j < MAX_STATE_VARIABLE; j++)
+    for (j = 0; j < MAX_NUM_STATES; j++)
       fprintf(outfile, "%.4g ",firstStateCDF[i][j]);
     fprintf(outfile, "\n");
   }
@@ -416,8 +416,8 @@ int readLosP(char *fname) {
   char buffer[1024], szsplitting[128], szstate[128];
  
   /* zero the losCDF */
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++)
-    for (j = 0; j < MAX_STATE_VARIABLE; j++)
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
+    for (j = 0; j < MAX_NUM_STATES; j++)
       for (k = 0; k < MAX_LOS_DAYS; k++)
         losCDF[i][j][k] = 0.0;
 
@@ -436,8 +436,8 @@ int readLosP(char *fname) {
     state = get_state(szstate);
     losCDF[splitting][state][days] = (double)value;
   }
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) {
-    for (j = 0; j < MAX_STATE_VARIABLE; j++){
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
+    for (j = 0; j < MAX_NUM_STATES; j++){
       sum = losCDF[i][j][0];
       for (k = 1; k < MAX_LOS_DAYS; k++) {
         sum = sum + losCDF[i][j][k];
@@ -450,9 +450,9 @@ int readLosP(char *fname) {
       }
     }
   }
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) {
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
     fprintf(outfile,"losCDF[%d]= \n", i);
-    for (j = 0; j < MAX_STATE_VARIABLE; j++) {
+    for (j = 0; j < MAX_NUM_STATES; j++) {
       for (k = 0; k < MAX_LOS_DAYS; k++)
         fprintf(outfile, "%.4g ", losCDF[i][j][k]);
       fprintf(outfile,"\n");
@@ -470,7 +470,7 @@ int readTransitionCDF(char *fname) {
   FILE *fid;
   int splitting,state_from, state_to;
   int i, j, k, count;
-  double P[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE][MAX_STATE_VARIABLE], sum;
+  double P[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES], sum;
   char buffer[2048], sztmp[128], *token;
  
   fid = fopen(fname, "r");
@@ -488,9 +488,9 @@ int readTransitionCDF(char *fname) {
     exit(1);
   }
   /* initialize the memory to zero */
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) 
-    for (j = 0; j < MAX_STATE_VARIABLE; j++) 
-      for (k = 0; k < MAX_STATE_VARIABLE; k++) 
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
+    for (j = 0; j < MAX_NUM_STATES; j++)
+      for (k = 0; k < MAX_NUM_STATES; k++)
         P[i][j][k] = 0.0;
   /* scan the entire file for transition counts */
   while (NULL != fgets(buffer, 8192, fid)) {
@@ -507,25 +507,25 @@ int readTransitionCDF(char *fname) {
     sscanf(token, "%d", &count);
     P[splitting][state_from][state_to] = count;
   }
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) 
-    for (j = 0; j < MAX_STATE_VARIABLE; j++) {
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
+    for (j = 0; j < MAX_NUM_STATES; j++) {
       sum = 0.0;
-      for (k = 0; k < MAX_STATE_VARIABLE; k++) 
+      for (k = 0; k < MAX_NUM_STATES; k++)
         sum = sum + P[i][j][k];
       if (sum > 0)
-        for (k = 0; k < MAX_STATE_VARIABLE; k++)
+        for (k = 0; k < MAX_NUM_STATES; k++)
           P[i][j][k] = P[i][j][k] / sum; 
     }
-  for (i = 0; i < MAX_SPLITTING_VARIABLE; i++) 
-    for (j = 0; j < MAX_STATE_VARIABLE; j++) {
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
+    for (j = 0; j < MAX_NUM_STATES; j++) {
       transitionCDF[i][j][0] = P[i][j][0];
-      for (k = 1; k < MAX_STATE_VARIABLE; k++) 
+      for (k = 1; k < MAX_NUM_STATES; k++)
         transitionCDF[i][j][k] = transitionCDF[i][j][k-1] + P[i][j][k];
     }
-  for (k = 0; k < MAX_SPLITTING_VARIABLE; k++) {
+  for (k = 0; k < MAX_NUM_SPLITTING_VALUES; k++) {
     fprintf(outfile, "CDF[%s] = \n", szSplittingVariable[k]);
-    for (i = 0; i < MAX_STATE_VARIABLE; i++) {
-      for (j = 0; j < MAX_STATE_VARIABLE; j++)
+    for (i = 0; i < MAX_NUM_STATES; i++) {
+      for (j = 0; j < MAX_NUM_STATES; j++)
         fprintf(outfile, "%.4g ", transitionCDF[k][i][j]);
       fprintf(outfile, "\n");
     }

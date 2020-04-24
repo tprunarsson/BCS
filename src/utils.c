@@ -6,25 +6,25 @@
 #include "fileio.h"
 #include "covid.h"
 
-extern double CDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE][MAX_STATE_VARIABLE];
-extern double losCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE][MAX_LOS_DAYS];
-extern double firstLocCDF[MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE];
+extern double CDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
+extern double losCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS];
+extern double firstLocCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 extern double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
-extern int historicalData[MAXINFECTED][MAX_SPLITTING_VARIABLE][MAX_STATE_VARIABLE];
+extern int historicalData[MAXINFECTED][MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 
 extern FILE *outfile;
 extern double ProbUnder50;
 
-extern char *szSplittingVariable[MAX_SPLITTING_VARIABLE];
-extern char *szStateVariable[MAX_STATE_VARIABLE];
+extern char *szSplittingVariable[MAX_NUM_SPLITTING_VALUES];
+extern char *szStateVariable[MAX_NUM_STATES];
 
 extern person iPerson[MAXINFECTED];
 extern int numInfected;
 
-extern double countStats[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
-extern double countStatsFalse[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
-extern double countNumber[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
-extern double countNumberFalse[MAX_SIM_TIME+1][MAX_STATE_VARIABLE];
+extern double countStats[MAX_SIM_TIME+1][MAX_NUM_STATES];
+extern double countStatsFalse[MAX_SIM_TIME+1][MAX_NUM_STATES];
+extern double countNumber[MAX_SIM_TIME+1][MAX_NUM_STATES];
+extern double countNumberFalse[MAX_SIM_TIME+1][MAX_NUM_STATES];
 
 extern char szAllDates[MAX_SIM_TIME][32];
 
@@ -61,7 +61,7 @@ int countStatistics(int max_sim_time) {
 
   if (max_sim_time < 0) {
     for (i = 0; i < MAX_SIM_TIME+1; i++) {
-      for (k = 0; k < MAX_STATE_VARIABLE; k++) {
+      for (k = 0; k < MAX_NUM_STATES; k++) {
         countStats[i][k] = 0.0;
         countNumber[i][k] = 0.0;
         countStatsFalse[i][k] = 0.0;
