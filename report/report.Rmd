@@ -51,12 +51,10 @@ quantiles_outp <- group_by(outpatient_clinic_sim_visits, date) %>%
 
 $~$
 
-Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á Covid göngudeild, legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
-Komur á göngudeild eru áætlaðar út frá spáðum fjölda í heimaeinangrun og hlutfalli þeirra sem voru í heimaeinangrun í síðustu viku og komu á göngudeild.
+Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu fjórar vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
 
 Spá um fjölda greindra smita er frá `r fjoldi_smita_dags`.<br />
 Söguleg gögn frá Landspítala ná til miðnættis `r soguleg_gogn_dags`.<br />
-Hlutfall sjúklinga í heimaeinangrun sem komu á göngudeild frá og með `r format(date_for_calculation, "%d-%m-%Y")` til og með `r format(current_date-1, "%d-%m-%Y")` er `r round(prop_outpatient_clinic_last_week, 4)*100`%.
 
 $~$
 
@@ -84,9 +82,9 @@ quantiles %>%
     ggtitle('Fjöldi smitaðra einstaklinga í heimaeinangrun á hverjum degi')
 ```
 
-### Covid göngudeild
 
-```{r, echo=FALSE, fig.align="center"}
+
+```{r, echo=FALSE, fig.align="center", include=FALSE}
 quantiles_outp %>%
     ggplot(aes(date, median)) +
     geom_line(group = 1, aes(lty = "Líkleg spá"), col = "blue4", size = 1.1) +
