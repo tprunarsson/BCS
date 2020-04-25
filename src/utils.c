@@ -13,7 +13,6 @@ extern double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 extern int historicalData[MAXINFECTED][MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 
 extern FILE *outfile;
-extern double ProbUnder50;
 
 extern char *szSplittingVariable[MAX_NUM_SPLITTING_VALUES];
 extern char *szStateVariable[MAX_NUM_STATES];
@@ -27,6 +26,33 @@ extern double countNumber[MAX_SIM_TIME+1][MAX_NUM_STATES];
 extern double countNumberFalse[MAX_SIM_TIME+1][MAX_NUM_STATES];
 
 extern char szAllDates[MAX_SIM_TIME][32];
+
+char tracking_info[MAX_SIM_TIME*MAXINFECTED][128]; // We track all repeats
+unsigned long tracking_num_transitions;
+
+// Functions for tracking persons during the simulation. Uses global variable tracking_info and tracking_num_transitions.
+
+void track_person(int person_id, int sim_no,char *transition, int sim_date, int state){
+	sprintf(tracking_info[tracking_num_transitions],"%d,%d,%s,%s,%s",person_id, sim_no,transition,szAllDates[sim_date],szStateVariable[state]);
+	tracking_num_transitions++;
+}
+
+void write_tracking_info(char *file_name){
+	FILE *fp;
+	unsigned long i;
+	
+	fp=fopen(file_name,"w");
+	if(fp==NULL){
+		printf("Could not open tracking info file\n");
+	}
+	else {
+		fprintf(fp,"person_id,sim_no,transition,date,state\n");	// write header
+		for (i=0;i<tracking_num_transitions;i++) {
+			fprintf(fp,"%s\n",tracking_info[i]);
+		}
+	}
+	fclose(fp);
+}
 
 /* function for displaying the progress of the simulation */
 void printProgress (double percentage) {
