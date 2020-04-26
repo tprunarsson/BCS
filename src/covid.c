@@ -8,6 +8,7 @@
 //#define TRACE
 //#define DEBUG
 //#define STATS
+#define TRACK_PERSON
 
 #include <stdio.h>
 #include <string.h>
@@ -62,6 +63,8 @@ int availHistory, availTrueStateDays, availScenarios;
 
 FILE *outfile; /* global file pointers for report writing */
 
+extern char tracking_info;
+extern unsigned long tracking_num_transitions;
 
 /*
   A randomly sampled length of stay for the different states based on an empirical distribution
@@ -165,6 +168,10 @@ int init_model(char *fname) {
     list_file (INCREASING, state);
     transfer[ATTR_STATE] = (double)state;
     event_schedule(departure_day, EVENT_DEPARTURE);
+		
+		#ifdef TRACK_PERSON
+			track_person(person_id,repeat,STATE_CURRENT,(int)floor(sim_time),state);
+		#endif
   }
   fclose(fid);
   return 0;
@@ -298,6 +305,10 @@ void arrive(int n) {
     list_file (INCREASING, first_state);
     transfer[ATTR_STATE] = (double)first_state; /* must be repeated since transfer is new */
     event_schedule(departure_day, EVENT_DEPARTURE);
+		
+	#ifdef TRACK_PERSON
+		track_person(PatientId,repeat,STATE_FIRST,(int)floor(sim_time),first_state);
+	#endif
   }
 }
 
@@ -387,7 +398,7 @@ void fake_arrive(int day) {
 void depart(void) {
   int state, new_state, new_new_state, worst_state;
   int days_from_diagnosis, splitting, days_in_state;
-  unsigned int id;
+  int id;
   double departure_day, length_of_stay;
   
   state = (int)transfer[ATTR_STATE]; /* location was in EVENT_LIST's transfer */
@@ -402,7 +413,7 @@ void depart(void) {
   splitting = (int)transfer[ATTR_SPLITTING];
   days_from_diagnosis = (int)transfer[ATTR_DAYSDIAGNOSIS];
   days_in_state = (int) transfer[ATTR_DAYSINSTATE];
-  id = (unsigned int)transfer[ATTR_PERSON];
+  id = (int)transfer[ATTR_PERSON];
   new_state = (int) transfer[ATTR_NEXTSTATE]; /* was decided when assigned */
   worst_state = (int) transfer[ATTR_WORSTSTATE];
   
@@ -437,6 +448,11 @@ void depart(void) {
     transfer[ATTR_STATE] = (double)new_state; /* must be repeated since transfer is allocated again */
     event_schedule(departure_day, EVENT_DEPARTURE);
   }
+#ifdef TRACK_PERSON
+	track_person(id,repeat,STATE_OUT,(int)floor(sim_time),state);
+	track_person(id,repeat,STATE_IN,(int)floor(sim_time),new_state);
+		
+#endif
 }
 /* report is used to write to file the current day and the length of all location lists */
 void report(FILE *fid, int day, int append) {
@@ -469,18 +485,16 @@ int main(int argc, char *argv[]) {
 	char date_start[12]="";
 	char date_data[12]="";
 	char experiment_id[4]="1";
-	char model[20]="base";
 	char heuristics_tmp[1024]="1;1;1";
 	char splitting_values_tmp[2048]="age_0-50;age_51+";
 	char path[1023]="..";
 
   maxatr = 15; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
 	
-	while ((opt = getopt(argc, argv, "s:i:m:h:v:d:n:p:")) != -1) {
+	while ((opt = getopt(argc, argv, "s:i:h:v:d:n:p:")) != -1) {
 			switch (opt) {
 			case 's': strcpy(date_start,optarg); break;
 			case 'i': strcpy(experiment_id,optarg); break;
-			case 'm': strcpy(model,optarg); break;
 			case 'h': strcpy(heuristics_tmp,optarg); break;
 			case 'v': strcpy(splitting_values_tmp,optarg); break;
 			case 'd': strcpy(date_data,optarg); break;
@@ -537,7 +551,12 @@ int main(int argc, char *argv[]) {
   
   /* Generate output run file name and pointer */
   sprintf(fname, "%s%s_%s_covid_simulation.csv",path_output, date_start, experiment_id);
-  printf(" reading files from %s%s_%s*.csv\n reading files from %s%s_%s*.csv\n writing result in: %s\n and run data into: %s%s_%s_covid.out\n\n",path_input, date_start, experiment_id, path_lsh_data, date_start, experiment_id, fname, path_output, date_start, experiment_id);
+	printf(" reading files from %s%s_%s*.csv\n reading files from %s%s_%s*.csv\n writing result in: %s\n and run data into: %s%s_%s_covid.out\n\n",path_input, date_start, experiment_id, path_lsh_data, date_start, experiment_id, fname, path_output, date_start, experiment_id);
+	
+#ifdef TRACK_PERSON
+	tracking_num_transitions=0; // Initialize tracking
+#endif
+	
   statfid = fopen (fname, "w");
 
   /* Initialize simlib */
@@ -704,6 +723,11 @@ int main(int argc, char *argv[]) {
   /* should tidy up simlib memory here! */
   printf("\n\n");
   fclose(outfile);
+#ifdef TRACK_PERSON
+	sprintf(fname, "%s%s_%s_tracking_info.csv",path_output, date_start, experiment_id);
+	write_tracking_info(fname);
+#endif
+	
   #ifdef STATS
   sprintf(fname, "%s%s_performance_check.csv", path_output, szDateHistory);
   outfile = fopen(fname, "w");
