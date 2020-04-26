@@ -239,10 +239,9 @@ get_tables_for_experiment <- function(id){
     transition_splitting_variable_names <- filter(experiment,type=='transition')$value
     
     current_state_per_date <- get_current_state_per_date(model,max_splitting_dat)
-    current_state_per_date_summary <- select(current_state_per_date,patient_id,matches(paste(max_splitting_names,collapse='|')),date,state) %>%
-                                        group_by(date,state) %>% summarize(count=n())
     current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
     current_state_filtered <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
+    current_state_from_start <- filter(current_state_per_date,date==(start_date-1)) %>% filter(!(days_from_diagnosis > 14 & state_worst == 'home')) %>% select(-date)
     recovered_imputed <- anti_join(select(current_state,patient_id,state),select(current_state_filtered,patient_id),by='patient_id') %>%
                                     mutate(date=current_date,state_tomorrow='recovered') %>%
                                     select(.,patient_id,date,state,state_tomorrow)
@@ -260,6 +259,7 @@ get_tables_for_experiment <- function(id){
                 'transition_summary'=transition_summary,
                 'current_state_per_date'=current_state_per_date,
                 'current_state_filtered'=current_state_filtered,
+                'current_state_from_start'=current_state_from_start,
                 'current_state_per_date_summary'=current_state_per_date_summary,
                 'first_state'=first_state,
                 'prop_outpatient_clinic'=prop_outpatient_clinic))

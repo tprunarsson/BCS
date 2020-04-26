@@ -43,15 +43,16 @@ if(is.null(opt[['date_start']])){
 }
 path_run_info <- paste0('../input/',date_data,'_',run_id,'_run_info.csv')
 run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','splitting_variable_name','splitting_variable_values','heuristic_string'))
+
+states_in_order <- c('home','inpatient_ward','intensive_care_unit')
+states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
+path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
+historical_data <- read_csv(path_historical_data) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
+
 plot_list=list()
 performance_data_list <- list()
 for(id in run_info$experiment_id){
     path_simulation_data <- paste0('../output/',date_start,'_',id,'_covid_simulation.csv')
-    path_historical_data <- paste0('../input/',date_data,'_',id,'_current_state_per_date_summary.csv')
-    
-    
-    states_in_order <- c('home','inpatient_ward','intensive_care_unit')
-    states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
     
     simulation_all <- read_csv(file = path_simulation_data ) %>%
         mutate(.,date=as.Date(date_start+day)) %>%
@@ -61,8 +62,6 @@ for(id in run_info$experiment_id){
     
     simulation_summary <- group_by(simulation_all,day,date,state) %>%
         summarize(median=median(count),lower=quantile(count,probs=0.025),upper=quantile(count,probs=0.975))
-    
-    historical_data <- read_csv(path_historical_data) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
     
     plot_list[[id]] <- ggplot(data=simulation_summary) +
         geom_line(aes(x=date,y=median)) +
@@ -82,8 +81,8 @@ for(id in run_info$experiment_id){
         select(experiment_id,state,mse,days_from_peak,peak_diff)
 }
 
-performance_data <- bind_rows(performance_data_list) %>% mutate(experiment_id=factor(experiment_id,levels=order()))
-ggplot(performance_data,aes(factor(experiment_id,levels=order(mse),labels=experiment_id[order(mse)]),mse)) + geom_col() + facet_wrap(~state)
-ggplot(performance_data,aes(factor(experiment_id,levels=order(days_from_peak),labels=experiment_id[order(days_from_peak)]),as.numeric(days_from_peak))) + geom_col() + facet_wrap(~state)
-ggplot(performance_data,aes(factor(experiment_id,levels=order(peak_diff),labels=experiment_id[order(peak_diff)]),as.numeric(peak_diff))) + geom_col() + facet_wrap(~state)
+performance_data <- bind_rows(performance_data_list) %>% mutate(experiment_id=factor(experiment_id))
+ggplot(performance_data,aes(experiment_id,mse,fill=experiment_id)) + geom_col(position='dodge') + facet_wrap(~state,scales='free')
+ggplot(performance_data,aes(experiment_id,as.numeric(days_from_peak),fill=experiment_id)) + geom_col(position='dodge') + facet_wrap(~state,scales='free')
+ggplot(performance_data,aes(experiment_id,as.numeric(peak_diff),fill=experiment_id)) + geom_col(position='dodge') + facet_wrap(~state,scales='free')
 

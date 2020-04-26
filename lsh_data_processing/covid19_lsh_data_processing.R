@@ -9,6 +9,7 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
+start_date_tmp <- as.Date('2020-03-02','%Y-%m-%d')
 current_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
@@ -31,6 +32,8 @@ option_list <-  list(
               help="current date of data being used", metavar="character"),
   make_option(c("-p", "--prediction_date"), type="character", default=NULL, 
               help="date of prediction from covid.hi.is", metavar="character"),
+  make_option(c("-s", "--start_date"), type="character", default=NULL, 
+              help="start date of simulation", metavar="character"),
   make_option(c("-r", "--run_id"), type="integer", default=NULL, 
               help="run_id to identify run of a set of experiments", metavar="integer"),
   make_option(c("-d", "--path_to_lsh_data"), type="character", default=NULL, 
@@ -53,6 +56,13 @@ if(is.null(opt[['prediction_date']])){
   warning(paste0('You did not provide a prediction date. ',prediction_date,' will be used'))
 }else{
   prediction_date <- as.Date(as.character(opt[['prediction_date']]),'%Y-%m-%d')
+}
+
+if(is.null(opt[['start_date']])){
+  start_date <- start_date_tmp 
+  warning(paste0('You did not provide a prediction date. ',start_date,' will be used'))
+}else{
+  start_date <- as.Date(as.character(opt[['start_date']]),'%Y-%m-%d')
 }
 
 if(is.null(opt[['path_to_lsh_data']])){
@@ -431,10 +441,14 @@ patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
 
 test_data_processing()
 
+################# ----- Historical data ------ ###############
+historical_data <- group_by(patient_transitions,date,state) %>% summarise(count=n())
+
 ################# ----- Predicted number of infections ------ ##############################
 infections_predicted_per_date <- get_infections_predicted_per_date(source='hi',prediction_date)
 
 if(write_tables){
+  write.table(historical_data, file = paste0(path_tables,current_date,'_historical_data.csv'), quote = F,row.names=F,sep=',')
   write.csv(infections_predicted_per_date, file = paste0(path_tables,current_date,'_infections_predicted.csv'), quote = F)
 }
 
@@ -453,6 +467,7 @@ for(id in run_info$experiment_id){
     write.table(experiment_table_list$length_of_stay,file=paste0(path_tables,current_date,'_',id,'_length_of_stay.csv'),sep=',',row.names=F,quote=F)
     write.table(experiment_table_list$current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$current_state_filtered,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(experiment_table_list$current_state_from_start,file=paste0(path_sensitive_tables,start_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$current_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_current_state_per_date_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$first_state,file=paste0(path_sensitive_tables,current_date,'_',id,'_first_state.csv'),sep=',',row.names=F,quote=F)
     write.table(experiment_table_list$prop_outpatient_clinic,file=paste0(path_outpatient_clinic,current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
