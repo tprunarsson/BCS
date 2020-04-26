@@ -51,23 +51,6 @@ get_first_state <- function(model,max_splitting_dat){
     return(first_state)
 }
 
-################# ----- Estimate proportion of infected going to outpatient clinic ---- #############
-get_prop_outpatient_clinic <- function(current_state_per_date_summary,window_size=7){
-    nr_at_home_per_day <- filter(current_state_per_date_summary,state=='home') %>% rename(nr_at_home=count)
-    outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
-        select(patient_id,date_in) %>%
-        arrange(patient_id,date_in) %>%
-        group_by(.,date_in) %>%
-        summarize(nr_visits=n()) %>% ungroup() %>%
-        left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
-        mutate(prop_visits=nr_visits/nr_at_home)
-    
-    date_for_calculation <- current_date-window_size
-    prop_outpatient_clinic_per_window <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
-        summarize(prop_visits_per_window=sum(prop_visits)/window_size)
-    return(prop_outpatient_clinic_per_window)
-}
-
 ################# ----- Transition counts between states ---- #############
 get_transition_summary <- function(model,recovered_imputed,s,splitting_variable_name,max_splitting_mapping){
     if(model=='extended'){
@@ -246,7 +229,6 @@ get_tables_for_experiment <- function(id){
                                     mutate(date=current_date,state_tomorrow='recovered') %>%
                                     select(.,patient_id,date,state,state_tomorrow)
     first_state <- get_first_state(model,max_splitting_dat) 
-    prop_outpatient_clinic <- get_prop_outpatient_clinic(current_state_per_date_summary)
     transition_summary <-lapply(1:length(transition_states),function(i){
         get_transition_summary(model,recovered_imputed,transition_states[i],transition_splitting_variable_names[i],max_splitting_mapping)
     }) %>% bind_rows() %>% arrange(splitting_variable,state,state_tomorrow)
@@ -260,7 +242,5 @@ get_tables_for_experiment <- function(id){
                 'current_state_per_date'=current_state_per_date,
                 'current_state_filtered'=current_state_filtered,
                 'current_state_from_start'=current_state_from_start,
-                'current_state_per_date_summary'=current_state_per_date_summary,
-                'first_state'=first_state,
-                'prop_outpatient_clinic'=prop_outpatient_clinic))
+                'first_state'=first_state))
 }

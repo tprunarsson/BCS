@@ -443,9 +443,17 @@ test_data_processing()
 
 ################# ----- Historical data ------ ###############
 historical_data <- group_by(patient_transitions,date,state) %>% summarise(count=n())
+historical_turnover <- get_historical_turnover()
+historical_state_sequences_base <- get_state_sequences(model='base',seq_type = 'finished')
+historical_state_sequences_extended <- get_state_sequences(model='extended',seq_type = 'finished')
+
 
 ################# ----- Predicted number of infections ------ ##############################
 infections_predicted_per_date <- get_infections_predicted_per_date(source='hi',prediction_date)
+
+################# ----- proportion of patients going to outpatient clinic ------ #################
+prop_outpatient_clinic <- get_prop_outpatient_clinic(historical_data)
+
 
 if(write_tables){
   write.table(historical_data, file = paste0(path_tables,current_date,'_historical_data.csv'), quote = F,row.names=F,sep=',')
@@ -455,7 +463,7 @@ if(write_tables){
 ################# ----- Transition summary and length of stay distribution for all experiments ------ ##############################
 run_info <- get_run_info(run_id) 
 
-if(write_tables){
+sif(write_tables){
   write.table(run_info, file = paste0(path_tables,current_date,'_',run_id,'_run_info.csv'), quote = F,row.names=F,sep='\t',col.names=F)
 }
 
@@ -468,8 +476,6 @@ for(id in run_info$experiment_id){
     write.table(experiment_table_list$current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$current_state_filtered,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$current_state_from_start,file=paste0(path_sensitive_tables,start_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
-    write.table(experiment_table_list$current_state_per_date_summary,file=paste0(path_tables,current_date,'_',id,'_current_state_per_date_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$first_state,file=paste0(path_sensitive_tables,current_date,'_',id,'_first_state.csv'),sep=',',row.names=F,quote=F)
-    write.table(experiment_table_list$prop_outpatient_clinic,file=paste0(path_outpatient_clinic,current_date,'_prop_outpatient_clinic','.csv'),sep=',',row.names=F,quote=F)
   }
 }

@@ -200,6 +200,78 @@ get_splitting_variable_mapping <- function(splitting_variable_name,max_splitting
   return(splitting_variable_mapping)
 }
 
+################# ----- Estimate proportion of infected going to outpatient clinic ---- #############
+get_prop_outpatient_clinic <- function(current_state_per_date_summary,window_size=7){
+  nr_at_home_per_day <- filter(current_state_per_date_summary,state=='home') %>% rename(nr_at_home=count)
+  outpatient_clinic_visits_per_day <- filter(hospital_visits,unit_category_all=='outpatient_clinic') %>%
+    select(patient_id,date_in) %>%
+    arrange(patient_id,date_in) %>%
+    group_by(.,date_in) %>%
+    summarize(nr_visits=n()) %>% ungroup() %>%
+    left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
+    mutate(prop_visits=nr_visits/nr_at_home)
+  
+  date_for_calculation <- current_date-window_size
+  prop_outpatient_clinic_per_window <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
+    summarize(prop_visits_per_window=sum(prop_visits)/window_size)
+  return(prop_outpatient_clinic_per_window)
+}
+
+get_historical_turnover <- function(){
+  transition_turnover <- select(patient_transitions,patient_id,date,state,state_tomorrow) %>%
+    filter(state!=state_tomorrow) %>%
+    pivot_longer(.,cols = c('state','state_tomorrow'),names_to = 'state_type',values_to = 'state') %>%
+    mutate(date=date+1) %>%
+    mutate(turnover_type=if_else(state_type=='state_tomorrow','state_in','state_out'))
+  
+  first_states <- select(patient_transitions,patient_id,date,state) %>%
+    group_by(.,patient_id) %>%
+    slice(which.min(date)) %>%
+    mutate(turnover_type='state_in') %>%
+    select(patient_id,date,turnover_type,state)
+  
+  historical_turnover <- bind_rows(transition_turnover,first_states) %>%
+    group_by(.,date,turnover_type,state) %>%
+    summarise(count=n())
+  return(historical_turnover)
+}
+
+get_state_sequences <- function(model,seq_type='finished'){
+  if(model=='extended'){
+    transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
+      select(.,patient_id,state_block_nr,state,state_next,censored)
+  }else{
+    transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+      summarize(state_next=state_next[which.max(state_with_severity_block_nr)],censored=censored[which.max(state_with_severity_block_nr)]) %>%
+      ungroup()
+  }
+  state_sequences <- group_by(transitions_state_blocks_summary,patient_id) %>%
+    filter(if(seq_type=='finished')!is.na(tail(state_next,1)) else if(seq_type=='active') is.na(tail(state_next,1)) else TRUE) %>%
+    summarise(path=paste0(paste(state,collapse=' -> '),if_else(!tail(censored,1),paste0(' -> ',tail(state_next,1)),''))) %>%
+    group_by(path) %>%
+    summarise(count=n()) %>%
+    arrange(desc(count))
+  return(state_sequences)
+}
+
+get_length_of_stay_empirical <- function(model){
+  if(model=='extended'){
+    transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
+      select(.,patient_id,state_with_severity_block_nr,state,censored,state_duration) %>%
+      rename(state_block_nr=state_with_severity_block_nr)
+  }else{
+    transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+      summarize(censored=censored[which.max(state_with_severity_block_nr)],state_duration=sum(state_duration)) %>%
+      ungroup()
+  }
+  length_of_stay_empirical <- group_by(transitions_state_blocks_summary,state,censored,state_duration) %>%
+    summarize(count=n()) %>%
+    arrange(state,censored) %>%
+    ungroup()
+  return(length_of_stay_empirical)
+}
+
+
 
 #analysis
 # theta_ward = fitlognormal(state_blocks_with_age, "inpatient_ward",max_num_days=21)

@@ -8,6 +8,7 @@ library(ggplot2)
 date_data_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 date_start_tmp <- as.Date('2020-03-02','%Y-%m-%d')
 run_id_tmp <- 1
+tracking_tmp <- FALSE
 
 option_list <-  list(
     make_option(c("-r", "--run_id"), type="integer", default=NULL, 
@@ -15,7 +16,9 @@ option_list <-  list(
     make_option(c("-d", "--date_data"), type="character", default=NULL, 
                 help="date of data", metavar="character"),
     make_option(c("-s", "--date_start"), type="character", default=NULL, 
-                help="start date of simulation", metavar="character")
+                help="start date of simulation", metavar="character"),
+    make_option(c("-t", "--tracking"), type="integer", default=NULL, 
+                help="should tracking info be read?", metavar="integer")
 )
 
 opt_parser <-  OptionParser(option_list=option_list)
@@ -41,6 +44,16 @@ if(is.null(opt[['date_start']])){
 }else{
     date_start <- as.Date(as.character(opt[['date_start']]),'%Y-%m-%d')
 }
+
+if(is.null(opt[['tracking']])){
+    tracking <- tracking_tmp
+    warning(paste0('You did not provide action regarding tracking. Tracking = ',tracking_tmp, ' will not be used'))
+}else if(opt[['tracking']]==0){
+    tracking <- tracking_tmp
+}else{
+    tracking <- TRUE
+}
+
 path_run_info <- paste0('../input/',date_data,'_',run_id,'_run_info.csv')
 run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','splitting_variable_name','splitting_variable_values','heuristic_string'))
 
@@ -51,9 +64,10 @@ historical_data <- read_csv(path_historical_data) %>% mutate(.,date=date-1,state
 
 plot_list=list()
 performance_data_list <- list()
+paths_data_list <- list()
+turnover_plot_list <- list()
 for(id in run_info$experiment_id){
     path_simulation_data <- paste0('../output/',date_start,'_',id,'_covid_simulation.csv')
-    
     simulation_all <- read_csv(file = path_simulation_data ) %>%
         mutate(.,date=as.Date(date_start+day)) %>%
         pivot_longer(.,-matches('date|day'),names_to='state',values_to ='count') %>%
@@ -79,6 +93,29 @@ for(id in run_info$experiment_id){
         ungroup() %>%
         mutate(experiment_id=id) %>%
         select(experiment_id,state,mse,days_from_peak,peak_diff)
+}
+if(tracking){
+    for(id in run_info$experiment_id){
+        path_to_tracking_data <- paste0('../output/',date_start,'_',id,'_tracking_info.csv')
+        tracking_info <- read_csv(path_to_tracking_data)
+        paths_data_list[[id]] <- group_by(tracking_info,person_id,sim_no) %>%
+            filter(transition!='state_current' & (transition != 'state_out' | (transition == 'state_out' & date==min(date[transition=='state_out'])))) %>%
+            filter(tail(state,1) %in% c('recovered','death')) %>%
+            summarise(path=paste(state,collapse=' -> ')) %>%
+            ungroup() %>%
+            mutate(experiment_id=id) %>%
+            select(experiment_id,person_id,sim_no,path)
+        turnover <- filter(tracking_info,transition!='state_current') %>%
+            group_by(sim_no,date,transition,state) %>%
+            summarise(count=n()) %>%
+            group_by(date,transition,state) %>%
+            summarise(median=median(count),lower=quantile(count,probs=0.025),upper=quantile(count,probs=0.975))%>%
+            ungroup() %>%
+            mutate(experiment_id=id) %>%
+            select(experiment_id,date,state,transition,median,lower,upper)
+        turnover_plot_list[[id]] <- ggplot(turnover,aes(date,median,fill=transition)) + geom_col(position='dodge') + facet_wrap(~state,scales='free')
+        
+    }
 }
 
 performance_data <- bind_rows(performance_data_list) %>% mutate(experiment_id=factor(experiment_id))
