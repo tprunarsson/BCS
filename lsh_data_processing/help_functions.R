@@ -38,29 +38,23 @@ get_splitting_variable_values_in_order <- function(splitting_variable_name){
   return(values)
 }
 
-
-get_splitting_variable <- function(dat,variable_name){
-  splitting_variable <- c()
-  if(variable_name=='age'){
-    if(!('age' %in% names(dat))){
-      stop("age must be a variable in dat")   
-    }
-    splitting_variable <- select(dat,age) %>% inner_join(age_groups,by='age') %>% mutate(age_group=paste0('age_',age_group)) %>% select(age_group) %>% unlist() %>% unname()
-  }else if(variable_name=='priority'){
-    if(!('priority' %in% names(dat))){
-      stop("priority must be a variable in dat")   
-    }
-    splitting_variable <- select(dat,priority) %>% mutate(priority=paste0('priority_',priority)) %>% unlist() %>% unname()
-  }else{
-    stop("splitting variable type not yet defined") 
-  }
-  splitting_variable_values_in_order <- get_splitting_variable_values_in_order(variable_name)
-  return(factor(splitting_variable,levels=splitting_variable_values_in_order,labels=splitting_variable_values_in_order))
-}
-
-impute_priority <- function(dat){
-  
-}
+# impute_priority <- function(priority,age,n_comorbidity){
+#   priority_out <- vector('character',length=length(priority)) 
+#   for(i in 1:length(priority)){
+#     if(is.na(priority[i])){
+#       if(age[i]>70){
+#         priority_out <- 'high'
+#       }else if(age[i]>50 & !is.na(n_comorbidity[i]))
+#         
+#     }else if(age[i]<50 & !is.na(n_comorbidity[i])){
+#         
+#       }
+#     }else{
+#       priority_out[i] <- priority[i]
+#     }
+# 
+#   }
+# }
 
 impute_severity <- function(state,severity_vec){
   output_vec <- vector('character',length = length(severity_vec))
@@ -128,49 +122,61 @@ get_state_worst <- function(state_vec,order_vec){
   return(state_worst_vec)
 }
 
-fit_lognormal <- function(x,x_c,max_num_days) {
+lognormal_objective_function <- function(x,x_c,max_num_days,theta){
   n <- length(x)+length(x_c)
-  objective_function <- function(theta){
-    L=sum(log(plnorm(x+0.5,theta[1],theta[2])-plnorm(x-0.5,theta[1],theta[2]))) + sum(log(plnorm(max_num_days+0.5,theta[1],theta[2])-plnorm(x_c,theta[1],theta[2])))-n*log(plnorm(max_num_days+0.5,theta[1],theta[2]))
-    return(-L)
+  L=sum(log(plnorm(x+0.5,theta[1],theta[2])-plnorm(x-0.5,theta[1],theta[2]))) + sum(log(plnorm(max_num_days+0.5,theta[1],theta[2])-plnorm(x_c,theta[1],theta[2])))-n*log(plnorm(max_num_days+0.5,theta[1],theta[2]))
+  return(-L)
+}
+beta_objective_function <- function(x,x_c,max_num_days,theta){
+  L=sum(log(pbeta(x/max_num_days,theta[1],theta[2])-pbeta((x-1)/max_num_days,theta[1],theta[2]))) + sum(log(1-pbeta((x_c-0.5)/max_num_days,theta[1],theta[2])))
+  return(-L)
+}
+
+fit_distr <- function(x,x_c,max_num_days,distr){
+  if(distr=='lognormal'){
+    theta_init <- c(1,1)
+    theta_start=c(0.5,0)
+    objective_function=function(theta) lognormal_objective_function(x=x,x_c=x_c,max_num_days = max_num_days,theta)
+  }else if(distr=='beta'){
+    theta_init <- c(1,3.5)
+    theta_lower <- c(0,0)
+    objective_function=function(theta) beta_objective_function(x=x,x_c=x_c,max_num_days = max_num_days,theta)
+  }else{
+    stop('distribution not yet supported')
   }
-  theta_init <- c(1,1)
-  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = theta_init)$par
+  theta_lower <- get_theta_lower(obj_fun=objective_function,theta_start=theta_start)
+  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = theta_lower)$par
   return(theta)
 }
 
+get_theta_lower <- function(obj_fun,theta_start=c(0.5,0)){
+  test_vals <- theta_start[2] + seq(0,1,by=0.01)
+  lower_test <- vector('numeric',length=length(test_vals))
+  for(i in 1:length(test_vals)){
+    lower_test[i] <- obj_fun(c(theta_start[1],test_vals[i]))
+  }
+  first_finite_lower <- test_vals[is.finite(lower_test)][which.max(lower_test)]
+  theta_lower <- c(theta_start[1],first_finite_lower)
+  return(theta_lower)
+}
 
-sample_from_lognormal <- function(x,x_c,max_num_days,nr_samples=1e6){
-  theta_s = fit_lognormal(x,x_c,max_num_days=max_num_days_inpatient_ward)
-  length_of_stay_samples <- rlnorm(nr_samples,theta_s[1],theta_s[2]) %>%
-                            round() %>%
+
+sample_from_distr <- function(x,x_c,max_num_days,distr,nr_samples=1e6){
+  if(!(distr %in% c('lognormal','beta'))){
+    stop('Distribution not yet supported')
+  }
+  theta_s = fit_distr(x,x_c,max_num_days,distr)
+  if(distr=='lognormal'){
+    samples <- rlnorm(nr_samples,theta_s[1],theta_s[2])
+  }else if(distr=='beta'){
+    samples <- max_num_days*(rbeta(nr_samples,theta_s[1],theta_s[2])+0.5)
+  }
+  length_of_stay_samples <- round(samples) %>%
                             table() %>%
                             as.numeric() %>%
                             tibble(state_duration=0:(length(.)-1),count=.) %>%
                             filter(state_duration>0 & state_duration<=max_num_days) %>%
                             select(state_duration,count)
-  return(length_of_stay_samples)
-}
-
-fit_beta <- function(x,x_c,max_num_days) {
-  objective_function <- function(theta){
-    L=sum(log(pbeta(x/max_num_days,theta[1],theta[2])-pbeta((x-1)/max_num_days,theta[1],theta[2]))) + sum(log(1-pbeta((x_c-0.5)/max_num_days,theta[1],theta[2])))
-    return(-L)
-  }
-  theta_init <- c(1,3.5)
-  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = c(0,0))$par
-  return(theta)
-}
-
-sample_from_beta <- function(x,x_c,max_num_days,nr_samples=1e6){
-  theta_s = fit_beta(x,x_c,max_num_days=max_num_days)
-  length_of_stay_samples <- (max_num_days*(rbeta(nr_samples,theta_s[1],theta_s[2])+0.5)) %>%
-                              round() %>%
-                              table() %>%
-                              as.numeric() %>%
-                              tibble(state_duration=0:(length(.)-1),count=.) %>%
-                              filter(state_duration>0 & state_duration<=max_num_days)%>%
-                              select(state_duration,count)
   return(length_of_stay_samples)
 }
 

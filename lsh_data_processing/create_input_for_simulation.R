@@ -41,13 +41,26 @@ get_first_state <- function(model,max_splitting_dat){
     }else{
         transitions <- patient_transitions
     }
+    active_states <- factor(get_states_in_order(model,active=T))
+    max_splitting_values <- filter(max_splitting_dat,!duplicated(max_splitting_values)) %>%
+                            arrange(max_splitting_order) %>%
+                            select(max_splitting_values) %>%
+                            unlist() %>%
+                            unname() %>%
+                            factor(.,levels=.,labels=.)
+    first_state_expanded<- expand_grid(initial_state=active_states,splitting_variable=max_splitting_values)
+    
     first_state <- group_by(transitions,patient_id) %>%
     summarize(date_diagnosis=min(date),initial_state=state[which.min(date)]) %>%
     ungroup() %>%
     inner_join(.,select(max_splitting_dat,patient_id,max_splitting_values) %>% rename(splitting_variable=max_splitting_values),by='patient_id') %>%
     select(-matches('severity'),-matches('state_block_nr')) %>%
-    select(patient_id,splitting_variable,date_diagnosis,initial_state)
-    
+    mutate(initial_state=factor(initial_state,levels=active_states),
+           splitting_variable=factor(splitting_variable,levels=max_splitting_values)) %>%
+    group_by(initial_state,splitting_variable) %>%
+    summarize(count=n()) %>%
+    right_join(.,first_state_expanded,by=c('initial_state','splitting_variable')) %>%
+    mutate(count=if_else(is.na(count),0,as.numeric(count)))
     return(first_state)
 }
 
@@ -95,7 +108,7 @@ get_transition_summary <- function(model,recovered_imputed,s,splitting_variable_
 }
 
 ################# ----- Statistical inference of length of stay distributions ---- #############
-get_length_of_stay_predicted <- function(model,s,splitting_variable_name,max_splitting_mapping,distr='lognormal',max_num_days=28){
+get_length_of_stay_predicted <- function(model,s,splitting_variable_name,max_splitting_mapping,distr='lognormal',max_num_days=35){
     if(model=='extended'){
         transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
             select(.,patient_id,state_block_nr,state,censored,state_duration)
@@ -137,12 +150,8 @@ get_length_of_stay_predicted <- function(model,s,splitting_variable_name,max_spl
                                         x_c <- filter(state_blocks_with_splitting_variable,splitting_variable==splitting_variable_values[j] & censored) %>% select(state_duration) %>% unlist() %>% unname()
                                         not_to_be_split <- filter(splitting_variable_mapping,splitting_variable==splitting_variable_values[j]) %>% select(.,max_splitting_values) %>% unlist() %>% unname()  
                                         length_of_stay_expanded <- expand_grid(state=state_values,splitting_variable=not_to_be_split,state_duration=1:max_num_days)
-                                        if(distr=='beta'){
-                                            samples <- sample_from_beta(x,x_c,max_num_days)
-                                        }else{
-                                            samples <- sample_from_lognormal(x,x_c,max_num_days)
-                                        }
-                                        length_of_stay_splitting_variable <- inner_join(length_of_stay_expanded,samples,by=c('state_duration'))
+                                        length_of_stay_samples <- sample_from_distr(x,x_c,max_num_days,distr)
+                                        length_of_stay_splitting_variable <- inner_join(length_of_stay_expanded,length_of_stay_samples,by=c('state_duration'))
                                         return(length_of_stay_splitting_variable)
                                     }) %>% bind_rows()
     }
@@ -233,7 +242,7 @@ get_tables_for_experiment <- function(id){
         get_transition_summary(model,recovered_imputed,transition_states[i],transition_splitting_variable_names[i],max_splitting_mapping)
     }) %>% bind_rows() %>% arrange(splitting_variable,state,state_tomorrow)
     length_of_stay <-lapply(1:length(length_of_stay_states),function(i){
-        get_length_of_stay_predicted(model,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 28)
+        get_length_of_stay_predicted(model,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 35)
     }) %>% bind_rows() %>% arrange(state,splitting_variable)
     
     
