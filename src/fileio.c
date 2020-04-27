@@ -16,10 +16,12 @@ extern FILE *outfile;
 
 extern char *szSplittingVariable[MAX_NUM_SPLITTING_VALUES];
 extern char *szStateVariable[MAX_NUM_STATES];
+extern char *szAllDates[MAX_SIM_TIME][32];
 
 extern person iPerson[MAXINFECTED];
-extern person fPerson[MAXINFECTED];
+extern person sPerson[MAXINFECTED];
 extern int numInfected;
+extern int numScenarioInfected;
 
 /* for a workaround with the .csv files, get rid of the commas! */
 int get_index(char* string, char c) {
@@ -89,6 +91,16 @@ int get_person_index(int person_id) {
   return i;
 }
 
+int get_scenario_person_index(int person_id) {
+  int i;
+  for (i = 0; i < numScenarioInfected; i++) {
+    if (sPerson[i].person_id == person_id) {
+      return i;
+    }
+  }
+  return i;
+}
+
 int is_date_before(char *date_str, int comp_year, int comp_month, int comp_day)
 {
     int before=0;
@@ -136,13 +148,13 @@ int readScenarioData(char *fname, char *szDate, int max_sim_time) {
 
     for (person_index = 0; person_index < MAXINFECTED; person_index++) {
     for (day = 0; day < max_sim_time; day++) {
-      fPerson[person_index].person_id = 0;
-      fPerson[person_index].splitting = 0;  
-      fPerson[person_index].real_state[day] = -1;
-      fPerson[person_index].real_state_worst[day] = -1;
-      fPerson[person_index].real_days_in_state[day] = -1;
-      fPerson[person_index].real_days_from_diagnosis[day] = 0;
-      fPerson[person_index].first_state_indicator[day] = 0;
+      sPerson[person_index].person_id = 0;
+      sPerson[person_index].splitting = 0;
+      sPerson[person_index].real_state[day] = -1;
+      sPerson[person_index].real_state_worst[day] = -1;
+      sPerson[person_index].real_days_in_state[day] = -1;
+      sPerson[person_index].real_days_from_diagnosis[day] = 0;
+      sPerson[person_index].first_state_indicator[day] = 0;
     }
   }
   sscanf(szDate,"%d-%d-%d", &y, &m, &d);
@@ -158,29 +170,23 @@ int readScenarioData(char *fname, char *szDate, int max_sim_time) {
       printf("fatal: scenario data file %s corrupt (1)\n", fname);
       exit(1);
     } /* remove the header! */
-    if (3 != clear_symbol(buffer,',')) {
+    if (COLS_FILE_SCENARIOS != clear_symbol(buffer,',')) {
       printf("fatal: scenario data file %s corrupt (2)\n", fname);
       exit(1);
     }
     while (NULL != fgets(buffer, 8192, fid)) {
-      token = strtok(buffer, ",");
-      sscanf(token, "%s", sztmp);
-      if (0 == strcmp(sztmp, sztmpdate)) {
-        token = strtok(NULL, ",");
-        sscanf(token, "%s", szstate);
-        state = get_state(szstate);
-        token = strtok(NULL, ",");
-        sscanf(token, "%s", szsplitting);
-        splitting = get_splitting_variable(szsplitting);
-        token = strtok(NULL, ",");
-        sscanf(token, "%d", &number);
+			clear_symbol(buffer,',');
+			sscanf(buffer, "%s %s %s %d", sztmp, szstate, szsplitting, &number);
+			if (0 == strcmp(sztmp, sztmpdate)) {
+				state = get_state(szstate);
+				splitting = get_splitting_variable(szsplitting);
         for (i = 0; i < number; i++, fake_person_index++) {
-          fPerson[fake_person_index].person_id = fake_person_index;
-          fPerson[fake_person_index].first_state_indicator[day] = 1;
-          fPerson[fake_person_index].real_state[day] = state;
-          fPerson[fake_person_index].splitting = splitting;
-          strcpy(fPerson[fake_person_index].szDate, sztmpdate);
-          fPerson[fake_person_index].start_day = day;
+          sPerson[fake_person_index].person_id = FIRST_ADDITIONAL_PERSON_ID - fake_person_index;	// Increment negative numbers
+          sPerson[fake_person_index].first_state_indicator[day] = 1;
+          sPerson[fake_person_index].real_state[day] = state;
+          sPerson[fake_person_index].splitting = splitting;
+          strcpy(sPerson[fake_person_index].szDate, sztmpdate);
+          sPerson[fake_person_index].start_day = day;
         }
       }
     }
@@ -196,9 +202,8 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
   FILE *fid;
   char sztmp[64], sztmpdate[32], szsplitting[32], szstate[128], szworststate[128];
   char buffer[8192];
-  int day, days_found, date_found = 0, state;
-  char *token;
-  int person_index, person_id, splitting, days_in_state, days_from_diagnosis;
+  int day, days_found, date_found = 0;
+  int person_index, person_id, days_in_state, days_from_diagnosis;
   int y, m, d;
   struct tm  t = { 0 };
 
@@ -239,25 +244,19 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
       exit(1);
     }
     date_found = 0;
-    while (NULL != fgets(buffer, 8192, fid)) {
-      token = strtok(buffer, ",");
-      sscanf(token, "%d", &person_id);
-      token = strtok(NULL, ",");
-      sscanf(token, "%s", sztmp);
-      if (0 == strcmp(sztmp, sztmpdate)) {
-        date_found = 1;
+		
+		while (NULL != fgets(buffer, 8192, fid)) {
+			clear_symbol(buffer,',');
+			sscanf(buffer, "%d %s %s %s %d %d %s", &person_id, sztmp, szsplitting, szstate, &days_in_state, &days_from_diagnosis, szworststate);
+			if (0 == strcmp(sztmp, sztmpdate)) {
+				date_found = 1;
         person_index = get_person_index(person_id);
         iPerson[person_index].person_id = person_id;
-       
-       // printf("historical data read for person_index=%d, with id=%d\n", person_index, person_id);
-        token = strtok(NULL, ",");
-        sscanf(token, "%s", szsplitting);
-        splitting = get_splitting_variable(szsplitting);
-        iPerson[person_index].splitting = splitting;
-        token = strtok(NULL, ",");
-        sscanf(token, "%s", szstate);
-        state = get_state(szstate);
-        iPerson[person_index].real_state[day] = state;
+				strcpy(iPerson[person_index].szDate, sztmpdate);
+				// printf("historical data read for person_index=%d, with id=%d\n", person_index, person_id);
+				iPerson[person_index].splitting = get_splitting_variable(szsplitting);
+				iPerson[person_index].real_state[day] = get_state(szstate);;
+     
         if ((day == 0) && (iPerson[person_index].real_state[day] != -1)) {
           iPerson[person_index].first_state_indicator[day] = 1;
         }
@@ -267,15 +266,9 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
         }
         else
           iPerson[person_index].first_state_indicator[day] = 0;
-        strcpy(iPerson[person_index].szDate, sztmpdate);
-        token = strtok(NULL, ",");
-        sscanf(token, "%d", &days_in_state);
+        
         iPerson[person_index].real_days_in_state[day] = days_in_state;
-        token = strtok(NULL, ",");
-        sscanf(token, "%d", &days_from_diagnosis);
         iPerson[person_index].real_days_from_diagnosis[day] = days_from_diagnosis;
-        token = strtok(NULL, ",");
-        sscanf(token, "%s", szworststate);
         iPerson[person_index].real_state_worst[day] = get_state(szworststate);
         iPerson[person_index].start_day = day;
       }

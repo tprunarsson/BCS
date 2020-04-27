@@ -54,6 +54,20 @@ void write_tracking_info(char *file_name){
 	fclose(fp);
 }
 
+size_t get_next_day(char *date_next_day, size_t max_size, char *date_day){
+	struct tm  t = { 0 };
+	int y,m,d;
+	
+	sscanf(date_day,"%d-%d-%d", &y, &m, &d);
+ 
+	t.tm_mday = d+1;
+	t.tm_mon = m - 1;
+	t.tm_year = y - 1900;
+	mktime(&t);
+	
+	return strftime(date_next_day, max_size, "%Y-%m-%d", &t);
+}
+
 /* function for displaying the progress of the simulation */
 void printProgress (double percentage) {
   char PBSTR[60] = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
