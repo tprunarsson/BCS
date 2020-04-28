@@ -242,7 +242,7 @@ get_tables_for_experiment <- function(id){
         get_transition_summary(model,recovered_imputed,transition_states[i],transition_splitting_variable_names[i],max_splitting_mapping)
     }) %>% bind_rows() %>% arrange(splitting_variable,state,state_tomorrow)
     length_of_stay <-lapply(1:length(length_of_stay_states),function(i){
-        get_length_of_stay_predicted(model,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 35)
+        get_length_of_stay_predicted(model,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 28)
     }) %>% bind_rows() %>% arrange(state,splitting_variable)
     
     
