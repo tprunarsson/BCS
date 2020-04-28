@@ -53,20 +53,20 @@
 
 #define NUM_HEURISTICS                  3
 
-#define COLS_FILE_FIRST_STATE                   4
+#define COLS_FILE_FIRST_STATE                   3
 #define COLS_FILE_CURRENT_STATE                 6
 #define COLS_FILE_CURRENT_STATE_PER_DATE        7
 #define COLS_FILE_LOS                           4
 #define COLS_FILE_TRANSITIONS                   4
-#define COLS_FILE_SCENARIOS											3
+#define COLS_FILE_SCENARIOS											2
 
 #define STATE_CURRENT										"state_current"
 #define STATE_FIRST											"state_first"
 #define STATE_IN												"state_in"
 #define STATE_OUT												"state_out"
 
-#define FIRST_PREDICTED_PERSON_ID								-1
-#define FIRST_ADDITIONAL_PERSON_ID							-100001
+#define FIRST_FORECAST_PERSON_ID								-1
+#define FIRST_SCENARIO_PERSON_ID								-100001
 
 
 typedef struct {

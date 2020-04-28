@@ -9,4 +9,5 @@ int readTransitionCDF(char *fname);
 int readHistoricalData(char *fname, char *szDate, int max_sim_time);
 int readHistoricalArrival(char *fname, char *szDate, int day);
 int get_person_index(int person_id);
+int readScenarioFirstCDF(char *fname);
 int readScenarioData(char *fname, char *szDate, int max_sim_time);

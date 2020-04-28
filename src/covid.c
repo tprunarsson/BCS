@@ -36,16 +36,14 @@ person sPerson[MAXINFECTED];	// Infected in scenario
 int numInfected = 0;
 int numScenarioInfected = 0;
 
-/* The following is the transition probability matrix from one
-   location/state to the next, length of stay for different agegroups
-   and location, and location/state on first arrival for different age
-   groups. */
-double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
-double losCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS];
+/* CDFs */
+double posteriorCDF[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 double firstSplittingCDF[MAX_NUM_SPLITTING_VALUES];
 double firstStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
-double CDFposterior[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
-int historicalData[MAXINFECTED][MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
+double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
+double losCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS];
+double firstScenarioSplittingCDF[MAX_NUM_SPLITTING_VALUES];
+double firstScenarioStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 
 /* count statistics for analysing the dynamics of the model */
 double countStats[MAX_SIM_TIME+1][MAX_NUM_STATES];
@@ -59,7 +57,8 @@ char szAllDates[MAX_SIM_TIME][32];
 int numRecovered;
 int numDeath;
 int repeat;
-int PatientId; /* used for trace */
+int forecastPersonId;
+int scenarioPersonId;
 int numHistoryDays;
 
 FILE *outfile; /* global file pointers for report writing */
@@ -298,7 +297,7 @@ void arrive(int n) {
     first_state = discrete_empirical(firstStateCDF[splitting], MAX_NUM_STATES, STREAM_FIRST_STATE);
     new_state = whereToNext(splitting, first_state, 0, first_state); /* fresh arrival */
     length_of_stay = lengthOfStay(splitting, first_state, 0, new_state);
-    transfer[ATTR_PERSON] = (double)PatientId--; /* dummy ID for prediced patients IDs */
+    transfer[ATTR_PERSON] = (double)forecastPersonId--; /* dummy ID for forecasted persons IDs */
     transfer[ATTR_SPLITTING] = (double)splitting;
     transfer[ATTR_DAYSDIAGNOSIS] += length_of_stay;
     transfer[ATTR_DAYSINSTATE] = length_of_stay;
@@ -316,7 +315,7 @@ void arrive(int n) {
     event_schedule(departure_day, EVENT_DEPARTURE);
 		
 	#ifdef TRACK_PERSON
-		track_person(PatientId,repeat,STATE_FIRST,(int)floor(sim_time),first_state);
+		track_person(forecastPersonId,repeat,STATE_FIRST,(int)floor(sim_time),first_state);
 	#endif
   }
 }
@@ -366,6 +365,7 @@ void real_arrive(int day) {
       
 /*
   The scenario arrive function is used to generate new individuals arriving at sim_time.
+	RJS Can be simplified and perhaps combined with arrive with parameters (num arrivals and type (forecast or scenario or real)
   */
 void scenario_arrive(int day) {
 
@@ -375,9 +375,9 @@ void scenario_arrive(int day) {
 
   for (i = 0; i < numScenarioInfected; i++) {
     if (sPerson[i].first_state_indicator[day] == 1) {
-      transfer[ATTR_PERSON] = (double)sPerson[i].person_id;
-      splitting = sPerson[i].splitting;
-      first_state = sPerson[i].real_state[day];
+      transfer[ATTR_PERSON] = (double)scenarioPersonId--;
+      splitting = discrete_empirical(firstScenarioSplittingCDF,MAX_NUM_SPLITTING_VALUES,STREAM_SPLITTING);
+			first_state = discrete_empirical(firstScenarioStateCDF[splitting], MAX_NUM_STATES, STREAM_FIRST_STATE);
       new_state = whereToNext(splitting, first_state, 0, first_state); // fresh arrival
       length_of_stay = lengthOfStay(splitting, first_state, 0, new_state);
       transfer[ATTR_SPLITTING] = (double)splitting;
@@ -390,7 +390,7 @@ void scenario_arrive(int day) {
       transfer[ATTR_DEPARTDAY] = departure_day;
       #ifdef TRACE
       if (repeat == 1)
-        printf("trace[%d]: ScenarioPerson-%d is entering for %s on day %.2g (worst state is %s, days_from_diagnosis = %.2g)\n", repeat, (int)transfer[ATTR_PERSON], szStateVariable[location], sim_time, szStateVariable[location], transfer[ATTR_DAYSDIAG]);
+        printf("trace[%d]: ScenarioPerson-%d is entering for %s on day %.2g (worst state is %s, days_from_diagnosis = %.2g)\n", repeat, (int)transfer[ATTR_PERSON], szStateVariable[first_state], sim_time, szStateVariable[first_state], transfer[ATTR_DAYSDIAG]);
       #endif
       #ifdef STATS
       setSimulationLocation(sPerson[i].person_id, (int)floor(sim_time), length_of_stay, first_state);
@@ -590,17 +590,18 @@ int main(int argc, char *argv[]) {
   readLosP(fname);
 
   /* load first location for new persons arrivals */
-  sprintf(fname, "%s%s_%s_first_state.csv", path_lsh_data, date_data,experiment_id);
+  sprintf(fname, "%s%s_%s_first_state.csv", path_input, date_data,experiment_id);
   readFirstCDF(fname);
 
   /* load posterior predicted values on current date and day number */
   sprintf(fname, "%s%s_infections_predicted.csv", path_input, date_data);
-  fprintf(outfile,"CDFposterior[%s] = \n", date_data);
+  fprintf(outfile,"posteriorCDF[%s] = \n", date_data);
+	// RJS Move to readHIPosterior
   for (i = 0; i < MAX_SIM_TIME; i++) {
-    n = readHIposteriors(fname, date_data, i, CDFposterior[i]);
+    n = readHIposteriors(fname, date_data, i, posteriorCDF[i]);
     fprintf(outfile,"Day-%d", i);
     for (j = 0; j < n; j++)
-      fprintf(outfile,",%.4g", CDFposterior[i][j]);
+      fprintf(outfile,",%.4g", posteriorCDF[i][j]);
     fprintf(outfile, "\n");
   }
 
@@ -626,12 +627,15 @@ int main(int argc, char *argv[]) {
 	
 /* load data about scenarios */
 	if (use_scenario_data==1){
-			sprintf(fname, "%s%s_%s_scenario_infected.csv", path_input, date_data, experiment_id);
-			numScenarioInfected = readScenarioData(fname, date_start, max_sim_time);
-			if (numScenarioInfected > 0) {
-					fprintf(outfile, "available scenarios for simulation from date %s is %d, taken from file %s\n", date_start, numScenarioInfected, fname);
-					//printPersons(sPerson, availScenarios);
-			}
+		scenarioPersonId=FIRST_SCENARIO_PERSON_ID;
+		sprintf(fname, "%s%s_%s_scenario_first_state.csv", path_input, date_data, experiment_id);
+		readScenarioFirstCDF(fname);
+		sprintf(fname, "%s%s_%s_scenario_infected.csv", path_input, date_data, experiment_id);
+		numScenarioInfected = readScenarioData(fname, date_start, max_sim_time);
+		if (numScenarioInfected > 0) {
+				fprintf(outfile, "available scenarios for simulation from date %s is %d, taken from file %s\n", date_start, numScenarioInfected, fname);
+				//printPersons(sPerson, availScenarios);
+		}
   }
 
   /* Read the transition probability matrix */
@@ -655,7 +659,7 @@ int main(int argc, char *argv[]) {
     event_schedule(sim_time + 0.25, EVENT_ARRIVAL); /* schedule also new arrivals */
     event_schedule(sim_time + 0.75, EVENT_PRINT_STATS);
     numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
-    PatientId = FIRST_PREDICTED_PERSON_ID; /* reset unkown patients counter */
+    forecastPersonId = FIRST_FORECAST_PERSON_ID; /* reset unkown patients counter */
     #ifdef STATS
     clearSimStatsLocation(max_sim_time);
     #endif
@@ -687,7 +691,7 @@ int main(int argc, char *argv[]) {
         case EVENT_ARRIVAL:
           if (sim_time >= numHistoryDays) {
             //printf("we should not new here?!\n");
-            i = discrete_empirical(CDFposterior[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_FORECAST);
+            i = discrete_empirical(posteriorCDF[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_FORECAST);
             arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
             scenario_arrive((int)floor(sim_time));
             #ifdef TRACE

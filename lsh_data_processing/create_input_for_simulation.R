@@ -241,6 +241,7 @@ get_tables_for_experiment <- function(id){
     length_of_stay <-lapply(1:length(length_of_stay_states),function(i){
         get_length_of_stay_predicted(model,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 35)
     }) %>% bind_rows() %>% arrange(state,splitting_variable)# %>% get_cdf(.,num_groups = 2)
+
     
     
     return(list('length_of_stay'=length_of_stay,
