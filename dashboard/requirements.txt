@@ -1,0 +1,10 @@
+flexdashboard
+shiny
+plotly
+ggplot2
+stringr
+dplyr
+readr
+tidyr
+RCurl
+stringr
