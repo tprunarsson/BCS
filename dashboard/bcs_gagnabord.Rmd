@@ -26,7 +26,7 @@ bcs_data$data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
 
 # Set constants
 start_date <- min(bcs_data$data_length_of_stay$date) # as.Date('2020-04-02')
-end_date <- Sys.Date()
+end_date <- max(bcs_data$data_all_simulation$date)
 gagnagerdir <- unique(bcs_data$data_length_of_stay$censored)
 aldurshopar <- unique(bcs_data$data_length_of_stay$age_group_simple) #list('0-50', '51+')
 states <- unique(bcs_data$data_length_of_stay$state)
@@ -43,7 +43,7 @@ Stillingar {.sidebar}
 helpText('Veljið dagsetningu til að birta skýrslu fyrir')
 sliderInput('dagsetning_sk', 'Dagsetning:', 
             min = start_date, max = max(bcs_data$data_all_simulation$date),
-            value = max(bcs_data$data_all_simulation$date), step = 1, timeFormat = "%d %b")
+            value = end_date, step = 1, timeFormat = "%d %b")
 actionButton('saekja_gogn', label = 'Sækja ný gögn')
 observeEvent(input$saekja_gogn, {
   msg <- get_and_save_new_data(bcs_data)
