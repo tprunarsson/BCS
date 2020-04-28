@@ -168,8 +168,8 @@ get_infections_predicted_per_date <- function(source,date_prediction){
                         summarise(count=n()) %>%
                         ungroup() %>%
                         right_join(hi_mat_CDF_expanded,by=c('date','new_cases')) %>%
-                        mutate(count=if_else(is.na(count),0,as.numeric(count))) %>%
-                        get_cdf(.,num_groups=1)
+                        mutate(count=if_else(is.na(count),0,as.numeric(count)))# %>%
+                        #get_cdf(.,num_groups=1)
         return(hi_mat_CDF)
     }
     return()
