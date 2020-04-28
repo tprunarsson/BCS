@@ -163,16 +163,13 @@ get_length_of_stay_predicted <- function(model,s,splitting_variable_name,max_spl
 get_infections_predicted_per_date <- function(source,date_prediction){
     if(source=='hi'){
         hi_posterior_predictive_distr <- read_csv(paste0('https://raw.githubusercontent.com/bgautijonsson/covid19/master/Output/Iceland_Posterior/Iceland_Posterior_',date_prediction,'.csv'))
-        dates <- unique(hi_posterior_predictive_distr$date)
-        max_new_cases = max(hi_posterior_predictive_distr$new_cases)
-        #note plus 1 to include the possibility of 0 new cases 
-        hi_mat_CDF <- matrix(rep(0,length(dates)*(max_new_cases+1)), nrow = length(dates), ncol=(max_new_cases+1))
-        rownames(hi_mat_CDF) <- as.character(dates)
-        colnames(hi_mat_CDF) <- c(0:max_new_cases)
-        for (i in 1:length(dates)) {
-            new_cases <- table(filter(hi_posterior_predictive_distr,date==dates[i])$new_cases)
-            hi_mat_CDF[i,names(new_cases)] = cumsum(new_cases)/sum(new_cases)
-        }
+        hi_mat_CDF_expanded <- expand_grid(date=unique(hi_posterior_predictive_distr$date),new_cases=0:max(hi_posterior_predictive_distr$new_cases))
+        hi_mat_CDF <- group_by(hi_posterior_predictive_distr,date,new_cases) %>%
+                        summarise(count=n()) %>%
+                        ungroup() %>%
+                        right_join(hi_mat_CDF_expanded,by=c('date','new_cases')) %>%
+                        mutate(count=if_else(is.na(count),0,as.numeric(count))) %>%
+                        get_cdf(.,num_groups=1)
         return(hi_mat_CDF)
     }
     return()
@@ -237,13 +234,14 @@ get_tables_for_experiment <- function(id){
     recovered_imputed <- anti_join(select(current_state,patient_id,state),select(current_state_filtered,patient_id),by='patient_id') %>%
                                     mutate(date=current_date,state_tomorrow='recovered') %>%
                                     select(.,patient_id,date,state,state_tomorrow)
-    first_state <- get_first_state(model,max_splitting_dat) 
+    first_state <- get_first_state(model,max_splitting_dat)# %>% get_cdf(.,num_groups = 1)
     transition_summary <-lapply(1:length(transition_states),function(i){
         get_transition_summary(model,recovered_imputed,transition_states[i],transition_splitting_variable_names[i],max_splitting_mapping)
-    }) %>% bind_rows() %>% arrange(splitting_variable,state,state_tomorrow)
+    }) %>% bind_rows() %>% arrange(splitting_variable,state,state_tomorrow)# %>% get_cdf(.,num_groups = 2)
     length_of_stay <-lapply(1:length(length_of_stay_states),function(i){
-        get_length_of_stay_predicted(model,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 28)
-    }) %>% bind_rows() %>% arrange(state,splitting_variable)
+        get_length_of_stay_predicted(model,length_of_stay_states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 35)
+    }) %>% bind_rows() %>% arrange(state,splitting_variable)# %>% get_cdf(.,num_groups = 2)
+
     
     
     return(list('length_of_stay'=length_of_stay,
