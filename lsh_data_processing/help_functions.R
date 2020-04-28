@@ -277,6 +277,12 @@ get_length_of_stay_empirical <- function(model){
   return(length_of_stay_empirical)
 }
 
+get_cdf <- function(dat,num_groups){
+  group_by_at(dat,1:num_groups) %>%
+    mutate_at(vars(matches(names(dat)[num_groups+2])),~cumsum(.)/sum(.)) %>%
+    rename(cdf=!!names(dat)[num_groups+2])
+}
+
 
 
 #analysis

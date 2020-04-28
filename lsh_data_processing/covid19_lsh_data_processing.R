@@ -482,7 +482,7 @@ if(write_tables){
 
 for(id in run_info$experiment_id){
   experiment_table_list <- get_tables_for_experiment(id)
-  #test_tables_for_experiment()
+  tables_to_convert_to_cdf <- c('transition_summary','length_of_stay','first_state')
   if(write_tables){
     write.table(experiment_table_list$transition_summary,file=paste0(path_tables,current_date,'_',id,'_transition_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
     write.table(experiment_table_list$length_of_stay,file=paste0(path_tables,current_date,'_',id,'_length_of_stay.csv'),sep=',',row.names=F,quote=F)
