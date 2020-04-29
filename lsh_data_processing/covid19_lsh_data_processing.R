@@ -11,7 +11,7 @@ source('help_functions.R')
 
 start_date_tmp <- as.Date('2020-03-02','%Y-%m-%d')
 current_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
-prediction_date_tmp <- as.Date('2020-04-14','%Y-%m-%d')
+prediction_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
 write_tables_tmp <- TRUE
@@ -470,7 +470,7 @@ if(write_tables){
   write.table(historical_data, file = paste0(path_tables,current_date,'_historical_data.csv'), quote = F,row.names=F,sep=',')
   write.table(historical_turnover, file = paste0(path_tables,current_date,'_historical_turnover.csv'), quote = F,row.names=F,sep=',')
   write.table(prop_outpatient_clinic, file=paste0(path_outpatient_clinic,current_date,'_prop_outpatient_clinic.csv'), quote = F,row.names=F,sep=',')
-  write.csv(infections_predicted_per_date, file = paste0(path_tables,current_date,'_infections_predicted.csv'), quote = F)
+  write.table(infections_predicted_per_date, file = paste0(path_tables,current_date,'_infections_predicted.csv'), quote = F,row.names=F,sep=',')
 }
 
 ################# ----- Transition summary and length of stay distribution for all experiments ------ ##############################
