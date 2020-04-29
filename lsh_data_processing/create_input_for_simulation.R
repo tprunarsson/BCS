@@ -107,6 +107,60 @@ get_transition_summary <- function(model,recovered_imputed,s,splitting_variable_
     return(transition_summary_state)
 }
 
+################# ----- Transition counts between states ---- #############
+get_transition_summary <- function(model,recovered_imputed,s,splitting_variable_name,max_splitting_mapping){
+    if(model=='extended'){
+        transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,
+                                                   state=paste0(state,'-',severity),
+                                                   state_next=case_when(is.na(state_next) & is.na(severity_next) ~ NA_character_,
+                                                                        !is.na(state_next) & is.na(severity_next) ~ state_next,
+                                                                        TRUE ~ paste0(state_next,'-',severity_next))
+                                                                        ) %>%
+                                                    filter(.,!censored) %>%
+                                                    select(.,patient_id,state_block_nr,state,state_next,state_duration)
+                                            
+    }else{
+        transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+                                            summarize(.,state_next=state_next[which.max(state_with_severity_block_nr)],
+                                                      censored=censored[which.max(state_with_severity_block_nr)],
+                                                      state_duration=sum(state_duration)) %>%
+                                            filter(.,!censored) %>%
+                                            select(.,patient_id,state_block_nr,state,state_next,state_duration) %>%
+                                            ungroup()
+    }
+    all_states <- get_states_in_order(model,active=F)
+    all_active_states <- get_states_in_order(model,active=T)
+    if(splitting_variable_name %in% names(individs_splitting_variables)){
+        transitions_with_splitting_variable <- filter(transitions,grepl(s,state)) %>%
+            inner_join(.,select(individs_splitting_variables,patient_id,matches(splitting_variable_name),-matches('order')),by='patient_id') %>%
+            rename(splitting_variable=!!splitting_variable_name)
+    }else{
+        transitions_with_splitting_variable <- filter(transitions,grepl(s,state)) %>%
+            mutate(splitting_variable='none')
+    }
+    splitting_variable_mapping <- get_splitting_variable_mapping(splitting_variable_name,max_splitting_mapping)
+    splitting_variable_values <- unique(splitting_variable_mapping$splitting_variable)
+    
+    transition_summary_extended <- expand_grid(max_splitting_values=splitting_variable_mapping$max_splitting_values,
+                                               state=s,state_tomorrow=all_states[!grepl(s,all_states)]) %>%
+        inner_join(.,splitting_variable_mapping,by='max_splitting_values')
+    
+    transition_summary_state <- filter(transitions_with_splitting_variable,!is.na(state_tomorrow)) %>%
+        group_by(.,splitting_variable,state,state_tomorrow) %>%
+        summarize(count=as.numeric(n())) %>%
+        ungroup() %>%
+        right_join(.,transition_summary_extended,by=c('splitting_variable','state','state_tomorrow')) %>%
+        mutate(count=if_else(is.na(count),0,count)) %>%
+        mutate(state=factor(state,levels=all_active_states),
+               state_tomorrow=factor(state_tomorrow,levels=all_states)) %>%
+        select(max_splitting_values,state,state_tomorrow,count) %>%
+        rename(splitting_variable=max_splitting_values)
+    return(transition_summary_state)
+}
+
+
+
+
 ################# ----- Statistical inference of length of stay distributions ---- #############
 get_length_of_stay_predicted <- function(model,s,splitting_variable_name,max_splitting_mapping,distr='lognormal',max_num_days=35){
     if(model=='extended'){
