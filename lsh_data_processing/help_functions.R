@@ -195,6 +195,7 @@ get_max_splitting_dat <- function(splitting_variable_names){
   return(max_splitting_dat)
 }
 
+
 get_splitting_variable_mapping <- function(splitting_variable_name,max_splitting_dat){
   if(splitting_variable_name %in% names(max_splitting_dat)){
     splitting_variable_mapping <- select(max_splitting_dat,matches(splitting_variable_name),max_splitting_values) %>%

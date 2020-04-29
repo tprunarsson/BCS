@@ -121,6 +121,7 @@ clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_
                                          clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
 priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories')
 age_groups <- read_excel(file_path_coding,sheet = 'age_groups')
+length_of_stay_categories <- read_excel(file_path_coding,sheet = 'length_of_stay_categories') 
 comorbidities_categories <- read_excel(file_path_coding,sheet = 'comorbidities') %>%
                               arrange(comorbidities_raw)
 sheet_names <- read_excel(file_path_coding,sheet = 'lsh_sheet_names',trim_ws = FALSE)
