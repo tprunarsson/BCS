@@ -59,6 +59,7 @@
 #define COLS_FILE_LOS                           4
 #define COLS_FILE_TRANSITIONS                   4
 #define COLS_FILE_SCENARIOS											2
+#define COLS_FILE_FORECAST											3
 
 #define STATE_CURRENT										"state_current"
 #define STATE_FIRST											"state_first"

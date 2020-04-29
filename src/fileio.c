@@ -4,9 +4,10 @@
 #include <math.h>
 #include <time.h>
 #include "covid.h"
+#include "utils.h"
 
 
-extern double posteriorCDF[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
+extern double forecastCDF[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 extern double firstSplittingCDF[MAX_NUM_SPLITTING_VALUES];
 extern double firstStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 extern double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
@@ -105,58 +106,68 @@ int get_scenario_person_index(int person_id) {
 
 /*--------------------  Forecast -------------------------------*/
 /* 
-  Read covid.hi.is posterior predictions for give day (MAX_SIM_TIME, )
-  TODO: rewrite this file to scan dates like history read!
+  Create CDF for the forecast for each day.
+	File header: date, new cases, probability
 */
 			
-int readHIposteriors(char *fname, char *szDate, int day, double *dbl) { /* TODO name change */
+int readForecast(char *fname, char *szStartDate) {
   FILE *fid;
-  char sztmp[64], sztmpdate[64];
-  char buffer[8192];
-  int numdays = 0;
-  char *token;
-  int i = 0, y, m, d;
-  struct tm  t = { 0 };
-
-  sscanf(szDate,"%d-%d-%d", &y, &m, &d);
-  t.tm_mday = d;
-  t.tm_mon = m - 1;
-  t.tm_year = y - 1900;
-  // Add 'skip' days to the date.                                                               
-  t.tm_mday += day;
-  mktime(&t);
-  strftime(sztmpdate, 32, "%Y-%m-%d", &t);
-
-  fid = fopen(fname, "r");
-  if (fid == NULL) {
-    printf("fatal: could not open covid.hi.is posterior predictions data file %s\n", fname);
+  char buffer[8192], szdate[64];
+  int i, j, num_infected, count, sim_day, sumForecast=0;
+ 
+	// zero the CDF
+  for (i = 0; i < MAX_SIM_TIME; i++){
+		for (j = 0; j < MAX_INFECTED_PER_DAY; j++){
+      forecastCDF[i][j] = 0.0;
+		}
+	}
+	
+	fid = fopen(fname, "r");
+	if (fid == NULL) {
+		printf("fatal: could not open forecast data file %s\n", fname);
+		exit(1);
+	}
+	if (NULL == fgets(buffer, 8192, fid)) /* remove the header! */
+		 return -1;
+	
+  if (COLS_FILE_FORECAST-1 != clear_symbol(buffer,',')) {
+    printf("[fatal error]: forecast file %s is corrupt (2)\n", fname);
     exit(1);
   }
-  if (NULL == fgets(buffer, 8192, fid)) /* remove the header! */
-    return -1;
-  numdays = clear_symbol(buffer,',');
-  for (i = 0; i < numdays; i++) /* make sure this memory is clean in case we don't hvae this date */
-    dbl[i] = 0.0;
-  dbl[0] = 1.0;  
-  
-  while (NULL != fgets(buffer, 8192, fid)) {
-    token = strtok(buffer, ",");
-    sprintf(sztmp, "%s", token);
-   
-    if (0 == strcmp(sztmp, sztmpdate)) {
-      
-      for (i = 0; i < numdays; i++) {
-        token = strtok(NULL, ",");
-        sscanf(token, "%lg", &dbl[i] );
+	
+	while (NULL != fgets(buffer, 8192, fid)) {
+		clear_symbol(buffer,',');
+		sscanf(buffer, "%s %d %d", szdate, &num_infected, &count);
+		sim_day=get_sim_day(szdate,szStartDate);
+
+		if (sim_day>=0 && sim_day<MAX_SIM_TIME && num_infected>=0 && num_infected<MAX_INFECTED_PER_DAY){
+			forecastCDF[sim_day][num_infected]+=count;
+		}
+	}
+	
+  for (i = 0; i < MAX_SIM_TIME; i++) {
+    sumForecast = forecastCDF[i][0];
+    for (j = 1; j < MAX_INFECTED_PER_DAY; j++) {
+      sumForecast += forecastCDF[i][j];
+      forecastCDF[i][j] = forecastCDF[i][j-1] + forecastCDF[i][j];
+    }
+    if (sumForecast > 0) {
+      for (j = 0; j < MAX_INFECTED_PER_DAY; j++) {
+        forecastCDF[i][j] = forecastCDF[i][j]/sumForecast;
       }
-      break;
     }
   }
-  if (i == 0) {
-    printf("warning: did not find poterior day %d starting from date %s\n", day, sztmpdate); 
+	
+  for (i = 0; i < MAX_SIM_TIME; i++) {
+    fprintf(outfile, "forecastCDF[%d] = ", i);
+    for (j = 0; j < MAX_INFECTED_PER_DAY; j++)
+      fprintf(outfile, "%.4g ",forecastCDF[i][j]);
+    fprintf(outfile, "\n");
   }
-  return i;
+  fclose(fid);
+  return 0;
 }
+
 /*--------------------  Historical data -------------------------------*/
 /*
   Computes the CDF for the different states and splitting values
@@ -170,7 +181,7 @@ int readFirstCDF(char *fname) {
   double sumSplitting,sumState;
 	char buffer[1024], szstate[128], szsplitting[128];
  
-  // zero the losCDF
+  // zero the CDFs
   for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++){
     firstScenarioSplittingCDF[i] = 0.0;
 		for (j = 0; j < MAX_NUM_STATES; j++){

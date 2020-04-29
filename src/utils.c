@@ -68,6 +68,23 @@ size_t get_next_day(char *date_next_day, size_t max_size, char *date_day){
 	return strftime(date_next_day, max_size, "%Y-%m-%d", &t);
 }
 
+int get_sim_day(char *sim_date, char *start_date){
+	int year, month, day;
+	struct tm  tm_date = { 0 }, tm_start_date= { 0 };
+	
+	sscanf(sim_date,"%d-%d-%d", &year, &month, &day);
+	tm_date.tm_mday = day;
+	tm_date.tm_mon = month - 1;
+	tm_date.tm_year = year - 1900;
+
+	sscanf(start_date,"%d-%d-%d", &year, &month, &day);
+	tm_start_date.tm_mday = day;
+	tm_start_date.tm_mon = month - 1;
+	tm_start_date.tm_year = year - 1900;
+
+	return difftime(mktime(&tm_date), mktime(&tm_start_date))/86400;
+}
+
 /* function for displaying the progress of the simulation */
 void printProgress (double percentage) {
   char PBSTR[60] = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";

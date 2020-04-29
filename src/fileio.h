@@ -2,7 +2,7 @@ int get_index(char* string, char c);
 int clear_symbol(char *buffer, char s);
 int get_state(char *szstate);
 int get_splitting_variable(char *szsplitvar);
-int readHIposteriors(char *fname, char *szDate, int day, double *dbl);
+int readForecast(char *fname, char *szStartDate);
 int readFirstCDF(char *fname);
 int readLosP(char *fname);
 int readTransitionCDF(char *fname);

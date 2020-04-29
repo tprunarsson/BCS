@@ -37,7 +37,7 @@ int numInfected = 0;
 int numScenarioInfected = 0;
 
 /* CDFs */
-double posteriorCDF[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
+double forecastCDF[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 double firstSplittingCDF[MAX_NUM_SPLITTING_VALUES];
 double firstStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
 double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
@@ -488,7 +488,7 @@ void report(FILE *fid, int day, int append) {
  */
 int main(int argc, char *argv[]) {
  
-	int listid, i, j, k, n;
+	int listid, i, j, k;
 	char fname[8192], opt;
   FILE *statfid;
 	char path_input[2048], path_output[2048], path_lsh_data[2048];
@@ -595,15 +595,7 @@ int main(int argc, char *argv[]) {
 
   /* load posterior predicted values on current date and day number */
   sprintf(fname, "%s%s_infections_predicted.csv", path_input, date_data);
-  fprintf(outfile,"posteriorCDF[%s] = \n", date_data);
-	// RJS Move to readHIPosterior
-  for (i = 0; i < MAX_SIM_TIME; i++) {
-    n = readHIposteriors(fname, date_data, i, posteriorCDF[i]);
-    fprintf(outfile,"Day-%d", i);
-    for (j = 0; j < n; j++)
-      fprintf(outfile,",%.4g", posteriorCDF[i][j]);
-    fprintf(outfile, "\n");
-  }
+	readForecast(fname, date_start);
 
 	numHistoryDays=0;
 	
@@ -627,7 +619,6 @@ int main(int argc, char *argv[]) {
 	
 /* load data about scenarios */
 	if (use_scenario_data==1){
-		scenarioPersonId=FIRST_SCENARIO_PERSON_ID;
 		sprintf(fname, "%s%s_%s_scenario_first_state.csv", path_input, date_data, experiment_id);
 		readScenarioFirstCDF(fname);
 		sprintf(fname, "%s%s_%s_scenario_infected.csv", path_input, date_data, experiment_id);
@@ -660,6 +651,7 @@ int main(int argc, char *argv[]) {
     event_schedule(sim_time + 0.75, EVENT_PRINT_STATS);
     numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
     forecastPersonId = FIRST_FORECAST_PERSON_ID; /* reset unkown patients counter */
+		scenarioPersonId=FIRST_SCENARIO_PERSON_ID;
     #ifdef STATS
     clearSimStatsLocation(max_sim_time);
     #endif
@@ -691,7 +683,7 @@ int main(int argc, char *argv[]) {
         case EVENT_ARRIVAL:
           if (sim_time >= numHistoryDays) {
             //printf("we should not new here?!\n");
-            i = discrete_empirical(posteriorCDF[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_FORECAST);
+            i = discrete_empirical(forecastCDF[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_FORECAST);
             arrive (i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */ 
             scenario_arrive((int)floor(sim_time));
             #ifdef TRACE
