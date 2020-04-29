@@ -8,7 +8,7 @@
 //#define TRACE
 //#define DEBUG
 //#define STATS
-#define TRACK_PERSON
+//#define TRACK_PERSON
 
 #include <stdio.h>
 #include <string.h>
@@ -496,6 +496,8 @@ int main(int argc, char *argv[]) {
 	
 	int	max_sim_time = MIN(28,MAX_SIM_TIME);
 	int use_scenario_data=0;
+	int use_historical_data=0;
+	int historical_reset_days=0;	// default is no historical reset
 	char date_start[12]="";
 	char date_data[12]="";
 	char experiment_id[4]="1";
@@ -505,7 +507,7 @@ int main(int argc, char *argv[]) {
 
   maxatr = 15; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
 	
-	while ((opt = getopt(argc, argv, "s:i:h:v:d:n:p:a")) != -1) {
+	while ((opt = getopt(argc, argv, "s:i:h:v:d:n:p:r:a")) != -1) {
 			switch (opt) {
 			case 's': strcpy(date_start,optarg); break;
 			case 'i': strcpy(experiment_id,optarg); break;
@@ -514,6 +516,7 @@ int main(int argc, char *argv[]) {
 			case 'd': strcpy(date_data,optarg); break;
 			case 'n': max_sim_time=MIN(MAX_SIM_TIME, atoi(optarg)); break;
 			case 'p': strcpy(path,optarg); break;
+			case 'r': use_historical_data=1;historical_reset_days=atoi(optarg); break;
 			case 'a': use_scenario_data=1; break;
 			default:
 // RJS add help + check date formats
@@ -600,7 +603,7 @@ int main(int argc, char *argv[]) {
 	numHistoryDays=0;
 	
 /* load historical data about people in the Covid system if we have any  */
-	if (0!=strcmp(date_start,date_data)){
+	if (use_historical_data==1 && 0!=strcmp(date_start,date_data)){
 		sprintf(fname, "%s%s_%s_current_state_per_date.csv", path_lsh_data, date_data, experiment_id);
 		fprintf(outfile,"trueStates[%s] = \n", date_start);
 		
@@ -614,6 +617,8 @@ int main(int argc, char *argv[]) {
 		}
 		fprintf(outfile, "available historical true states days for simulation from date %s is %d, taken from file %s\n", date_start, numHistoryDays, fname);
 	}
+	if (numHistoryDays > 0)
+		 printf(" available history %d days from %s\n", numHistoryDays, date_start);
 	
 	numScenarioInfected=0;
 	
@@ -635,8 +640,6 @@ int main(int argc, char *argv[]) {
 
   report(statfid,0,0); /* write header in output stats file */
   countStatistics(-1);
-  if (numHistoryDays > 0)
-    printf(" available history %d days from %s\n", numHistoryDays, date_start);
 	
   for (repeat = 0; repeat < MAX_REPEAT; repeat++) {
     /* progress bar added for the slower machines */
@@ -646,7 +649,9 @@ int main(int argc, char *argv[]) {
     /* Initialize the model and fire up departure event for this in system */
     sprintf(fname, "%s%s_%s_current_state.csv", path_lsh_data, date_start, experiment_id);
     init_model(fname);
-    //event_schedule(sim_time, EVENT_REINITIALIZE); /* used for validation purposes only */
+		if (use_historical_data == 1 && historical_reset_days > 0){
+			event_schedule(sim_time + historical_reset_days, EVENT_REINITIALIZE); /* used for validation purposes only */
+		}
     event_schedule(sim_time + 0.25, EVENT_ARRIVAL); /* schedule also new arrivals */
     event_schedule(sim_time + 0.75, EVENT_PRINT_STATS);
     numRecovered = 0; numDeath = 0; /* zero daily counters for this run */
@@ -677,7 +682,7 @@ int main(int argc, char *argv[]) {
               printf("trace[main-re-init] failed to re-initialize with real data... at time %g (%d)\n", sim_time, (int)floor(sim_time));
             #endif
           }
-          event_schedule(sim_time + 7.0, EVENT_REINITIALIZE); /* try again, perhaps no data was available befor current day */
+          event_schedule(sim_time + historical_reset_days, EVENT_REINITIALIZE); /* try again, perhaps no data was available befor current day */
           break;
 
         case EVENT_ARRIVAL:
