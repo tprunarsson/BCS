@@ -343,11 +343,8 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       left_join(.,interview_last_date,by='patient_id') %>%
                       mutate(.,date_outcome=pmin(date_outcome_tmp,if_else(covid_group=='recovered',date_last_known,NULL),na.rm=TRUE)) %>%
                       filter(if_else(is.finite(date_outcome) & outcome=='recovered',(date_outcome-date_diagnosis)>0,TRUE)) %>%
-                      #mutate(.,age_group_std=as.character(cut(age,breaks=c(-Inf,seq(10,80,by=10),Inf),labels=c('0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80+'),right=FALSE)),
-                      #       age_group_simple=as.character(cut(age,breaks=c(-Inf,50,Inf),labels=c('0-50','51+'),right=TRUE)))%>%
-                      #select(.,patient_id,zip_code,age,age_group_std,age_group_simple,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
-                      #mutate(.,splitting_variable=get_splitting_variable(.,splitting_variable_name)) %>%
-                      select(.,patient_id,zip_code,age,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+                      mutate(.,imputed_priority=impute_priority(priority,age,n_comorbidity)) %>%
+                      select(.,patient_id,zip_code,age,sex,priority,imputed_priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
 
 individs_splitting_variables <- select(individs_extended,patient_id,age,sex,priority) %>%
                             left_join(age_groups,by='age') %>%

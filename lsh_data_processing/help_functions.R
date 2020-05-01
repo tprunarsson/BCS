@@ -38,23 +38,39 @@ get_splitting_variable_values_in_order <- function(splitting_variable_name){
   return(values)
 }
 
-# impute_priority <- function(priority,age,n_comorbidity){
-#   priority_out <- vector('character',length=length(priority)) 
-#   for(i in 1:length(priority)){
-#     if(is.na(priority[i])){
-#       if(age[i]>70){
-#         priority_out <- 'high'
-#       }else if(age[i]>50 & !is.na(n_comorbidity[i]))
-#         
-#     }else if(age[i]<50 & !is.na(n_comorbidity[i])){
-#         
-#       }
-#     }else{
-#       priority_out[i] <- priority[i]
-#     }
-# 
-#   }
-# }
+impute_priority <- function(priority,age,n_comorbidity){
+  priority_out <- vector('character',length=length(priority))
+  for(i in 1:length(priority)){
+    if(is.na(priority[i])){
+      if(age[i]>70){
+        priority_out[i] <- 'high'
+      }else if(age[i]>50){
+        if(is.na(n_comorbidity[i])){
+          priority_out[i] <- 'high'
+        }else{
+          if(n_comorbidity[i]>0){
+            priority_out[i] <- 'high'
+          }else{
+            priority_out[i] <- 'medium'
+          }
+        }
+      }else{
+        if(is.na(n_comorbidity[i])){
+          priority_out[i] <- 'medium'
+        }else{
+          if(n_comorbidity[i]>0){
+            priority_out[i] <- 'medium'
+          }else{
+            priority_out[i] <- 'low'
+          }
+        }
+      }
+    }else{
+       priority_out[i] <- priority[i]
+    }
+  }
+  return(priority_out)
+}
 
 impute_severity <- function(state,severity_vec){
   output_vec <- vector('character',length = length(severity_vec))

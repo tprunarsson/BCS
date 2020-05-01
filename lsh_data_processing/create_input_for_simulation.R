@@ -258,12 +258,10 @@ get_tables_for_experiment <- function(id){
     transition_states <- filter(experiment,type=='transition')$state
     transition_splitting_variable_names <- filter(experiment,type=='transition')$value
     if(model=='extended'){
-        transition_time_splitting_variable_names <- c('length_of_stay_simple','none','none')
-    }else{
         transition_time_splitting_variable_names <- c('length_of_stay_simple','length_of_stay_simple','none','none','none','none')
+    }else{
+        transition_time_splitting_variable_names <- c('length_of_stay_simple','none','none')
     }
-    
-    
     current_state_per_date <- get_current_state_per_date(model,max_splitting_dat)
     current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
     current_state_filtered <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
