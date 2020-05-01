@@ -109,19 +109,19 @@ get_transition_summary <- function(model,recovered_imputed,s,splitting_variable_
     length_of_stay_categories <- mutate(length_of_stay_categories,none='none')
     transition_summary_extended <- expand_grid(max_splitting_values=splitting_variable_mapping$max_splitting_values,
                                                state=s,
-                                               state_next=all_states[!grepl(s,all_states)],
-                                               max_time_splitting_values=length_of_stay_categories$length_of_stay) %>%
+                                               max_time_splitting_values=length_of_stay_categories$length_of_stay,
+                                               state_next=all_states[!grepl(s,all_states)]) %>%
                                     inner_join(.,splitting_variable_mapping,by='max_splitting_values') %>%
                                     inner_join(.,rename(length_of_stay_categories,time_splitting_variable=!!time_splitting_variable_name),by=c('max_time_splitting_values'='length_of_stay'))
     
-    transition_summary_state <- group_by(transitions_state_blocks_summary,splitting_variable,state,state_next,time_splitting_variable) %>%
+    transition_summary_state <- group_by(transitions_state_blocks_summary,splitting_variable,state,time_splitting_variable,state_next) %>%
         summarize(count=as.numeric(n())) %>%
         ungroup() %>%
-        right_join(.,transition_summary_extended,by=c('splitting_variable','state','state_next','time_splitting_variable')) %>%
+        right_join(.,transition_summary_extended,by=c('splitting_variable','state','time_splitting_variable','state_next')) %>%
         mutate(count=if_else(is.na(count),0,count)) %>%
         mutate(state=factor(state,levels=all_active_states),
                state_next=factor(state_next,levels=all_states)) %>%
-        select(max_splitting_values,state,state_next,max_time_splitting_values,count) %>%
+        select(max_splitting_values,state,max_time_splitting_values,state_next,count) %>%
         rename(splitting_variable=max_splitting_values,
                time_splitting_variable=max_time_splitting_values)
     return(transition_summary_state)
