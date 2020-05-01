@@ -50,8 +50,9 @@
 #define NO_REENTER_ICU                  0
 #define RECOVER_MIN_14_DAYS             1
 #define IMPUTE_RECOVERED                2
+#define LOS_BEFORE_TRANSITION						3
 
-#define NUM_HEURISTICS                  3
+#define NUM_HEURISTICS                  4
 
 #define COLS_FILE_FIRST_STATE                   3
 #define COLS_FILE_CURRENT_STATE                 6
@@ -87,3 +88,13 @@ typedef struct {
   int first_state_indicator[MAX_SIM_TIME];
 } person;
 
+typedef struct{
+	int state_current;
+	int state_next;
+	int state_worst;
+	double length_of_stay;
+	int days_in_state;
+	int days_from_diagnosis;
+	int days_from_symthoms;
+} state_time_data;
+	
