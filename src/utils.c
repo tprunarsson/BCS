@@ -26,10 +26,22 @@ extern double countNumber[MAX_SIM_TIME+1][MAX_NUM_STATES];
 extern double countNumberFalse[MAX_SIM_TIME+1][MAX_NUM_STATES];
 
 extern char szAllDates[MAX_SIM_TIME][32];
+extern char heuristics[NUM_HEURISTICS];
 
 char tracking_info[MAX_SIM_TIME*MAXINFECTED][128]; // We track all repeats
 unsigned long tracking_num_transitions;
 
+int use_heuristic(int heuristic){
+	int i;
+	
+	for (i = 0;i < NUM_HEURISTICS;i++){
+		if (heuristics[i] == heuristic){
+			return 1;
+		}
+	}
+	
+	return 0;
+}
 // Functions for tracking persons during the simulation. Uses global variable tracking_info and tracking_num_transitions.
 
 void track_person(int person_id, int sim_no,char *transition, int sim_date, int state){

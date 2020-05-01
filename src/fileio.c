@@ -25,6 +25,10 @@ extern person iPerson[MAXINFECTED];
 extern person sPerson[MAXINFECTED];
 extern int numInfected;
 extern int numScenarioInfected;
+extern int iPersonArrivalIndex[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
+extern int iPersonArrival[MAX_SIM_TIME];
+extern int iPersonCurrentIndex[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
+extern int iPersonCurrent[MAX_SIM_TIME];
 
 /* for a workaround with the .csv files, get rid of the commas! */
 int get_index(char* string, char c) {
@@ -418,6 +422,7 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
     
   sscanf(szDate,"%d-%d-%d", &y, &m, &d);
   days_found = 0;
+	
   for (day = 0; day < max_sim_time; day++) {
     t.tm_mday = d;
     t.tm_mon = m - 1;
@@ -426,6 +431,10 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
     mktime(&t);
     strftime(sztmpdate, 32, "%Y-%m-%d", &t);
     rewind(fid); /* read the file from the start */
+		
+		iPersonArrival[day] = 0;		// Initalize the count of arrival each day (first_state).
+//		iPersonCurrent[day+1] = 0;	//	Initalize the count of current each day (current_state).
+		
     if (NULL == fgets(buffer, 8192, fid)) {
       printf("fatal: historical data file %s corrupt (1)\n", fname);
       exit(1);
@@ -462,8 +471,19 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
         iPerson[person_index].real_days_from_diagnosis[day] = days_from_diagnosis;
         iPerson[person_index].real_state_worst[day] = get_state(szworststate);
         iPerson[person_index].start_day = day;
+				
+				// Fill the index tables
+				
+//				iPersonCurrentIndex[day+1][iPersonCurrent[day+1]] = person_index;
+//				iPersonCurrent[day+1]++;
+				
+				if (iPerson[person_index].first_state_indicator[day] == 1){
+					iPersonArrivalIndex[day][iPersonArrival[day]] = person_index;
+					iPersonArrival[day]++;
+				}
       }
-    }
+		}
+		
     if (date_found)
       days_found++;
   }
