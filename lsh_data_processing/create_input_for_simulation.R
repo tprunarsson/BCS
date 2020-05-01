@@ -206,11 +206,13 @@ get_run_info <- function(current_run_id){
                         unlist() %>%
                         unname()
     run_info <- lapply(experiment_ids,function(id){
-        splitting_variable_names <- filter(experiment_specification,experiment_id==id,type!='heuristic') %>%
+        splitting_variable_names <- filter(experiment_specification,experiment_id==id,
+                                              type %in% c('transition','length_of_stay'),
+                                              type_attribute=='time_independent') %>%
                                     select(value) %>%
                                     unlist() %>%
                                     unname()
-        max_splitting_info <- get_max_splitting_dat(individs_splitting_variables,splitting_variable_names) %>%
+        max_splitting_info <- get_max_splitting_dat(splitting_variable_names) %>%
                                 filter(.,!duplicated(max_splitting_values)) %>%
                                 arrange(max_splitting_order) %>%
                                 select(max_splitting_name,max_splitting_values) %>%
@@ -246,22 +248,13 @@ get_tables_for_experiment <- function(id){
                                     arrange(max_splitting_order) %>%
                                     select(-patient_id)
     
-    max_time_splitting_names <- unlist(strsplit(experiment_info$max_splitting_name,split=':'))
-    max_time_splitting_dat <- get_max_splitting_dat(max_splitting_names)
-    max_time_splitting_mapping <- filter(max_splitting_dat,!duplicated(max_splitting_values)) %>%
-        arrange(max_splitting_order) %>%
-        select(-patient_id)
-    
     experiment <- filter(experiment_specification,experiment_id==id)
     length_of_stay_states <- filter(experiment,type=='length_of_stay')$state
     length_of_stay_splitting_variable_names <- filter(experiment,type=='length_of_stay')$value
-    transition_states <- filter(experiment,type=='transition')$state
-    transition_splitting_variable_names <- filter(experiment,type=='transition')$value
-    if(model=='extended'){
-        transition_time_splitting_variable_names <- c('length_of_stay_simple','length_of_stay_simple','none','none','none','none')
-    }else{
-        transition_time_splitting_variable_names <- c('length_of_stay_simple','none','none')
-    }
+    transition_states <- filter(experiment,type=='transition',type_attribute=='time_independent')$state
+    transition_splitting_variable_names <- filter(experiment,type=='transition',type_attribute=='time_independent')$value
+    transition_time_splitting_variable_names <- filter(experiment,type=='transition',type_attribute=='time_dependent')$value
+
     current_state_per_date <- get_current_state_per_date(model,max_splitting_dat)
     current_state <- filter(current_state_per_date,date==date_last_known_state) %>% select(-date)
     current_state_filtered <- filter(current_state,!(days_from_diagnosis > 14 & state_worst == 'home'))
