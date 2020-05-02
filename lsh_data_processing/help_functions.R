@@ -398,3 +398,41 @@ get_cdf <- function(dat,num_groups){
 #   arrange(outcome) %>%
 #   summarise(prop_red=cumulative_counts[1]/(cumulative_counts[1]+cumulative_counts[2]))
 # ggplot(prop_red_plot_dat,aes(date,prop_red)) + geom_line() + ylim(0,1) + facet_wrap(~splitting_variable)
+
+# historical_data_with_splitting <- inner_join(patient_transitions,select(individs_splitting_variables,patient_id,age_simple),'patient_id') %>%
+#                                   group_by(.,date,state,age_simple) %>%
+#                                   summarise(count=n()) %>%
+#                                   group_by(.,state,age_simple) %>%
+#                                   summarise(.,sum(count))
+# los_home_by_time_splitting <- filter(length_of_stay,state=='home') %>%
+#                               mutate(time_splitting_variable=if_else(state_duration<14,'los_1-13','los_14+')) %>%
+#                               group_by(state,splitting_variable) %>%
+#                               mutate(prop=count/sum(count)) %>%
+#                               group_by(state,splitting_variable,time_splitting_variable) %>%
+#                               summarise(prop_los=sum(prop))
+# prop_ward_transition_by_time_splitting <- filter(transition_summary,state=='home',time_splitting_variable %in% c(1,14)) %>%
+#   mutate(time_splitting_variable=if_else(time_splitting_variable==1,'los_1-13','los_14+')) %>%
+#   group_by(splitting_variable,state,time_splitting_variable) %>%
+#   mutate(prop_transition=count/sum(count)) %>%
+#   ungroup() %>%
+#   filter(state_next=='inpatient_ward') %>%
+#   select(splitting_variable,state,time_splitting_variable,prop_transition)
+# 
+# prop_ward_transition_without_time_splitting <- filter(transition_summary,state=='home',time_splitting_variable %in% c(1,14)) %>%
+#   group_by(splitting_variable,state) %>%
+#   mutate(prop_transition_without_time=count/sum(count)) %>%
+#   ungroup() %>%
+#   filter(state_next=='inpatient_ward') %>%
+#   select(splitting_variable,state,prop_transition_without_time)
+# 
+# inner_join(los_home_by_time_splitting,prop_ward_transition_by_time_splitting,by=c('splitting_variable','state','time_splitting_variable')) %>%
+#   inner_join(.,first_state,by=c('splitting_variable','state'='initial_state')) %>% 
+#   mutate(exp_cum_ward=prop_los*prop_transition*count) %>% 
+#   ungroup() %>%
+#   summarise(sum(exp_cum_ward))
+# 
+# inner_join(los_home_by_time_splitting,prop_ward_transition_without_time_splitting,by=c('splitting_variable','state')) %>%
+#   inner_join(.,first_state,by=c('splitting_variable','state'='initial_state')) %>% 
+#   mutate(exp_cum_ward=prop_los*prop_transition_without_time*count) %>% 
+#   ungroup() %>%
+#   summarise(sum(exp_cum_ward))

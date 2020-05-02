@@ -24,8 +24,8 @@ num_sim_days=$(Rscript -e 'args <- commandArgs(trailingOnly = TRUE);print(as.num
 cd lsh_data_processing
 Rscript covid19_lsh_data_processing.R -c "$date_data" -r "$run_id" -s "$date_start"
 
-cd ..
-make src/covid
+cd ../src
+make covid
 while read experiment_id model splitting_variable_name splitting_variable_values heuristic_string
- do src/covid -s "$date_start" -i "$experiment_id" -h "$heuristic_string" -v "$splitting_variable_values" -d "$date_data" -n 50 -p .
-done <  input/"$date_data"_"$run_id"_run_info.csv
+ do ./covid -s "$date_start" -i "$experiment_id" -v "$splitting_variable_values" -d "$date_data" -n 50 -p ..
+done <  ../input/"$date_data"_"$run_id"_run_info.csv

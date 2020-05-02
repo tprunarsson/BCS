@@ -62,7 +62,7 @@ states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
 path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
 historical_data <- read_csv(path_historical_data) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
-plot_list=list()
+plot_data=tibble(date=as.Date(x = integer(0), origin = "1970-01-01"),experiment_id=numeric(),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric())
 performance_data_list <- list()
 paths_data_list <- list()
 turnover_plot_list <- list()
@@ -74,24 +74,20 @@ for(id in run_info$experiment_id){
         filter(.,state %in% c('home','inpatient_ward','intensive_care_unit')) %>%
         mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
     
-    simulation_summary <- group_by(simulation_all,day,date,state) %>%
-        summarize(median=median(count),lower=quantile(count,probs=0.025),upper=quantile(count,probs=0.975))
+    simulation_summary <- group_by(simulation_all,date,state) %>%
+        summarize(median=median(count),lower=quantile(count,probs=0.025),upper=quantile(count,probs=0.975)) %>%
+        ungroup() %>%
+        mutate(experiment_id=factor(as.character(id),levels=as.character(run_info$experiment_id))) %>%
+        select(date,experiment_id,state,median,lower,upper)
     
-    plot_list[[id]] <- ggplot(data=simulation_summary) +
-        geom_line(aes(x=date,y=median)) +
-        geom_line(aes(x=date,y=lower),linetype = "dashed") +
-        geom_line(aes(x=date,y=upper),linetype = "dashed") +
-        geom_point(data=historical_data,aes(date,count)) +
-        facet_wrap(~state,scales='free') + 
-        theme_bw()
+    plot_data <- bind_rows(plot_data,simulation_summary)
     
     performance_data_list[[id]] <- inner_join(historical_data,simulation_summary,by=c('date','state')) %>%
-        group_by(state) %>%
+        group_by(experiment_id,state) %>%
         summarise(mse=mean((median-count)^2),
                   days_from_peak=date[which.max(median)]-date[which.max(count)],
                   peak_diff=max(median)-max(count)) %>%
         ungroup() %>%
-        mutate(experiment_id=id) %>%
         select(experiment_id,state,mse,days_from_peak,peak_diff)
 }
 if(tracking){
@@ -119,7 +115,10 @@ if(tracking){
 }
 
 performance_data <- bind_rows(performance_data_list) %>% mutate(experiment_id=factor(experiment_id))
-ggplot(performance_data,aes(experiment_id,mse,fill=experiment_id)) + geom_col(position='dodge') + facet_wrap(~state,scales='free')
-ggplot(performance_data,aes(experiment_id,as.numeric(days_from_peak),fill=experiment_id)) + geom_col(position='dodge') + facet_wrap(~state,scales='free')
-ggplot(performance_data,aes(experiment_id,as.numeric(peak_diff),fill=experiment_id)) + geom_col(position='dodge') + facet_wrap(~state,scales='free')
-
+ggplot(data=plot_data) +
+    geom_line(aes(x=date,y=median,group=experiment_id,color=experiment_id)) +
+    geom_line(aes(x=date,y=lower,group=experiment_id,color=experiment_id),linetype = "dashed") +
+    geom_line(aes(x=date,y=upper,group=experiment_id,color=experiment_id),linetype = "dashed") +
+    geom_point(data=historical_data,aes(date,count)) +
+    facet_wrap(~state,scales='free') + 
+    theme_bw()
