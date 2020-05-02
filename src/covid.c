@@ -8,7 +8,8 @@
 //#define TRACE
 //#define DEBUG
 //#define STATS
-//#define TRACK_PERSON
+#define TRACK_PERSON
+//#define TIME
 
 #include <stdio.h>
 #include <string.h>
@@ -45,7 +46,7 @@ int iPersonCurrent[MAX_SIM_TIME];
 double forecastCDF[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 double firstSplittingCDF[MAX_NUM_SPLITTING_VALUES];
 double firstStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
-double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
+double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS][MAX_NUM_STATES];
 double losCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS];
 double firstScenarioSplittingCDF[MAX_NUM_SPLITTING_VALUES];
 double firstScenarioStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
@@ -79,10 +80,10 @@ double lengthOfStay(int splitting, state_time_data *data) {
   double length_of_stay = 0;
 	int count;
 	
-	if (use_heuristic(LOS_BEFORE_TRANSITION)){
+	if (heuristics[LOS_BEFORE_TRANSITION] == 1){
 		length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
 	} else {
-		if (use_heuristic(RECOVER_MIN_14_DAYS) && (((*data).state_current == HOME_RED) || ((*data).state_current == HOME_GREEN) || ((*data).state_current == HOME)) && ((*data).state_next == RECOVERED)) {
+		if (heuristics[RECOVER_MIN_14_DAYS] && (((*data).state_current == HOME_RED) || ((*data).state_current == HOME_GREEN) || ((*data).state_current == HOME)) && ((*data).state_next == RECOVERED)) {
 			length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
 			while (((*data).days_from_diagnosis + length_of_stay) < 14)
 				length_of_stay = (double) discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
@@ -94,7 +95,7 @@ double lengthOfStay(int splitting, state_time_data *data) {
 	// Make sure length_of_stay is not less than the days already spent in state when entering the simulation.
 	// Here (total) length of stay will always be larger than the value used in the RECOVER_MIN_14_DAYS heuristic.
 	count = 0;
-	while (length_of_stay - (double)(*data).days_in_state < 0) {
+	while (length_of_stay - (double)(*data).days_in_state < 1) {
 		length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
 		count++;
 		if (count > 1000) {
@@ -113,21 +114,23 @@ double lengthOfStay(int splitting, state_time_data *data) {
 */
 int whereToNext(int splitting, state_time_data *data) {
   int state_next = -1;
+	int length_of_stay;
 	
-	if (use_heuristic(LOS_BEFORE_TRANSITION)){
-		state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current], MAX_NUM_STATES, STREAM_TRANSITION);
+	if (heuristics[LOS_BEFORE_TRANSITION]){
+		length_of_stay = (int)(*data).length_of_stay + (*data).days_in_state; // make sure we don't forget the days before the simulation started.
 	} else {
-		state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current], MAX_NUM_STATES, STREAM_TRANSITION);
+		length_of_stay = 1;	// The transition matrix is time-invariant when transitions are made before los so we can select any value between 1 and MAX_LOS_DAYS-1. We select 1.
 	}
+	state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current][length_of_stay], MAX_NUM_STATES, STREAM_TRANSITION);
 	
-	if (use_heuristic(NO_REENTER_ICU)){
+	if (heuristics[NO_REENTER_ICU]){
 		/* this first check will only activate in case we are using the simple model */
 		while ((state_next == INTENSIVE_CARE_UNIT) && ((*data).state_worst == INTENSIVE_CARE_UNIT) )
-			state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current], MAX_NUM_STATES, STREAM_TRANSITION);
+			state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current][length_of_stay], MAX_NUM_STATES, STREAM_TRANSITION);
 
 		/* this second check will only activate when we are using the clinical assessment */
 		while ((state_next == INTENSIVE_CARE_UNIT_RED) && ((*data).state_worst == INTENSIVE_CARE_UNIT_RED) )
-			state_next = discrete_empirical(transitionCDF[splitting][(*data).state_next], MAX_NUM_STATES, STREAM_TRANSITION);
+			state_next = discrete_empirical(transitionCDF[splitting][(*data).state_next][length_of_stay], MAX_NUM_STATES, STREAM_TRANSITION);
 	}
 	
 	(*data).state_next = state_next;
@@ -176,6 +179,9 @@ int init_model(char *fname) {
     transfer[ATTR_PERSON] = (double)person_id;
     person_idx = get_person_index(person_id);
 		
+		if (person_id==217960)
+			data.state_current=state;
+		
 		data.state_current = state;
 		data.state_next = -1;
 		data.state_worst = worst_state;
@@ -184,13 +190,11 @@ int init_model(char *fname) {
 		data.days_from_diagnosis = days_from_diagnosis;
 		data.days_from_symthoms = -1;
 		
-		if(use_heuristic(LOS_BEFORE_TRANSITION)){
+		if(heuristics[LOS_BEFORE_TRANSITION]){
 			length_of_stay = lengthOfStay(splitting, &data);
-			data.length_of_stay = length_of_stay;
 			new_state = whereToNext(splitting, &data);
 		} else {
 			new_state = whereToNext(splitting, &data);
-			data.state_next = new_state;
 			length_of_stay = lengthOfStay(splitting, &data);
     }
 		
@@ -199,8 +203,8 @@ int init_model(char *fname) {
     transfer[ATTR_NEXTSTATE] = (double)new_state;
     transfer[ATTR_DEPARTDAY] = (double)departure_day;
     iPerson[person_idx].splitting = splitting;
-    iPerson[person_idx].real_days_in_state[day] = length_of_stay;
-    iPerson[person_idx].real_days_from_diagnosis[day] = days_from_diagnosis + length_of_stay;
+    iPerson[person_idx].real_days_in_state[day] = length_of_stay; // RJS probably not correct at this day. should be days_in_state?
+    iPerson[person_idx].real_days_from_diagnosis[day] = days_from_diagnosis + length_of_stay; // RJS probably not correct at this day. should be date_from_diagnosis?
     iPerson[person_idx].real_state[day] = state;
     iPerson[person_idx].real_state_worst[day] = worst_state;
     #ifdef STATS
@@ -258,13 +262,11 @@ int real_reinit_model(int day) {
 			data.days_from_diagnosis = days_from_diagnosis;
 			data.days_from_symthoms = -1;
 			
-			if(use_heuristic(LOS_BEFORE_TRANSITION)){
+			if(heuristics[LOS_BEFORE_TRANSITION]){
 				length_of_stay = lengthOfStay(splitting, &data);
-				data.length_of_stay = length_of_stay;
 				new_state = whereToNext(splitting, &data);
 			} else {
 				new_state = whereToNext(splitting, &data);
-				data.state_next = new_state;
 				length_of_stay = lengthOfStay(splitting, &data);
 			}
 			
@@ -312,13 +314,11 @@ int historical_arrive(int day) {
 		data.days_from_diagnosis = 0;
 		data.days_from_symthoms = -1;
 		
-		if(use_heuristic(LOS_BEFORE_TRANSITION)){
+		if(heuristics[LOS_BEFORE_TRANSITION]){
 			length_of_stay = lengthOfStay(splitting, &data);
-			data.length_of_stay = length_of_stay;
 			new_state = whereToNext(splitting, &data);
 		} else {
 			new_state = whereToNext(splitting, &data);
-			data.state_next = new_state;
 			length_of_stay = lengthOfStay(splitting, &data);
 		}
 		
@@ -371,13 +371,11 @@ void forecast_arrive(int n) {
 		data.days_from_diagnosis = 0;
 		data.days_from_symthoms = -1;
 		
-		if(use_heuristic(LOS_BEFORE_TRANSITION)){
+		if(heuristics[LOS_BEFORE_TRANSITION]){
 			length_of_stay = lengthOfStay(splitting, &data);
-			data.length_of_stay = length_of_stay;
 			new_state = whereToNext(splitting, &data);
 		} else {
 			new_state = whereToNext(splitting, &data);
-			data.state_next = new_state;
 			length_of_stay = lengthOfStay(splitting, &data);
 		}
 		
@@ -399,7 +397,7 @@ void forecast_arrive(int n) {
     event_schedule(departure_day, EVENT_DEPARTURE);
 		
 	#ifdef TRACK_PERSON
-		track_person(forecastPersonId,repeat,STATE_FIRST,(int)floor(sim_time),first_state);
+		track_person(forecastPersonId+1,repeat,STATE_FIRST,(int)floor(sim_time),first_state);
 	#endif
   }
 }
@@ -459,7 +457,8 @@ void scenario_arrive(int day) {
 
   for (i = 0; i < numScenarioInfected; i++) {
     if (sPerson[i].first_state_indicator[day] == 1) {
-      transfer[ATTR_PERSON] = (double)scenarioPersonId--;
+			sPerson[i].person_id = scenarioPersonId--;
+			transfer[ATTR_PERSON] = (double)sPerson[i].person_id;
       splitting = discrete_empirical(firstScenarioSplittingCDF,MAX_NUM_SPLITTING_VALUES,STREAM_SPLITTING);
 			first_state = discrete_empirical(firstScenarioStateCDF[splitting], MAX_NUM_STATES, STREAM_FIRST_STATE);
 			
@@ -471,13 +470,11 @@ void scenario_arrive(int day) {
 			data.days_from_diagnosis = 0;
 			data.days_from_symthoms = -1;
 			
-			if(use_heuristic(LOS_BEFORE_TRANSITION)){
+			if(heuristics[LOS_BEFORE_TRANSITION]){
 				length_of_stay = lengthOfStay(splitting, &data);
-				data.length_of_stay = length_of_stay;
 				new_state = whereToNext(splitting, &data);
 			} else {
 				new_state = whereToNext(splitting, &data);
-				data.state_next = new_state;
 				length_of_stay = lengthOfStay(splitting, &data);
 			}
 			
@@ -552,13 +549,11 @@ void depart(void) {
 		data.days_from_diagnosis = days_from_diagnosis;
 		data.days_from_symthoms = -1;
 		
-		if(use_heuristic(LOS_BEFORE_TRANSITION)){
+		if(heuristics[LOS_BEFORE_TRANSITION]){
 			length_of_stay = lengthOfStay(splitting, &data);
-			data.length_of_stay = length_of_stay;
 			new_new_state = whereToNext(splitting, &data);
 		} else {
 			new_new_state = whereToNext(splitting, &data);
-			data.state_next = new_new_state;
 			length_of_stay = lengthOfStay(splitting, &data);
 		}
 		
@@ -620,7 +615,7 @@ int main(int argc, char *argv[]) {
 	char date_start[12]="";
 	char date_data[12]="";
 	char experiment_id[4]="1";
-	char heuristics_tmp[1024]="1;1;1";
+	char heuristics_tmp[1024]="1;1;1;1";
 	char splitting_values_tmp[2048]="age_0-50;age_51+";
 	char path[1023]="..";
 
@@ -759,8 +754,9 @@ int main(int argc, char *argv[]) {
 
   report(statfid,0,0); /* write header in output stats file */
   countStatistics(-1);
-	
+#ifdef TIME
 	clock_t start=0, end=0;
+#endif
 	int reinit_return=0;
 	
   for (repeat = 0; repeat < MAX_REPEAT; repeat++) {
@@ -790,17 +786,18 @@ int main(int argc, char *argv[]) {
         case EVENT_REINITIALIZE:
           /* this event is for prediction validation purposes, it will reset the current state of the system based on historical data */
           //printf("re-init at %d number of person's found is %d\n", (int)floor(sim_time), numInfected);
-					
+				#ifdef TIME
 					if (repeat==2){
 						start = clock();
 					}
+				#endif
 					reinit_return = real_reinit_model((int)floor(sim_time));
-					
+				#ifdef TIME
 					if (repeat==2){
 						end = clock();
 						printf("reinit_return took %f sec\n", ((double) (end - start)) / CLOCKS_PER_SEC);
 					}
-					
+				#endif
 					if (1 == reinit_return) {
             event_schedule(sim_time + 0.25, EVENT_ARRIVAL); /* because this event was cleared */
             event_schedule(sim_time + 0.75, EVENT_PRINT_STATS);
@@ -822,15 +819,18 @@ int main(int argc, char *argv[]) {
           if (sim_time >= numHistoryDays) {
             //printf("we should not new here?!\n");
             i = discrete_empirical(forecastCDF[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_FORECAST);
-						
+					#ifdef TIME
 						if (repeat==1){
 							start = clock();
 						}
+					#endif
             forecast_arrive(i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */
+					#ifdef TIME
 						if (repeat==1){
 							end = clock();
 							printf("%s:forecast_arrive of %d persons took %f sec\n", szAllDates[(int)floor(sim_time)], i, ((double) (end - start)) / CLOCKS_PER_SEC);
 						}
+					#endif
             scenario_arrive((int)floor(sim_time));
             #ifdef TRACE
             if (repeat == 1)
@@ -838,14 +838,18 @@ int main(int argc, char *argv[]) {
             #endif
           }
           else {
+					#ifdef TIME
 						if (repeat==1){
 							start = clock();
 						}
+					#endif
             historical_arrive((int)floor(sim_time));
+					#ifdef TIME
 						if (repeat==1){
 							end = clock();
 							printf("%s: historical arrive of %d persons took %f sec\n", szAllDates[(int)floor(sim_time)], iPersonArrival[(int)floor(sim_time)], ((double) (end - start)) / CLOCKS_PER_SEC);
 						}
+					#endif
 //            real_arrive((int)floor(sim_time)+1); // ATH + 1 
             #ifdef TRACE
             if (repeat == 1)

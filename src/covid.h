@@ -2,7 +2,7 @@
 
 #define MAXINFECTED 65536 /* estimated MAX value infected! */
 #define MAX_INFECTED_PER_DAY 8192 /* estimated MAX value infected! */
-#define MAX_REPEAT 1000 /* number of times we replicated the simulation */
+#define MAX_REPEAT 500 /* number of times we replicated the simulation */
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -58,7 +58,7 @@
 #define COLS_FILE_CURRENT_STATE                 6
 #define COLS_FILE_CURRENT_STATE_PER_DATE        7
 #define COLS_FILE_LOS                           4
-#define COLS_FILE_TRANSITIONS                   4
+#define COLS_FILE_TRANSITIONS                   5
 #define COLS_FILE_SCENARIOS											2
 #define COLS_FILE_FORECAST											3
 

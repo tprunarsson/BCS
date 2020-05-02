@@ -10,7 +10,7 @@
 extern double forecastCDF[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
 extern double firstSplittingCDF[MAX_NUM_SPLITTING_VALUES];
 extern double firstStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
-extern double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES];
+extern double transitionCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS][MAX_NUM_STATES];
 extern double losCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS];
 extern double	firstScenarioSplittingCDF[MAX_NUM_SPLITTING_VALUES];
 extern double firstScenarioStateCDF[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES];
@@ -320,20 +320,28 @@ int readLosP(char *fname) {
 
 /*
  Calculating CDF for state transitions
- File header: splitting_variable,state,state_tomorrow,count
+ File header: splitting_variable,state,state_duration,state_next,count
 */
 int readTransitionCDF(char *fname) {
   FILE *fid;
-  int splitting,state_from, state_to;
-  int i, j, k, count;
-  double P[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_NUM_STATES], sum;
-  char buffer[2048], sztmp[128], *token;
+  int splitting, state, state_next, state_duration;
+  int i, j, k,l, count;
+  double P[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS][MAX_NUM_STATES], sum;
+	char buffer[2048], szsplitting[128], szstate[128], szstatenext[128];
  
+  /* initialize the memory to zero */
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
+    for (j = 0; j < MAX_NUM_STATES; j++)
+      for (k = 0; k < MAX_LOS_DAYS; k++)
+				for (l = 0;l < MAX_NUM_STATES; l++)
+					P[i][j][k][l] = 0.0;
+	
   fid = fopen(fname, "r");
   if (fid == NULL) {
     printf("[fatal error]: could not open state transition count file %s\n", fname);
     exit(1);
   }
+	// remove header
   if (NULL == fgets(buffer, 2048, fid)) {
     printf("[fatal error]: state transition by split file %s is corrupt (1)\n", fname);
     exit(1);
@@ -343,49 +351,64 @@ int readTransitionCDF(char *fname) {
     printf("[fatal error]: state transition by split file %s is corrupt (2)\n", fname);
     exit(1);
   }
-  /* initialize the memory to zero */
-  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
-    for (j = 0; j < MAX_NUM_STATES; j++)
-      for (k = 0; k < MAX_NUM_STATES; k++)
-        P[i][j][k] = 0.0;
+	
   /* scan the entire file for transition counts */
   while (NULL != fgets(buffer, 8192, fid)) {
-    token = strtok(buffer, ",");
-    sprintf(sztmp, "%s", token);
-    splitting = get_splitting_variable(sztmp);
-    token = strtok(NULL, ",");
-    sscanf(token, "%s", sztmp);
-    state_from = get_state(sztmp);
-    token = strtok(NULL, ",");
-    sscanf(token, "%s", sztmp);
-    state_to = get_state(sztmp);
-    token = strtok(NULL, ",");
-    sscanf(token, "%d", &count);
-    P[splitting][state_from][state_to] = count;
+		clear_symbol(buffer,',');
+    sscanf(buffer, "%s %s %d %s %d", szsplitting, szstate, &state_duration, szstatenext, &count);
+    splitting = get_splitting_variable(szsplitting);
+    state = get_state(szstate);
+    state_next = get_state(szstatenext);
+    P[splitting][state][state_duration][state_next] = count;
   }
-  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
+	
+	for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++){
+		for (j = 0; j < MAX_NUM_STATES; j++){
+      for (k = 0; k < MAX_LOS_DAYS; k++){
+				sum = 0.0;
+				for (l = 0; l < MAX_NUM_STATES; l++){
+					sum = sum + P[i][j][k][l];
+				}
+				if (sum > 0){
+					for (l = 0; l < MAX_NUM_STATES; l++){
+						P[i][j][k][l] = P[i][j][k][l] / sum;
+					}
+				}
+			}
+		}
+	}
+	for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++){
     for (j = 0; j < MAX_NUM_STATES; j++) {
-      sum = 0.0;
-      for (k = 0; k < MAX_NUM_STATES; k++)
-        sum = sum + P[i][j][k];
-      if (sum > 0)
-        for (k = 0; k < MAX_NUM_STATES; k++)
-          P[i][j][k] = P[i][j][k] / sum; 
+			for (k = 0; k < MAX_LOS_DAYS; k++){
+				transitionCDF[i][j][k][0] = P[i][j][k][0];
+				for (l = 1; l < MAX_NUM_STATES; l++){
+					transitionCDF[i][j][k][l] = transitionCDF[i][j][k][l-1] + P[i][j][k][l];
+				}
+			}
     }
-  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
+	}
+	
+	// Write to separate file for R
+	char fout_name[1024];
+	sprintf(fout_name,"../output/2020-03-02_1_transition_cdf.csv"); // RJS Create on the fly
+	
+	FILE *fout = fopen(fout_name, "w");
+	
+	fprintf(fout,"splitting_variable,state,state_duration,state_tomorrow,cdf\n");
+	
+  for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
+		if (szSplittingVariable[i]==NULL)
+			break;
     for (j = 0; j < MAX_NUM_STATES; j++) {
-      transitionCDF[i][j][0] = P[i][j][0];
-      for (k = 1; k < MAX_NUM_STATES; k++)
-        transitionCDF[i][j][k] = transitionCDF[i][j][k-1] + P[i][j][k];
-    }
-  for (k = 0; k < MAX_NUM_SPLITTING_VALUES; k++) {
-    fprintf(outfile, "CDF[%s] = \n", szSplittingVariable[k]);
-    for (i = 0; i < MAX_NUM_STATES; i++) {
-      for (j = 0; j < MAX_NUM_STATES; j++)
-        fprintf(outfile, "%.4g ", transitionCDF[k][i][j]);
-      fprintf(outfile, "\n");
+			for (k = 0; k < MAX_LOS_DAYS; k++){
+				for (l = 0; l < MAX_NUM_STATES; l++){
+					fprintf(fout,"%s,%s,%d,%s,%.4g\n", szSplittingVariable[i], szStateVariable[j], k, szStateVariable[l], transitionCDF[i][j][k][l]);
+				}
+				fprintf(outfile, "\n");
+			}
     }
   }
+	fclose(fout);
   fclose(fid);
   return 0;
 }
@@ -432,8 +455,8 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
     strftime(sztmpdate, 32, "%Y-%m-%d", &t);
     rewind(fid); /* read the file from the start */
 		
-		iPersonArrival[day] = 0;		// Initalize the count of arrival each day (first_state).
-//		iPersonCurrent[day+1] = 0;	//	Initalize the count of current each day (current_state).
+		iPersonArrival[day] = 0;	// Initalize the count of arrival each day (first_state).
+		iPersonCurrent[day] = 0;	//	Initalize the count of current each day (current_state).
 		
     if (NULL == fgets(buffer, 8192, fid)) {
       printf("fatal: historical data file %s corrupt (1)\n", fname);
@@ -448,6 +471,7 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
 		while (NULL != fgets(buffer, 8192, fid)) {
 			clear_symbol(buffer,',');
 			sscanf(buffer, "%d %s %s %s %d %d %s", &person_id, sztmp, szsplitting, szstate, &days_in_state, &days_from_diagnosis, szworststate);
+			
 			if (0 == strcmp(sztmp, sztmpdate)) {
 				date_found = 1;
         person_index = get_person_index(person_id);
@@ -455,27 +479,28 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
 				strcpy(iPerson[person_index].szDate, sztmpdate);
 				// printf("historical data read for person_index=%d, with id=%d\n", person_index, person_id);
 				iPerson[person_index].splitting = get_splitting_variable(szsplitting);
-				iPerson[person_index].real_state[day] = get_state(szstate);;
-     
-        if ((day == 0) && (iPerson[person_index].real_state[day] != -1)) {
-          iPerson[person_index].first_state_indicator[day] = 1;
-        }
-        else if ((iPerson[person_index].real_state[day-1] != iPerson[person_index].real_state[day])
-                && (iPerson[person_index].real_state[day-1] == -1)) {
-          iPerson[person_index].first_state_indicator[day] = 1;
-        }
-        else
-          iPerson[person_index].first_state_indicator[day] = 0;
-        
+				iPerson[person_index].real_state[day] = get_state(szstate);
+				
+				if (days_in_state == 1){
+					if (day > 0) {
+						iPerson[person_index].first_state_indicator[day] = (iPerson[person_index].real_state[day-1] == -1) ? 1 : 0;
+					} else {
+						iPerson[person_index].first_state_indicator[day] = 1;	// RJS we still have to fix when day=0.
+					}
+				} else {
+					iPerson[person_index].first_state_indicator[day] = 0;
+				}
+	
         iPerson[person_index].real_days_in_state[day] = days_in_state;
         iPerson[person_index].real_days_from_diagnosis[day] = days_from_diagnosis;
         iPerson[person_index].real_state_worst[day] = get_state(szworststate);
         iPerson[person_index].start_day = day;
 				
 				// Fill the index tables
-				
-//				iPersonCurrentIndex[day+1][iPersonCurrent[day+1]] = person_index;
-//				iPersonCurrent[day+1]++;
+				if (iPerson[person_index].real_days_in_state[day] > 1){
+					iPersonCurrentIndex[day][iPersonCurrent[day]] = person_index;
+					iPersonCurrent[day]++;
+				}
 				
 				if (iPerson[person_index].first_state_indicator[day] == 1){
 					iPersonArrivalIndex[day][iPersonArrival[day]] = person_index;

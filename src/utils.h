@@ -8,5 +8,4 @@ int clearSimStatsLocation(int max_sim_time);
 int setSimulationLocation(int person_id, int day, int los, int location);
 int countStatistics(int max_sim_time);
 void printPersons(person thePerson[MAXINFECTED], int n);
-int use_heuristic(int heuristic);
 
