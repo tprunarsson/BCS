@@ -148,23 +148,6 @@ beta_objective_function <- function(x,x_c,max_num_days,theta){
   return(-L)
 }
 
-fit_distr <- function(x,x_c,max_num_days,distr){
-  if(distr=='lognormal'){
-    theta_init <- c(1,1)
-    theta_start=c(0.5,0)
-    objective_function=function(theta) lognormal_objective_function(x=x,x_c=x_c,max_num_days = max_num_days,theta)
-  }else if(distr=='beta'){
-    theta_init <- c(1,3.5)
-    theta_lower <- c(0,0)
-    objective_function=function(theta) beta_objective_function(x=x,x_c=x_c,max_num_days = max_num_days,theta)
-  }else{
-    stop('distribution not yet supported')
-  }
-  theta_lower <- get_theta_lower(obj_fun=objective_function,theta_start=theta_start)
-  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = theta_lower)$par
-  return(theta)
-}
-
 get_theta_lower <- function(obj_fun,theta_start=c(0.5,0)){
   test_vals <- theta_start[2] + seq(0,1,by=0.01)
   lower_test <- vector('numeric',length=length(test_vals))
@@ -174,6 +157,24 @@ get_theta_lower <- function(obj_fun,theta_start=c(0.5,0)){
   first_finite_lower <- test_vals[is.finite(lower_test)][which.max(lower_test)]
   theta_lower <- c(theta_start[1],first_finite_lower)
   return(theta_lower)
+}
+
+fit_distr <- function(x,x_c,max_num_days,distr){
+  if(distr=='lognormal'){
+    theta_init <- c(1,1)
+    theta_start=c(0.5,0)
+    objective_function=function(theta) lognormal_objective_function(x=x,x_c=x_c,max_num_days = max_num_days,theta)
+  }else if(distr=='beta'){
+    theta_init <- c(1,3.5)
+    theta_start=c(0.1,0.1)
+    theta_lower <- c(0,0)
+    objective_function=function(theta) beta_objective_function(x=x,x_c=x_c,max_num_days = max_num_days,theta)
+  }else{
+    stop('distribution not yet supported')
+  }
+  theta_lower <- get_theta_lower(obj_fun=objective_function,theta_start=theta_start)
+  theta <- optim(theta_init,objective_function,method='L-BFGS-B',lower = theta_lower)$par
+  return(theta)
 }
 
 
@@ -197,7 +198,9 @@ sample_from_distr <- function(x,x_c,max_num_days,distr,nr_samples=1e6){
 }
 
 get_max_splitting_dat <- function(splitting_variable_names){
-  max_splitting_dat <- select(individs_splitting_variables,patient_id,matches(paste(unique(splitting_variable_names),sep='|'))) %>%
+  max_splitting_dat <- select(individs_splitting_variables,patient_id,
+                              matches(paste(paste0('^',unique(splitting_variable_names),'$'),collapse='|')),
+                              matches(paste(paste0('^',unique(splitting_variable_names),'_order','$'),collapse='|'))) %>%
     pivot_longer(.,-matches('patient_id|order'),names_to='splitting_variable',values_to='value') %>%
     pivot_longer(.,matches('order'),names_to='splitting_variable_order_name',values_to='splitting_variable_order') %>%
     filter(.,paste0(splitting_variable,'_order')==splitting_variable_order_name) %>%
@@ -426,13 +429,13 @@ get_cdf <- function(dat,num_groups){
 #   select(splitting_variable,state,prop_transition_without_time)
 # 
 # inner_join(los_home_by_time_splitting,prop_ward_transition_by_time_splitting,by=c('splitting_variable','state','time_splitting_variable')) %>%
-#   inner_join(.,first_state,by=c('splitting_variable','state'='initial_state')) %>% 
-#   mutate(exp_cum_ward=prop_los*prop_transition*count) %>% 
+#   inner_join(.,first_state,by=c('splitting_variable','state'='initial_state')) %>%
+#   mutate(exp_cum_ward=prop_los*prop_transition*count) %>%
 #   ungroup() %>%
 #   summarise(sum(exp_cum_ward))
 # 
 # inner_join(los_home_by_time_splitting,prop_ward_transition_without_time_splitting,by=c('splitting_variable','state')) %>%
-#   inner_join(.,first_state,by=c('splitting_variable','state'='initial_state')) %>% 
-#   mutate(exp_cum_ward=prop_los*prop_transition_without_time*count) %>% 
+#   inner_join(.,first_state,by=c('splitting_variable','state'='initial_state')) %>%
+#   mutate(exp_cum_ward=prop_los*prop_transition_without_time*count) %>%
 #   ungroup() %>%
 #   summarise(sum(exp_cum_ward))
