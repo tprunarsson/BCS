@@ -7,7 +7,7 @@ library(ggplot2)
 
 date_data_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 date_start_tmp <- as.Date('2020-03-02','%Y-%m-%d')
-run_id_tmp <- 1
+run_id_tmp <- 3
 tracking_tmp <- FALSE
 
 option_list <-  list(
@@ -62,7 +62,7 @@ states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
 path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
 historical_data <- read_csv(path_historical_data) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
-plot_data=tibble(date=as.Date(x = integer(0), origin = "1970-01-01"),experiment_id=numeric(),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric())
+plot_data=tibble(date=as.Date(x = integer(0), origin = "1970-01-01"),experiment_id=factor(character(0),levels=as.character(run_info$experiment_id)),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric())
 performance_data_list <- list()
 paths_data_list <- list()
 turnover_plot_list <- list()
