@@ -122,6 +122,7 @@ clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_
 priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories')
 age_groups <- read_excel(file_path_coding,sheet = 'age_groups')
 length_of_stay_categories <- read_excel(file_path_coding,sheet = 'length_of_stay_categories') 
+
 comorbidities_categories <- read_excel(file_path_coding,sheet = 'comorbidities') %>%
                               arrange(comorbidities_raw)
 sheet_names <- read_excel(file_path_coding,sheet = 'lsh_sheet_names',trim_ws = FALSE)
@@ -343,19 +344,9 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       left_join(.,interview_last_date,by='patient_id') %>%
                       mutate(.,date_outcome=pmin(date_outcome_tmp,if_else(covid_group=='recovered',date_last_known,NULL),na.rm=TRUE)) %>%
                       filter(if_else(is.finite(date_outcome) & outcome=='recovered',(date_outcome-date_diagnosis)>0,TRUE)) %>%
-                      mutate(.,imputed_priority=impute_priority(priority,age,n_comorbidity)) %>%
-                      select(.,patient_id,zip_code,age,sex,priority,imputed_priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
-
-individs_splitting_variables <- select(individs_extended,patient_id,age,sex,priority) %>%
-                            left_join(age_groups,by='age') %>%
-                            mutate_at(vars(matches('age_'),-matches('order')),list( ~paste0('age_',.))) %>%
-                            left_join(priority_categories,by=c('priority'='priority_all')) %>%
-                            rename(priority_all=priority) %>%
-                            mutate_at(vars(matches('priority'),-matches('order')),list( ~paste0('priority_',.))) %>%
-                            select(-matches('raw'))
+                      mutate(.,priority=impute_priority(priority,age,n_comorbidity)) %>%
+                      select(.,patient_id,zip_code,age,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
                             
-                      
-
 #patient transitions.
 #Start by assuming everybody is at home from the time diagnosed to today
 #Note: patients diagnosed on current_date have a known state on that date, but others do not. Applies both for dates_home and dates_hospital
@@ -438,6 +429,24 @@ state_worst_case <- group_by(state_worst_case_per_date,patient_id) %>% arrange(d
 individs_extended <- left_join(individs_extended,state_worst_case,by='patient_id')
 rm(state_worst_case)
 
+#add point of diagnosis
+individs_extended <- left_join(individs_extended,select(patient_transitions,patient_id,date,state,severity),by=c('patient_id','date_diagnosis'='date')) %>%
+                        rename(state_first=state,severity_first=severity)
+  
+  
+individs_splitting_variables <- select(individs_extended,patient_id,age,sex,priority,state_first) %>%
+                                left_join(age_groups,by='age') %>%
+                                mutate_at(vars(matches('age_'),-matches('order')),list( ~paste0('age_',.))) %>%
+                                left_join(priority_categories,by=c('priority'='priority_all')) %>%
+                                rename(priority_all=priority) %>%
+                                mutate_at(vars(matches('priority'),-matches('order')),list( ~paste0('priority_',.))) %>%
+                                select(-matches('raw')) %>%
+                                mutate(point_of_diagnosis=if_else(state_first=='home','outpatient','inpatient')) %>%
+                                mutate(point_of_diagnosis_order=if_else(point_of_diagnosis=='outpatient',1,2)) %>%
+                                mutate(age_simple_point_of_diagnosis=if_else(age_simple=='age_0-50',age_simple,paste(age_simple,point_of_diagnosis,sep='_'))) %>%
+                                mutate(age_simple_point_of_diagnosis_order=if_else(age_simple=='age_0-50',1,if_else(point_of_diagnosis=='outpatient',2,3)))
+
+
 #summarize state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
 patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
                                     mutate(state_block_nr=get_state_block_numbers(state),
@@ -478,7 +487,7 @@ if(write_tables){
   write.table(run_info, file = paste0(path_tables,current_date,'_',run_id,'_run_info.csv'), quote = F,row.names=F,sep='\t',col.names=F)
 }
 
-for(id in run_info$experiment_id){
+ for(id in run_info$experiment_id){
   experiment_table_list <- get_tables_for_experiment(id)
   tables_to_convert_to_cdf <- c('transition_summary','length_of_stay','first_state')
   if(write_tables){
