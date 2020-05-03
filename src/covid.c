@@ -293,8 +293,8 @@ int real_reinit_model(int day) {
   The init_model function using real historical data, from given day
  NOTE: Change comment
 */
-int historical_arrive(int day) {
-  int i, person_index, splitting, state;
+int historical_arrive(int day, int use_historical_states) {
+  int i, person_index, splitting, first_state;
   int new_state;
   double length_of_stay, departure_day;
 	state_time_data data;
@@ -303,12 +303,15 @@ int historical_arrive(int day) {
 		person_index = iPersonArrivalIndex[day][i];
 		transfer[ATTR_PERSON] = (double)iPerson[person_index].person_id;
 		splitting = iPerson[person_index].splitting;
-		/* we need a strategy for selecting which location we enter */
-		state = iPerson[person_index].real_state[day];
+		if (use_historical_states == 1){
+			first_state = iPerson[person_index].real_state[day];
+		} else {
+			first_state = discrete_empirical(firstStateCDF[splitting], MAX_NUM_STATES, STREAM_FIRST_STATE);
+		}
 		
-		data.state_current = state;
+		data.state_current = first_state;
 		data.state_next = -1;
-		data.state_worst = state;
+		data.state_worst = first_state;
 		data.length_of_stay = -1;
 		data.days_in_state = 0;
 		data.days_from_diagnosis = 0;
@@ -325,9 +328,9 @@ int historical_arrive(int day) {
 		transfer[ATTR_SPLITTING] = (double)splitting;
 		transfer[ATTR_DAYSDIAGNOSIS] = length_of_stay;
 		transfer[ATTR_DAYSINSTATE] = length_of_stay;
-		transfer[ATTR_STATE] = (double)state;
+		transfer[ATTR_STATE] = (double)first_state;
 		transfer[ATTR_NEXTSTATE] = (double)new_state;
-		transfer[ATTR_WORSTSTATE] = (double)state;
+		transfer[ATTR_WORSTSTATE] = (double)first_state;
 		departure_day = sim_time + length_of_stay;
 		transfer[ATTR_DEPARTDAY] = departure_day;
 		#ifdef TRACE
@@ -337,12 +340,12 @@ int historical_arrive(int day) {
 		#ifdef STATS
 		setSimulationLocation(iPerson[person_index].person_id, (int)floor(sim_time), length_of_stay, state);
 		#endif
-		list_file (INCREASING, state);
-		transfer[ATTR_STATE] = (double)state; /* must be repeated since transfer is new */
+		list_file (INCREASING, first_state);
+		transfer[ATTR_STATE] = (double)first_state; /* must be repeated since transfer is new */
 		event_schedule(departure_day, EVENT_DEPARTURE);
 		
 	#ifdef TRACK_PERSON
-		track_person(iPerson[person_index].person_id,repeat,STATE_FIRST,(int)floor(sim_time),state);
+		track_person(iPerson[person_index].person_id,repeat,STATE_FIRST,(int)floor(sim_time),first_state);
 	#endif
   }
   return 0;
@@ -615,6 +618,7 @@ int main(int argc, char *argv[]) {
 	int use_scenario_data = 0;
 	int use_historical_data = 0;
 	int historical_reset_days = 0;	// default is no historical reset
+	int use_historical_states = 0;
 	char date_start[12]="";
 	char date_data[12]="";
 	char experiment_id[4]="1";
@@ -624,7 +628,7 @@ int main(int argc, char *argv[]) {
 
   maxatr = 15; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
 	
-	while ((opt = getopt(argc, argv, "s:i:h:v:d:n:p:r:a")) != -1) {
+	while ((opt = getopt(argc, argv, "s:i:h:v:d:n:p:r:at")) != -1) {
 			switch (opt) {
 			case 's': strcpy(date_start,optarg); break;
 			case 'i': strcpy(experiment_id,optarg); break;
@@ -635,6 +639,7 @@ int main(int argc, char *argv[]) {
 			case 'p': strcpy(path,optarg); break;
 			case 'r': use_historical_data=1;historical_reset_days=atoi(optarg); break;
 			case 'a': use_scenario_data=1; break;
+			case 't': use_historical_states=1; break;
 			default:
 // RJS add help + check date formats
 					fprintf(stderr, "Usage: ./%s [-simhvdnp]\n", argv[0]);
@@ -846,7 +851,7 @@ int main(int argc, char *argv[]) {
 							start = clock();
 						}
 					#endif
-            historical_arrive((int)floor(sim_time));
+            historical_arrive((int)floor(sim_time), use_historical_states);
 					#ifdef TIME
 						if (repeat==1){
 							end = clock();
