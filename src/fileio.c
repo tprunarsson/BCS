@@ -418,12 +418,13 @@ int readTransitionCDF(char *fname) {
 */
 int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
   FILE *fid;
-  char sztmp[64], sztmpdate[32], szsplitting[32], szstate[128], szworststate[128];
+  char sztmp[64], sztmpdate[32], szsplitting[128], szstate[128], szworststate[128], day_before[32];
   char buffer[8192];
-  int day, days_found, date_found = 0;
+  int i, found_day_before, day_before_idx, day, days_found, date_found = 0;
   int person_index, person_id, days_in_state, days_from_diagnosis;
   int y, m, d;
   struct tm  t = { 0 };
+	int person_day_before[MAX_INFECTED_PER_DAY];
 
   fid = fopen(fname, "r");
   if (fid == NULL) {
@@ -431,6 +432,10 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
     exit(1);
   }
  
+	for (i = 0; i  < MAX_INFECTED_PER_DAY; i ++){
+		person_day_before[i] = -1;
+	}
+	
   for (person_index = 0; person_index < MAXINFECTED; person_index++) {
     for (day = 0; day < max_sim_time; day++) {
         iPerson[person_index].person_id = 0;
@@ -444,6 +449,14 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
   }
     
   sscanf(szDate,"%d-%d-%d", &y, &m, &d);
+	
+	t.tm_mday = d - 1;
+	t.tm_mon = m - 1;
+	t.tm_year = y - 1900;
+	mktime(&t);
+	strftime(day_before, 32, "%Y-%m-%d", &t);
+	day_before_idx = 0;
+	
   days_found = 0;
 	
   for (day = 0; day < max_sim_time; day++) {
@@ -472,6 +485,12 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
 			clear_symbol(buffer,',');
 			sscanf(buffer, "%d %s %s %s %d %d %s", &person_id, sztmp, szsplitting, szstate, &days_in_state, &days_from_diagnosis, szworststate);
 			
+			// find those who are in the system the day before start_date (to correctly find those who arrive on start_date)
+			if (0 == strcmp(sztmp,day_before)){
+				person_day_before[day_before_idx] = person_id;
+				day_before_idx++;
+			}
+			// find those who are in the system from start_date onward
 			if (0 == strcmp(sztmp, sztmpdate)) {
 				date_found = 1;
         person_index = get_person_index(person_id);
@@ -485,7 +504,13 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
 					if (day > 0) {
 						iPerson[person_index].first_state_indicator[day] = (iPerson[person_index].real_state[day-1] == -1) ? 1 : 0;
 					} else {
-						iPerson[person_index].first_state_indicator[day] = 1;	// RJS we still have to fix when day=0.
+						found_day_before = 0;
+						for (i = 0; i < day_before_idx; i++){
+							if( iPerson[person_index].person_id == person_day_before[i]){
+								found_day_before = 1;
+							}
+						}
+						iPerson[person_index].first_state_indicator[day] = (found_day_before == 0) ? 1 : 0;
 					}
 				} else {
 					iPerson[person_index].first_state_indicator[day] = 0;
@@ -496,7 +521,7 @@ int readHistoricalData(char *fname, char *szDate, int max_sim_time) {
         iPerson[person_index].real_state_worst[day] = get_state(szworststate);
         iPerson[person_index].start_day = day;
 				
-				// Fill the index tables
+				// Fill the index tables. RJS Need to fix current state before using (need to deal with cases when switching state on day)
 				if (iPerson[person_index].real_days_in_state[day] > 1){
 					iPersonCurrentIndex[day][iPersonCurrent[day]] = person_index;
 					iPersonCurrent[day]++;

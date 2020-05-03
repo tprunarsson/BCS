@@ -130,7 +130,7 @@ int whereToNext(int splitting, state_time_data *data) {
 
 		/* this second check will only activate when we are using the clinical assessment */
 		while ((state_next == INTENSIVE_CARE_UNIT_RED) && ((*data).state_worst == INTENSIVE_CARE_UNIT_RED) )
-			state_next = discrete_empirical(transitionCDF[splitting][(*data).state_next][length_of_stay], MAX_NUM_STATES, STREAM_TRANSITION);
+			state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current][length_of_stay], MAX_NUM_STATES, STREAM_TRANSITION);
 	}
 	
 	(*data).state_next = state_next;
@@ -148,7 +148,7 @@ int init_model(char *fname) {
   int person_id, day;
   int days_from_diagnosis, days_in_state, state, new_state, splitting, worst_state, person_idx;
   double departure_day, length_of_stay;
-  char buffer[1024], szstate[32], szsplitting[32], szworststate[32];
+  char buffer[1024], szstate[32], szsplitting[128], szworststate[32];
 	state_time_data data;
  
   fid = fopen(fname, "r");
@@ -179,7 +179,7 @@ int init_model(char *fname) {
     transfer[ATTR_PERSON] = (double)person_id;
     person_idx = get_person_index(person_id);
 		
-		if (person_id==217960)
+		if (person_id==422531)
 			data.state_current=state;
 		
 		data.state_current = state;
@@ -541,6 +541,9 @@ void depart(void) {
   else {
     worst_state = MAX(new_state, worst_state); /* ICU with highest value */
 		
+		if (id == 422531)
+			data.state_current = new_state;
+		
 		data.state_current = new_state;
 		data.state_next = -1;
 		data.state_worst = worst_state;
@@ -609,9 +612,9 @@ int main(int argc, char *argv[]) {
 	char *item;
 	
 	int	max_sim_time = MIN(28,MAX_SIM_TIME);
-	int use_scenario_data=0;
-	int use_historical_data=0;
-	int historical_reset_days=0;	// default is no historical reset
+	int use_scenario_data = 0;
+	int use_historical_data = 0;
+	int historical_reset_days = 0;	// default is no historical reset
 	char date_start[12]="";
 	char date_data[12]="";
 	char experiment_id[4]="1";
