@@ -9,10 +9,11 @@ date_data_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 date_start_tmp <- as.Date('2020-03-02','%Y-%m-%d')
 run_id_tmp <- 1
 tracking_tmp <- FALSE
+display_tmp <- FALSE
 
 option_list <-  list(
-    make_option(c("-r", "--run_id"), type="integer", default=NULL, 
-                help="run_id of run", metavar="integer"),
+    make_option(c("-r", "--run_id"), type="character", default=NULL, 
+                help="run_id of run", metavar="character"),
     make_option(c("-d", "--date_data"), type="character", default=NULL, 
                 help="date of data", metavar="character"),
     make_option(c("-s", "--date_start"), type="character", default=NULL, 
@@ -28,7 +29,7 @@ if(is.null(opt[['run_id']])){
     run_id <- run_id_tmp
     warning(paste0('You did not provide a current date. ',run_id,' will be used'))
 }else{
-    run_id <- as.Date(as.character(opt[['run_id']]),'%Y-%m-%d')
+    run_id <- opt[['run_id']]
 }
 
 if(is.null(opt[['date_data']])){
@@ -54,6 +55,14 @@ if(is.null(opt[['tracking']])){
     tracking <- TRUE
 }
 
+if (length(opt)>1){
+    display <- TRUE
+}else{
+    display <- display_tmp
+}
+
+print(opt[['run_id']])
+print(date_data)
 path_run_info <- paste0('../input/',date_data,'_',run_id,'_run_info.csv')
 run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','splitting_variable_name','splitting_variable_values','heuristic_string'))
 
@@ -62,7 +71,7 @@ states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
 path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
 historical_data <- read_csv(path_historical_data) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
-plot_data=tibble(date=as.Date(x = integer(0), origin = "1970-01-01"),experiment_id=numeric(),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric())
+plot_data=tibble(date=as.Date(x = integer(0), origin = "1970-01-01"),experiment_id=factor(character(0),levels=as.character(run_info$experiment_id)),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric())
 performance_data_list <- list()
 paths_data_list <- list()
 turnover_plot_list <- list()
@@ -122,3 +131,8 @@ ggplot(data=plot_data) +
     geom_point(data=historical_data,aes(date,count)) +
     facet_wrap(~state,scales='free') + 
     theme_bw()
+if(display){
+    ggsave(paste0('../output/run_',run_id,'.png'),device='png',width=16,height=10)
+    system(paste0('open ../output/run_',run_id,'.png'))
+}
+
