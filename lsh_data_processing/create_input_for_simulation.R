@@ -262,10 +262,10 @@ get_tables_for_experiment <- function(id){
                                     mutate(date=current_date,state_tomorrow='recovered') %>%
                                     select(.,patient_id,date,state,state_tomorrow)
     first_state <- get_first_state(model,max_splitting_dat)# %>% get_cdf(.,num_groups = 1)
-    transition_summary <-lapply(1:length(transition_states),function(i){
+    transition_summary <-lapply(1:length(states),function(i){
         get_transition_summary(model,recovered_imputed,states[i],transition_splitting_variable_names[i],max_splitting_mapping,transition_time_splitting_variable_names[i])
     }) %>% bind_rows() %>% arrange(splitting_variable,state,time_splitting_variable,state_next)# %>% get_cdf(.,num_groups = 2)
-    length_of_stay <-lapply(1:length(length_of_stay_states),function(i){
+    length_of_stay <-lapply(1:length(states),function(i){
         get_length_of_stay_predicted(model,states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 35)
     }) %>% bind_rows() %>% arrange(state,splitting_variable)# %>% get_cdf(.,num_groups = 2)
 
