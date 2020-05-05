@@ -27,7 +27,7 @@ Rscript covid19_lsh_data_processing.R -c "$date_data" -r "$run_id" -s "$date_sta
 cd ../src
 make covid
 while read experiment_id model splitting_variable_name splitting_variable_values heuristic_string
- do ./covid -s "$date_start" -i "$experiment_id" -h "$heuristic_string" -v "$splitting_variable_values" -d "$date_data" -n 50 -p ..
+ do ./covid -s "$date_start" -i "$experiment_id" -h "$heuristic_string" -v "$splitting_variable_values" -d "$date_data" -n 50 -p .. -r 0
 done <  ../input/"$date_data"_"$run_id"_run_info.csv
 cd ../lsh_data_processing
 Rscript ../R/run_evaluation.R -r "$run_id" -d "$date_data" -s "$date_start"

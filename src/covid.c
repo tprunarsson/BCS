@@ -627,7 +627,7 @@ int main(int argc, char *argv[]) {
 	char date_start[12]="";
 	char date_data[12]="";
 	char experiment_id[12]="1";
-	char heuristics_tmp[1024]="1;1;1;0;1";
+	char heuristics_tmp[1024]="1;1;1;0;0";
 	char splitting_values_tmp[2048]="age_0-50;age_51+";
 	char path[1023]="..";
 
