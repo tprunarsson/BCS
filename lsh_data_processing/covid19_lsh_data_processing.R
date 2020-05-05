@@ -109,6 +109,7 @@ interview_last_raw <- read_excel(file_path_data,sheet = 'Lokaviðtal-Spurning ú
 interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl úr hóp', skip=3) 
 NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
+treatment_contraints_raw <- read_excel(file_path_data,sheet = 'Takmörkun meðferðar', skip=3)
 
 covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
 unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
@@ -283,6 +284,13 @@ ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_ti
                       mutate(ventilator=if_else(ventilator=='date_ventilator_start','red','green')) %>%
                       group_by(patient_id,unit_in,date) %>%
                       summarize(ventilator=ventilator[which.max(ventilator=='red')])
+
+treatment_contraints <- rename(treatment_contraints_raw,patient_id=`Person Key`,intensive_care_unit_restriction=`Gjörgæsluvistun`,ventilator_restriction=`Öndunarvél`) %>%
+                        select(patient_id,intensive_care_unit_restriction,ventilator_restriction) %>%
+                        mutate(intensive_care_unit_restriction=if_else(!is.na(intensive_care_unit_restriction),'icu_restricted','not_icu_restricted')) %>%
+                        mutate(ventilator_restriction=if_else(!is.na(ventilator_restriction),'ventilator_restricted','not_ventilator_restricted'))
+
+
                 
               
 
@@ -345,7 +353,9 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                       mutate(.,date_outcome=pmin(date_outcome_tmp,if_else(covid_group=='recovered',date_last_known,NULL),na.rm=TRUE)) %>%
                       filter(if_else(is.finite(date_outcome) & outcome=='recovered',(date_outcome-date_diagnosis)>0,TRUE)) %>%
                       mutate(.,priority=impute_priority(priority,age,n_comorbidity)) %>%
-                      select(.,patient_id,zip_code,age,sex,priority,n_comorbidity,date_first_symptoms,date_diagnosis,outcome,date_outcome)
+                      left_join(.,select(treatment_contraints,patient_id,intensive_care_unit_restriction),by='patient_id') %>%
+                      mutate(intensive_care_unit_restriction=if_else(is.na(intensive_care_unit_restriction),'not_icu_restricted',intensive_care_unit_restriction)) %>%
+                      select(.,patient_id,zip_code,age,sex,priority,n_comorbidity,intensive_care_unit_restriction,date_first_symptoms,date_diagnosis,outcome,date_outcome)
                             
 #patient transitions.
 #Start by assuming everybody is at home from the time diagnosed to today
@@ -434,7 +444,7 @@ individs_extended <- left_join(individs_extended,select(patient_transitions,pati
                         rename(state_first=state,severity_first=severity)
   
   
-individs_splitting_variables <- select(individs_extended,patient_id,age,sex,priority,state_first) %>%
+individs_splitting_variables <- select(individs_extended,patient_id,age,sex,priority,state_first,intensive_care_unit_restriction) %>%
                                 left_join(age_groups,by='age') %>%
                                 mutate_at(vars(matches('age_'),-matches('order')),list( ~paste0('age_',.))) %>%
                                 left_join(priority_categories,by=c('priority'='priority_all')) %>%
@@ -444,8 +454,9 @@ individs_splitting_variables <- select(individs_extended,patient_id,age,sex,prio
                                 mutate(point_of_diagnosis=if_else(state_first=='home','outpatient','inpatient')) %>%
                                 mutate(point_of_diagnosis_order=if_else(point_of_diagnosis=='outpatient',1,2)) %>%
                                 mutate(age_simple_point_of_diagnosis=if_else(age_simple=='age_0-50',age_simple,paste(age_simple,point_of_diagnosis,sep='_'))) %>%
-                                mutate(age_simple_point_of_diagnosis_order=if_else(age_simple=='age_0-50',1,if_else(point_of_diagnosis=='outpatient',2,3)))
-
+                                mutate(age_simple_point_of_diagnosis_order=if_else(age_simple=='age_0-50',1,if_else(point_of_diagnosis=='outpatient',2,3))) %>%
+                                mutate(age_simple_intensive_care_unit_restriction=if_else(age_simple=='age_0-50',age_simple,paste(age_simple,intensive_care_unit_restriction,sep='_'))) %>%
+                                mutate(age_simple_intensive_care_unit_restriction_order=if_else(age_simple=='age_0-50',1,if_else(intensive_care_unit_restriction=='not_icu_restricted',2,3)))
 
 #summarize state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
 patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
