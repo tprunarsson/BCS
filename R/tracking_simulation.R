@@ -1,5 +1,5 @@
 
-trck=read_csv("../output/2020-03-02_2_tracking_info.csv")
+trck=read_csv("../output/2020-03-02_7_tracking_info.csv")
 curr <- read_csv("../lsh_data/2020-04-20_2_current_state_per_date.csv")
 
 arrival_state_per_date <- filter(curr,days_in_state==1) %>% group_by(date,state) %>% summarize(cnt=n())
