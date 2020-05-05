@@ -51,8 +51,9 @@
 #define RECOVER_MIN_14_DAYS             1
 #define IMPUTE_RECOVERED                2
 #define LOS_BEFORE_TRANSITION						3
+#define HOSPITAL_LESS_THAN_14_DAYS			4
 
-#define NUM_HEURISTICS                  4
+#define NUM_HEURISTICS                  5
 
 #define COLS_FILE_FIRST_STATE                   3
 #define COLS_FILE_CURRENT_STATE                 6

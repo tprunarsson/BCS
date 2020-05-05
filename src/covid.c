@@ -87,9 +87,14 @@ double lengthOfStay(int splitting, state_time_data *data) {
 			length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
 			while (((*data).days_from_diagnosis + length_of_stay) < 14)
 				length_of_stay = (double) discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
-		}
-		else
+		} else if (heuristics[HOSPITAL_LESS_THAN_14_DAYS] && (((*data).state_current == HOME_RED) || ((*data).state_current == HOME_GREEN) || ((*data).state_current == HOME)) && (((*data).state_worst == HOME_RED) || ((*data).state_worst == HOME_GREEN) || ((*data).state_worst == HOME)) && ((*data).days_from_diagnosis < 14) && ((*data).state_next != RECOVERED)){
 			length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
+			while (((*data).days_from_diagnosis + length_of_stay) >= 14)
+				length_of_stay = (double) discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
+		}
+		else{
+			length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
+		}
 	}
 	
 	// Make sure length_of_stay is not less than the days already spent in state when entering the simulation.
@@ -621,8 +626,8 @@ int main(int argc, char *argv[]) {
 	int use_historical_states = 0;
 	char date_start[12]="";
 	char date_data[12]="";
-	char experiment_id[4]="1";
-	char heuristics_tmp[1024]="1;1;1;1";
+	char experiment_id[12]="1";
+	char heuristics_tmp[1024]="1;1;1;0;1";
 	char splitting_values_tmp[2048]="age_0-50;age_51+";
 	char path[1023]="..";
 
