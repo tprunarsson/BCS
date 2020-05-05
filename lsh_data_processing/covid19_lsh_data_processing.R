@@ -456,7 +456,10 @@ individs_splitting_variables <- select(individs_extended,patient_id,age,sex,prio
                                 mutate(age_simple_point_of_diagnosis=if_else(age_simple=='age_0-50',age_simple,paste(age_simple,point_of_diagnosis,sep='_'))) %>%
                                 mutate(age_simple_point_of_diagnosis_order=if_else(age_simple=='age_0-50',1,if_else(point_of_diagnosis=='outpatient',2,3))) %>%
                                 mutate(age_simple_intensive_care_unit_restriction=if_else(age_simple=='age_0-50',age_simple,paste(age_simple,intensive_care_unit_restriction,sep='_'))) %>%
-                                mutate(age_simple_intensive_care_unit_restriction_order=if_else(age_simple=='age_0-50',1,if_else(intensive_care_unit_restriction=='not_icu_restricted',2,3)))
+                                mutate(age_simple_intensive_care_unit_restriction_order=if_else(age_simple=='age_0-50',1,if_else(intensive_care_unit_restriction=='not_icu_restricted',2,3))) %>%
+                                mutate(age_simple_sex=if_else(age_simple=='age_0-50',age_simple,paste(age_simple,sex,sep='_'))) %>%
+                                mutate(age_simple_sex_order=if_else(age_simple=='age_0-50',1,if_else(sex=='Kona',2,3)))
+
 
 #summarize state blocks, extracting min and max date to calculate length of each state. Note:states entered yesterday are not used to estimate length of stay
 patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
