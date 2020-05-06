@@ -1,10 +1,12 @@
 #!/usr/bin/env Rscript
-Sys.setlocale("LC_ALL","IS_is")
-library(optparse)
-library(readxl)
-library(dplyr)
-library(tidyr)
-library(readr)
+invisible(Sys.setlocale("LC_ALL","IS_is"))
+suppressPackageStartupMessages({
+  library(optparse)
+  library(readxl)
+  library(dplyr)
+  library(tidyr)
+  library(readr)
+})
 source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
@@ -157,17 +159,17 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                     left_join(.,clinical_assessment_categories,by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
                     mutate(.,clinical_assessment=clinical_assessment_category) %>%
                     group_by(.,patient_id) %>%
-                    summarize(.,date_first_symptoms=min(date_first_symptoms,na.rm=TRUE),
-                                    date_diagnosis=min(date_diagnosis,na.rm=TRUE),
-                                    date_clinical_assessment=min(date_clinical_assessment,na.rm=TRUE),
+                    summarize(.,date_first_symptoms=Min(date_first_symptoms,na.rm=TRUE),
+                                    date_diagnosis=Min(date_diagnosis,na.rm=TRUE),
+                                    date_clinical_assessment=Min(date_clinical_assessment,na.rm=TRUE),
                                     #date_clinical_assessment=if(!any(is.finite(clinical_assessment))) NA else date_clinical_assessment[which.max(clinical_assessment_category_order)],
                                     priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_all_order)],
                                     clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)],
                                     comorbidities_raw=if(any(!is.na(comorbidities_raw))) paste(comorbidities_raw[!is.na(comorbidities_raw)],collapse="; ") else NA_character_ #So as to not lose data we paste together the raw comorbidities of duplictes. Deal with duplicated comorbidities below.
                               ) %>%
                     filter(.,if_else(is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>%
-                    ungroup()%>%
-                    separate(comorbidities_raw,into = paste("comorbidity",c(1:10)),sep="; ") %>% #Adding comorbidities
+                    ungroup() %>%
+                    separate(comorbidities_raw,into = paste("comorbidity",c(1:10)),sep="; ",fill='left') %>% #Adding comorbidities
                     pivot_longer(matches("comorbidity"),names_to="comorb_number",values_to="comorbidity") %>%
                     group_by(patient_id) %>%
                     filter(!duplicated(comorbidity)) %>% 
@@ -179,7 +181,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                     group_by(patient_id)%>%
                     mutate(n_comorbidity=sum(comorbidities_included,na.rm=T))%>%
                     ungroup() %>%
-                    select(-comorbidities_included,-comorbidities_names)%>%
+                    select(-comorbidities_included,-comorbidities_names) %>%
                     pivot_wider(.,id_cols=c("patient_id","date_first_symptoms","date_diagnosis","date_clinical_assessment","priority","clinical_assessment","n_comorbidity"),
                                 names_from = "comorbidity",values_from="comorbidity") %>%
                     select(.,-comorb_NA,-comorb_healthy) %>%
@@ -316,11 +318,11 @@ hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,un
 
 hospital_outcomes <- group_by(hospital_visits_filtered,patient_id) %>%
                       summarize(.,outcome_tmp=if_else(any(grepl('death',text_out)),'death',NULL),
-                                date_outcome_tmp=min(date_out[grepl('death',text_out)],na.rm=TRUE)) %>%
+                                date_outcome_tmp=Min(date_out[grepl('death',text_out)],na.rm=TRUE)) %>%
                       ungroup()
 
 interview_extra_first_date <- group_by(interview_extra,patient_id) %>%
-                              summarize(priority_tmp=min(priority,na.rm=TRUE),min_date_clincial_assessment=min(date_clinical_assessment,na.rm=TRUE)) %>%
+                              summarize(priority_tmp=Min(priority,na.rm=TRUE),min_date_clincial_assessment=Min(date_clinical_assessment,na.rm=TRUE)) %>%
                               ungroup()
 
 #Find latest interview for each patient

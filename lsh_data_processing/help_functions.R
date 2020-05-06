@@ -1,3 +1,10 @@
+
+Min <- function(x,na.rm=F,...){
+  min_x <- suppressWarnings(min(x,na.rm=na.rm,...))
+  return(min_x)
+}
+
+
 get_states_in_order <- function(model='',active=F){
   states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
     arrange(unit_category_order) %>%
