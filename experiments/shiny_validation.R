@@ -14,7 +14,9 @@ option_list <-  list(
     make_option(c("-r", "--run_id"), type="integer", default=NULL, 
                 help="run_id to identify run of a set of experiments", metavar="integer"),
     make_option(c("-a", "--use_scenario"),action='store_true', default=FALSE, 
-                help="scenario used or not")
+                help="scenario used or not"),
+    make_option(c("-p", "--path"), type="character", default=NULL, 
+                help="path to root", metavar="character")
     
 )
 
@@ -34,9 +36,14 @@ if(is.null(opt[['run_id']])){
 if(is.null(opt[['use_scenario']])){
     stop(paste0('use_scenario flag must be active'))
 }
+if(is.null(opt[['path']])){
+    stop(paste0('You must provide a path'))
+}else{
+    path_to_root <- opt[['path']]
+}
 scenario_first_state_filename <- paste0(date_start,'_',run_id,'_scenario_first_state.csv')
 scenario_infected_filename <- paste0(date_start,'_',run_id,'_scenario_infected.csv')
-path_input <- '../input/'
+path_input <- paste0(path_to_root,'/input/')
 if(!(scenario_first_state_filename %in% list.files(path_input))){
     stop('Error: scenario first state file does not exist')
 }else if(!(scenario_infected_filename %in% list.files(path_input))){
