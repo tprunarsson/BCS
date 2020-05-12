@@ -61,10 +61,6 @@ if(class(scenario_infected$date_diagnosis)!='Date'){
     stop('Error: count column in scenario_infected must be an integer')
 }
 
-if(min(scenario_infected$date_diagnosis)!=date_start){
-    stop('Error: start date column in scenario_infected file must match date_start input argument') 
-}
-
 ###### scenario_first_state tests ##################
 if(class(scenario_first_state$initial_state)!='character'){
     stop('Error: initial_state column in scenario_first_state must be of class character')
