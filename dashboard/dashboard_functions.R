@@ -82,10 +82,11 @@ initial_get_and_save_data <- function() {
 get_and_save_new_data <- function(bcs_data) {
     max_date_los <- max(bcs_data$data_length_of_stay$date)
     max_date_sim <- max(bcs_data$data_all_simulation$date)
-    showNotification('Sæki ný gögn...', duration = 4, id = 'msg_saeki', type = 'message')
+    # showNotification('Sæki ný gögn...', duration = 4, id = 'msg_saeki', type = 'message')
+    
     data_simulation_new <- data.frame()
-    data_los_new <- data.frame()
     if (max_date_sim < Sys.Date()) {
+        showNotification('Sæki simulation history...', duration = 2, id = 'msg_sim', type = 'message')
         data_simulation_new <- load_git_data(
             'covid_simulation',
             data_folder = 'simulation_history',
@@ -94,9 +95,12 @@ get_and_save_new_data <- function(bcs_data) {
     if (nrow(data_simulation_new) > 0) {
         bcs_data$data_all_simulation <- bind_rows(bcs_data$data_all_simulation,
                                                   data_simulation_new)
+        
     }
 
+    data_los_new <- data.frame()
     if (max_date_los < Sys.Date()) {
+        showNotification('Sæki length of stay...', duration = 2, id = 'msg_sim', type = 'message')
         data_los_new <- load_git_data(
             'length_of_stay_empirical_age_simple', 
             start_date = max_date_los + 1)

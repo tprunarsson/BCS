@@ -8,7 +8,7 @@ output:
     css: styles.css
 ---
 
-```{r global, include=FALSE, warning=FALSE}
+```{r global, include=FALSE, warning=TRUE}
 library(flexdashboard)
 library(shiny)
 library(plotly)
@@ -18,10 +18,13 @@ library(dplyr)
 library(readr)
 library(tidyr)
 library(RCurl)
+library(shinySIR)
 source('dashboard_functions.R')
 
 #Load csv data
-bcs_data <- readRDS('input/bcs_data.rds')
+env_wdir <- Sys.getenv("ENV_WORKING_DIRECTORY")
+data_path <- ifelse(env_wdir == "", 'input', file.path(env_wdir, 'input'))
+bcs_data <- readRDS(file.path(data_path, 'bcs_data.rds'))
 bcs_data$data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
 
 # Set constants
@@ -41,8 +44,9 @@ Stillingar {.sidebar}
 
 ```{r}
 helpText('Veljið dagsetningu til að birta skýrslu fyrir')
-sliderInput('dagsetning_sk', 'Dagsetning:', min = start_date, max = max(bcs_data$data_all_simulation$date),
-            value = end_date, step = 1, timeFormat = "%d %b")
+sliderInput('dagsetning_sk', 'Dagsetning:', 
+            min = start_date, max = max(bcs_data$data_all_simulation$date),
+            value = max(bcs_data$data_all_simulation$date), step = 1, timeFormat = "%d %b")
 actionButton('saekja_gogn', label = 'Sækja ný gögn')
 observeEvent(input$saekja_gogn, {
   msg <- get_and_save_new_data(bcs_data)
@@ -88,6 +92,7 @@ plot_simulation <- function(state) {
                                     quantile975 = "Svartsýn spá"))
     ggplot(data = p_data, aes(x = date_spa, y = value)) +
         geom_line(aes(linetype = key, alpha = key), col = "blue4") +
+        geom_text(aes(label = value, alpha = key), col = "blue4") +
         # scale_x_date(date_breaks = "2 days", date_labels = "%m-%d", expand = c(0,0.5)) +
         labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
         scale_alpha_manual(values = c(1, 0.7)) +
@@ -176,18 +181,17 @@ renderPlotly({
 <!-- - Komur á göngudeild eru áætlaðar út frá spáðum fjölda í heimaeinangrun og hlutfalli þeirra sem voru í heimaeinangrun í síðustu viku og komu á göngudeild. -->
 
 
-Sviðsmyndir {id=svidsmyndir data-icon="fa-project-diagram"}
+
+Sviðsmyndir {id=svidsmyndir_old data-icon="fa-project-diagram"}
 ===============================================
 
 Stillingar {.sidebar}
 ---------------------------------------------------
 
 ```{r}
-# sliderInput('dagsetning', 'Dagsetning:', min = start_date, max = end_date,
-#             value = end_date, step = 1, timeFormat = "%d %b")
 helpText('Sláið inn nýjar auka forsendur og veljið "Keyra hermun". 
          Nokkurn tíma gæti tekið fyrir keyrsluna að klárast.')
-dateInput('sv_date', 'Dagsetning', value = '2020-03-01', min = '2020-03-01', max = Sys.Date() + 30)
+dateInput('sv_date', 'Dagsetning', value = Sys.Date(), min = '2020-03-01', max = Sys.Date() + 30)
 
 div(numericInput('sv_fjoldi', 'Fjöldi', min = 0, max = 100, step = 1, value = 0, width = 20),  selectInput('sv_age', 'Aldursbil', choices = c('0-50', '51-75', '>75'), selected = '0-50', width = 20), id='groupInputs')
 div(numericInput('sv_fjoldi', 'Fjöldi', min = 0, max = 100, step = 1, value = 0, width = 20),  selectInput('sv_age', 'Aldursbil', choices = c('0-50', '51-75', '>75'), selected = '51-75', width = 20), id='groupInputs')
@@ -232,6 +236,78 @@ renderPlotly({
 })
 ```
 
+
+Sviðsmyndir SIR {id=svidsmyndir data-icon="fa-project-diagram"}
+===============================================
+
+Stillingar {.sidebar}
+---------------------------------------------------
+
+```{r}
+dateInput('sir_start_date', 'Dagsetning fyrsta smits',
+          value = Sys.Date() + 1, min = '2020-03-01', max = Sys.Date() + 30)
+numericInput("sir_utsettir", 'Fjöldi útsettra',
+            min = 10, max = 1000, value = 300)
+radioButtons('sir_aldur_val', 'Aldursdreifing', choices = c('Þjóðar', 'Faraldurs', 'Skv. Stillingu:'))
+sliderInput("sir_aldur_dreif", '0-50 -- +51',
+            min = 0, max = 100, value = c(60))
+p('Staða við greiningu (%)')
+sliderInput("sir_stada", 'Heima -- Legudeild -- Gjörgæsla',
+            min = 0, max = 100, value = c(40, 70))
+
+ratio_heima <- reactive(as.numeric(input$sv_stada[1]))
+ratio_legu <- reactive(as.numeric(input$sv_stada[2]) - as.numeric(input$sv_stada[1]))
+ratio_gjor <- reactive(100 - as.numeric(input$sv_stada[2]))
+renderText(paste0('Heima: ', ratio_heima(), '%'))
+renderText(paste0('Legudeild: ', ratio_legu(), '%'))
+renderText(paste0('Gjörgæsla: ', ratio_gjor(), '%'))
+
+actionButton("sir_keyra", "Keyra hermun")
+```
+
+
+Sviðsmyndir SIR
+------------------------------
+
+### SIR kúrfa
+```{r fig.height=2}
+# staerd <- sliderInput(sir_staerd, 'Útsettir', min = 10, max = 1000)
+# observeEvent(input$sir_keyra, ({
+  shinySIR::run_shiny(model = "SIR", tmax = 60, ics =c(S = 100, I = 1, R = 2), showtable = F)
+# }))
+```
+
+sviðsmyndir-legudeild-gjörgæsla
+-------------------------------
+
+### Legudeild
+
+```{r}
+renderPlotly({
+  p <- plot_simulation('Legudeild') + ylim(0, 100)
+  ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+  observeEvent(input$sv_keyra, {
+    p <- p + geom_line(aes(y = value + 5, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
+    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+  })
+  ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+})
+
+```
+
+
+### Gjörgæsla
+
+```{r}
+renderPlotly({
+    p <- plot_simulation('Gjörgæsla') + ylim(0, 50)
+    if (input$sv_fjoldi > 0) {
+    p <- p +
+      geom_line(aes(y = value + 2, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
+    }
+    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+})
+```
 
 Forsendur {data-icon="fa-chart-bar"}
 =======================================================================
