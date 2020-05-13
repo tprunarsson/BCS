@@ -1,8 +1,8 @@
 
 library(ggplot2)
 library(readr)
-date_start=as.Date('2020-03-02','%Y-%m-%d')
-date_data=as.Date('2020-04-15','%Y-%m-%d')
+date_start=as.Date('2020-04-20','%Y-%m-%d')
+date_data=as.Date('2020-04-20','%Y-%m-%d')
 experiment_id <- 1
 path_data_sim <- paste0('../output/',date_start,'_',experiment_id,'_covid_simulation.csv')
 path_data_hist <- paste0('../input/',date_data,'_',experiment_id,'_current_state_per_date_summary.csv')
@@ -27,11 +27,11 @@ df <- read_csv(path_data_hist) %>% ungroup() %>% mutate(.,date=as.factor(date), 
 brk <- levels(simulation_run$date); brk[seq(2,length(brk),2)] <- " "; 
 brk[seq(2,length(brk),3)] <- " "; brk[seq(3,length(brk),3)] <- " "
 brk <- c(brk," ")
-p = ggplot(simulation_run, aes(x = date, y = count)) + stat_summary(fun.data = f, geom="boxplot") + geom_boxplot(color = "gray", alpha = 0.3, outlier.shape = NA)  +
-    geom_point(data=df, aes(x = date, y = count, color = "black"), color = "red", shape = 23, show.legend = FALSE) +
+p = ggplot(simulation_run, aes(x = date, y = count)) + stat_summary(fun.data = f, geom="boxplot") + geom_boxplot(color = "gray", alpha = 0.3, outlier.shape = NA)  +    
+#    geom_point(data=df, aes(x = date, y = count, color = "black"), color = "red", shape = 23, show.legend = FALSE) +
     facet_wrap(~state,scales = "free") +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),panel.background = element_rect(fill='white',colour='black'),
             panel.grid.major = element_line(colour='gray95'),panel.grid.minor = element_line(colour='gray95')) + xlab('') + ylab('') +
     scale_x_discrete(labels=brk)
 
-ggsave(filename='simulations_performance.png',device='png',width=18,height=11)
+#ggsave(filename='simulations_performance.png',device='png',width=18,height=11)

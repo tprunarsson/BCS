@@ -1,0 +1,7 @@
+initial_state,splitting_variable,count
+home,age_0-50,1231
+home,age_51+,525
+inpatient_ward,age_0-50,1
+inpatient_ward,age_51+,14
+intensive_care_unit,age_0-50,0
+intensive_care_unit,age_51+,5
