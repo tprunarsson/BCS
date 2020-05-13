@@ -4,6 +4,11 @@ Min <- function(x,na.rm=F,...){
   return(min_x)
 }
 
+Max <- function(x,na.rm=F,...){
+  max_x <- suppressWarnings(max(x,na.rm=na.rm,...))
+  return(max_x)
+}
+
 
 get_states_in_order <- function(model='',active=F){
   states_active <- distinct(unit_categories,unit_category,unit_category_order) %>%
@@ -103,6 +108,47 @@ impute_severity <- function(state,severity_vec){
   return(output_vec)
 }
 
+interview_first_is_valid <- function(age,num_comorbidity,priority,date_first_symptoms,date_diagnosis,date_diagnosis_pcr){
+  priority_test <- if_else(!is.na(age) & !is.na(num_comorbidity) & !is.na(priority),
+                           (age<=50 & num_comorbidity==0 & priority=='low') |
+                             (age<=50 & num_comorbidity>0 & priority=='medium') |
+                             (age>50 & num_comorbidity==0 & priority=='medium') |
+                             (age>50 & num_comorbidity>0 & priority=='high') |
+                             (age>70 &  priority=='high'),
+                           TRUE)
+  #date_first_symptoms_test <- if_else(is.finite(date_first_symptoms) & is.finite(date_diagnosis),date_first_symptoms<=date_diagnosis,TRUE)
+  date_diagnosis_test <- if_else(is.finite(date_diagnosis) & is.finite(date_diagnosis_pcr),date_diagnosis<=date_diagnosis_pcr,TRUE)
+  return(priority_test & date_diagnosis_test)
+}
+
+#assuming the data is sorted according to date_time_in
+get_hospital_state_block_numbers <- function(unit,date_in,date_time_in,date_out,date_time_out){
+  hospital_state_block_numbers <- vector('numeric',length=length(unit))
+  if(length(unit)==0){
+    return(hospital_state_block_numbers)
+  }
+  state_nr <- 1
+  date_time_last_in_block <- date_time_out[1]
+  date_last_in_block <- date_out[1]
+  unit_last <- unit[1]
+  hospital_state_block_numbers <- state_nr
+  if(length(unit)==1){
+    return(hospital_state_block_numbers)
+  }
+  for(i in 2:length(unit)){
+    if((unit_last!=unit[i] & unit_last!='home') | (date_in[i]!=date_last_in_block & as.numeric(date_time_in[i]-date_time_last_in_block,units='hours') > 1)){
+      state_nr <- state_nr+1
+      unit_last <- unit[i]
+      hospital_state_block_numbers[i] <- state_nr
+    }else{
+      hospital_state_block_numbers[i] <- hospital_state_block_numbers[i-1]
+    }
+    date_time_last_in_block <- date_time_out[i]
+    date_last_in_block <- date_out[i]
+  }
+  return(hospital_state_block_numbers)
+}
+
 #identify and sequencially number blocks of states for each patient_id 
 get_state_block_numbers <- function(state_vec){
   state_nr=1
@@ -112,7 +158,7 @@ get_state_block_numbers <- function(state_vec){
     return(state_block_numbers)
   }
   
-  state_block_numbers[1]=state_nr=1
+  state_block_numbers[1]=state_nr
   
   if(length(state_vec)==1){
     return(state_block_numbers)

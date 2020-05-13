@@ -12,7 +12,7 @@ source('create_input_for_simulation.R')
 source('help_functions.R')
 
 start_date_tmp <- as.Date('2020-03-02','%Y-%m-%d')
-current_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-05-08','%Y-%m-%d')
 prediction_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
@@ -23,6 +23,8 @@ run_id_tmp <- 1
 unit_category_type <- 'simple'
 #Supported text out category types: simple
 text_out_category_type <- 'simple'
+#Supported isolation category type: simple
+isolation_category_type <- 'simple'
 #Supported clnical assessment category types: all,simple
 clinical_assessment_category_type <- 'simple_red'
 
@@ -105,6 +107,8 @@ file_path_experiment_template <- 'experiment_template.xlsx'
 
 individs_raw <- read_excel(file_path_data,sheet = 'Einstaklingar', skip=3)
 hospital_visits_raw <- read_excel(file_path_data,sheet ='Komur og innlagnir', skip=3)
+hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3)
+covid_diagnosis_raw <- read_excel(file_path_data,sheet ='Dag. greiningar frá veirurannsó', skip=6)
 interview_first_raw <- read_excel(file_path_data,sheet = 'Fyrsta viðtal úr forms', skip=3)
 interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr forms Pivot', skip=1)
 interview_last_raw <- read_excel(file_path_data,sheet = 'Lokaviðtal-Spurning úr forms', skip=1)
@@ -113,16 +117,20 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
 treatment_contraints_raw <- read_excel(file_path_data,sheet = 'Takmörkun meðferðar', skip=3)
 
+
 covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
 unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
                     mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
                            unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
 text_out_categories <- read_excel(file_path_coding,sheet = 'lsh_text_out_categories') %>%
                         mutate(text_out_category=!!as.name(paste0('text_out_category_',text_out_category_type)))
+isolation_categories <- read_excel(file_path_coding,sheet = 'lsh_isolation_categories') %>%
+                        mutate(isolation_category=!!as.name(paste0('isolation_category_',isolation_category_type)))
 clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_assessment_categories') %>%
                                   mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
                                          clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
 priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories')
+priority_mapping <- 
 age_groups <- read_excel(file_path_coding,sheet = 'age_groups')
 length_of_stay_categories <- read_excel(file_path_coding,sheet = 'length_of_stay_categories') 
 
@@ -141,17 +149,94 @@ test_lsh_data_file()
 
 ################## ----- Cleaning ----- ##############################################################
 
+# covid_diagnosis <- rename(covid_diagnosis_raw,patient_id=`Person Key`,date_time_diagnosis_pcr=`Dagsetning greiningar`) %>%
+#   separate(.,col='date_time_diagnosis_pcr',into=c('date_diagnosis_pcr','time_diagnosis_pcr'),sep=' ',remove=FALSE) %>%
+#   mutate(.,date_diagnosis_pcr=as.Date(date_diagnosis_pcr,"%Y-%m-%d")) %>%
+#   select(patient_id,date_diagnosis_pcr)
+
+# individs_new <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, sex=`Yfirfl. kyns`,zip_code=`Póstnúmer`,
+#                    covid_group_raw=`Heiti sjúklingahóps`) %>%
+#                     filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
+#                     left_join(.,select(covid_groups,covid_group_raw,covid_group),by='covid_group_raw') %>%
+#                     mutate(clinically_diagnosed=covid_group=='clinically_diagnosed') %>%
+#                     group_by(.,patient_id) %>%
+#                     summarise(zip_code=min(zip_code,na.rm=T),
+#                               age=min(age,na.rm=T),
+#                               sex=min(sex,na.rm=T),
+#                               clinically_diagnosed=any(clinically_diagnosed)) %>%
+#                     ungroup()
+
 individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, sex=`Yfirfl. kyns`,zip_code=`Póstnúmer`,
                    covid_group_raw=`Heiti sjúklingahóps`) %>% 
-                    left_join(.,select(covid_groups,covid_group_raw,covid_group),by='covid_group_raw') %>%
-                    group_by(.,patient_id) %>%
-                    summarize(.,zip_code=min(zip_code),age=min(age),sex=min(sex),covid_group=if_else(any(grepl('recovered',covid_group)),'recovered','infected')) %>%
-                    ungroup()
+            left_join(.,select(covid_groups,covid_group_raw,covid_group),by='covid_group_raw') %>%
+            group_by(.,patient_id) %>%
+            summarize(.,zip_code=min(zip_code),age=min(age),sex=min(sex),covid_group=if_else(any(grepl('recovered',covid_group)),'recovered','infected')) %>%
+            ungroup()
 
+#hospital_visits
+hospital_visits_raw <- mutate_at(hospital_visits_raw, vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==13173,as.Date('2020-03-29 00:00:00'))) %>%
+  mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==56481,as.Date('2020-03-29 00:00:00'))) %>%
+  mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==78970,as.Date('2020-03-29 00:00:00'))) %>%
+  mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==94463,as.Date('2020-03-29 00:00:00'))) %>%
+  mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==205678,as.Date('2020-03-29 00:00:00'))) %>%
+  mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==217960,as.Date('2020-03-31 00:00:00'))) %>%
+  mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==358268,as.Date('2020-03-26 00:00:00'))) %>%
+  mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==381951,as.Date('2020-04-10 00:00:00')))
+
+
+hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
+                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
+  select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital,ventilator) %>%
+  mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
+  inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
+  filter(!(unit_category_all=='inpatient_ward_geriatric' & is.na(date_diagnosis_hospital))) %>%
+  filter(!(unit_category_all=='inpatient_ward_geriatric' & date_time_out<date_diagnosis_hospital)) %>%
+  mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital-1,date_time_in)) %>%
+  filter(!(unit_category_all %in% c('maternity_clinic','endoscopy_clinic','inpatient_ward_maternity'))) %>%
+  separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
+  separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
+  mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
+  filter(date_in<=date_last_known_state) %>%
+  select(-time_in,-time_out) %>% 
+  mutate(ventilator=!is.na(ventilator))
+
+
+# hospital_visits_new <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
+#                           text_out=`Heiti afdrifa`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
+#                     select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital) %>%
+#                     filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
+#                     mutate(date_time_out=as.POSIXct(gsub('9999-12-31 00:00:00',NA,date_time_out),format='%Y-%m-%d %H:%M:%S',tz='UTC')) %>%
+#                     inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
+#                     inner_join(.,select(text_out_categories,text_out_category_raw,text_out_category),by=c('text_out'='text_out_category_raw')) %>%
+#                     mutate(.,text_out=text_out_category) %>%
+#                     filter(!(unit_category_all %in% c('maternity_clinic','endoscopy_clinic','inpatient_ward_maternity'))) %>%
+#                     separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
+#                     separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
+#                     mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
+#                     filter(date_in<=date_last_known_state) %>%
+#                     select(patient_id,unit_in,unit_category_all,date_time_in,date_in,date_time_out,date_out,text_out,date_diagnosis_hospital)
+
+# hospital_isolations <- rename(hospital_isolations_raw,patient_id=`Person Key`,isolation=`Einangrun`,unit_in=`Deild heiti`,
+#                               date_time_in=`Dags einangrun byrjar`,date_time_out=`Dags einangrun endar`) %>%
+#                         select(patient_id,isolation,unit_in,date_time_in,date_time_out) %>%
+#                         mutate(.,patient_id=suppressWarnings(as.numeric(patient_id))) %>%
+#                         filter(!is.na(patient_id)) %>%
+#                         filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
+#                         mutate(date_time_out=as.POSIXct(gsub('9999-12-31 00:00:00',NA,date_time_out),format='%Y-%m-%d %H:%M:%S',tz='UTC')) %>%
+#                         inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
+#                         filter(!(unit_category_all %in% c('maternity_clinic','endoscopy_clinic','inpatient_ward_maternity'))) %>%
+#                         inner_join(.,select(isolation_categories,isolation_category_raw,isolation_category),by=c('isolation'='isolation_category_raw')) %>%
+#                         separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
+#                         separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
+#                         mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
+#                         filter(date_in<=date_last_known_state) %>%
+#                         select(patient_id,isolation_category,unit_in,date_time_in,date_in,date_time_out,date_out)
+                    
 #forms data
 interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first_symptoms=`Upphafsdagur einkenna`, date_diagnosis=`Dagsetning greiningar`,
                           priority=`Forgangur`, clinical_assessment=`Klínískt mat - flokkun`,date_clinical_assessment=`Síma eftirfylgd hefst`,comorbidities_raw=`Sjúkdómar`) %>% 
                     select(.,patient_id,date_first_symptoms,date_diagnosis,priority,date_clinical_assessment,clinical_assessment,comorbidities_raw) %>%
+                    filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
                     mutate_at(.,vars(matches('date')),~as.Date(gsub('\\s.*','',.),"%Y-%m-%d")) %>%
                     mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
                     left_join(.,priority_categories,by=c('priority'='priority_raw')) %>%
@@ -190,6 +275,7 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
 #note, min clinical assessment chosen for each date. TODO: get time stamps of interviews
 interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,date_clinical_assessment=`Dagsetning símtals`,clinical_assessment=`Klínískt mat`) %>%
                         select(patient_id,date_clinical_assessment,clinical_assessment) %>%
+                        filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
                         mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_clinical_assessment),"%Y-%m-%d")) %>%
                         filter(.,is.finite(date_clinical_assessment)) %>%
                         filter(.,date_clinical_assessment<=date_last_known_state) %>%
@@ -203,6 +289,7 @@ interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,da
 
 #date_clinical_assessment is the last interview by a physician. Remove scheduled future phone calls
 interview_last <- rename(interview_last_raw,patient_id=`Person Key`,date_clinical_assessment=`Dagsetning símtals`) %>%
+                  filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
                   mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_clinical_assessment),"%Y-%m-%d")) %>%
                   filter(is.finite(date_clinical_assessment)) %>%
                   filter(date_clinical_assessment<=date_last_known_state) %>%
@@ -212,6 +299,7 @@ interview_last <- rename(interview_last_raw,patient_id=`Person Key`,date_clinica
 
 interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_clinical_assessment=`Dags breytingar`,col_name=`Heiti dálks`,col_value=`Skráningar - breytingar.Skráð gildi`) %>% 
                     select(.,patient_id,date_time_clinical_assessment,col_name,col_value) %>%
+                    filter_at(vars(-patient_id),any_vars(!is.na(.))) %>% 
                     mutate(.,date_clinical_assessment=as.Date(gsub('\\s.*','',date_time_clinical_assessment),"%Y-%m-%d")) %>%
                     group_by(.,patient_id,date_clinical_assessment,col_name) %>%
                     summarize(date_time_clinical_assessment=max(date_time_clinical_assessment),col_value=col_value[which.max(date_time_clinical_assessment)]) %>%
@@ -231,38 +319,10 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     summarize(.,priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_all_order)],
                               clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)]) %>%
                     select(patient_id,priority, date_clinical_assessment,clinical_assessment) 
-                    
-
-#hospital_visits
-#hardcode date_diagnosis_hospital for geriatic patients while confusion in how they are registered.
-hospital_visits_raw <- mutate_at(hospital_visits_raw, vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==13173,as.Date('2020-03-29 00:00:00'))) %>%
-                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==56481,as.Date('2020-03-29 00:00:00'))) %>%
-                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==78970,as.Date('2020-03-29 00:00:00'))) %>%
-                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==94463,as.Date('2020-03-29 00:00:00'))) %>%
-                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==205678,as.Date('2020-03-29 00:00:00'))) %>%
-                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==217960,as.Date('2020-03-31 00:00:00'))) %>%
-                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==358268,as.Date('2020-03-26 00:00:00'))) %>%
-                        mutate_at( vars(`Dagsetning skráningar - NR 1`),~replace(.,`Person Key`==381951,as.Date('2020-04-10 00:00:00')))
-  
-          
-hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`, 
-                          text_out=`Heiti afdrifa`,ventilator=`Öndunarvél - inniliggjandi`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>% 
-                    select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital,ventilator) %>%
-                    mutate(date_time_out=gsub('9999-12-31 00:00:00',NA,date_time_out)) %>%
-                    inner_join(.,select(unit_categories,unit_category_raw,unit_category_all),by=c('unit_in'='unit_category_raw')) %>%
-                    filter(!(unit_category_all=='inpatient_ward_geriatric' & is.na(date_diagnosis_hospital))) %>%
-                    filter(!(unit_category_all=='inpatient_ward_geriatric' & date_time_out<date_diagnosis_hospital)) %>%
-                    mutate(date_time_in=if_else(unit_category_all=='inpatient_ward_geriatric',date_diagnosis_hospital-1,date_time_in)) %>%
-                    filter(!(unit_category_all %in% c('maternity_clinic','endoscopy_clinic','inpatient_ward_maternity'))) %>%
-                    separate(col='date_time_in',into=c('date_in','time_in'),sep=' ',remove=FALSE) %>% 
-                    separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
-                    mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
-                    filter(date_in<=date_last_known_state) %>%
-                    select(-time_in,-time_out) %>% 
-                    mutate(ventilator=!is.na(ventilator))
 
 NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtími skráningar`,NEWS_score=`News score`) %>% 
               select(.,patient_id,date_time,NEWS_score) %>%
+              filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
               mutate(date=as.Date(gsub('\\s.*','',date_time),"%Y-%m-%d")) %>%
               filter(!is.na(NEWS_score)) %>%
               filter(date<=date_last_known_state) %>%
@@ -273,6 +333,7 @@ NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtí
 
 ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_time_ventilator_start=`Dags settur í öndunarvél`,date_time_ventilator_end=`Dags tekin úr öndunarvél`) %>% 
                       select(.,patient_id,date_time_ventilator_start,date_time_ventilator_end) %>%
+                      filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
                       mutate(unit_in='intensive_care_unit') %>%
                       mutate(date_ventilator_start=as.Date(gsub('\\s.*','',date_time_ventilator_start),'%Y-%m-%d'),
                              date_ventilator_end=as.Date(gsub('\\s.*','',date_time_ventilator_end),'%Y-%m-%d')) %>%
@@ -289,37 +350,80 @@ ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_ti
 
 treatment_contraints <- rename(treatment_contraints_raw,patient_id=`Person Key`,intensive_care_unit_restriction=`Gjörgæsluvistun`,ventilator_restriction=`Öndunarvél`) %>%
                         select(patient_id,intensive_care_unit_restriction,ventilator_restriction) %>%
+                        filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
                         mutate(intensive_care_unit_restriction=if_else(!is.na(intensive_care_unit_restriction),'icu_restricted','not_icu_restricted')) %>%
                         mutate(ventilator_restriction=if_else(!is.na(ventilator_restriction),'ventilator_restricted','not_ventilator_restricted'))
-
-
-                
-              
 
 test_cleaning()
 
 ################## ----- Data processing ----- ##############################################################
 
-#create some help tables
-
-hospital_visit_first_date <- group_by(hospital_visits,patient_id) %>% 
-                              summarize(min_date_in=min(date_in,na.rm=TRUE)) %>%
-                              ungroup()
 # fix to remove redundancies due to simple classification
 #filter out units that are not predicted and relabel the units in the terms to be predicted.Also relabel text_out
-hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
-                            filter(unit_category!='home') %>%
-                            mutate(unit_in=unit_category) %>%
-                            select(-unit_category)  %>%
-                            inner_join(.,select(text_out_categories,text_out_category_raw,text_out_category),by=c('text_out'='text_out_category_raw')) %>%
-                            mutate(.,text_out=text_out_category) %>%
-                            select(.,-text_out_category) %>%
-                            arrange(patient_id,date_time_in) #arrange precisely in time
 
+# hospital_isolations_filtered <- inner_join(hospital_isolations,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
+#                                 filter(unit_category!='home') %>%
+#                                 mutate(unit_in=unit_category) %>%
+#                                 filter(isolation_category!='covid19_quarantine') %>%
+#                                 group_by(patient_id) %>%
+#                                 arrange(date_time_in) %>%
+#                                 mutate(state_block_nr=get_hospital_state_block_numbers(unit_in,date_in,date_time_in,date_out,date_time_out)) %>%
+#                                 
+#                                 group_by(patient_id,state_block_nr,unit_in) %>%
+#                                 arrange(date_time_in) %>%
+#                                 summarize(isolation_category=tail(isolation_category,1),
+#                                           date_time_in=head(date_time_in,1),date_in=head(date_in,1),
+#                                           date_time_out=tail(date_time_out,1),date_out=tail(date_out,1)) %>%
+#                                 ungroup()
+# 
+# hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
+#                             filter(unit_category!='home') %>%
+#                             mutate(unit_in=unit_category) %>%
+#                             group_by(patient_id) %>%
+#                             arrange(date_time_in) %>%
+#                             mutate(state_block_nr=get_hospital_state_block_numbers(unit_in,date_in,date_time_in,date_out,date_time_out)) %>%
+#                             group_by(patient_id,state_block_nr,unit_in) %>%
+#                             arrange(date_time_in) %>%
+#                             summarize(date_time_in=head(date_time_in,1),date_in=head(date_in,1),
+#                                       date_time_out=tail(date_time_out,1),date_out=tail(date_out,1),
+#                                       text_out=tail(text_out,1)) %>%
+#                             ungroup() %>%
+#                             right_join(.,hospital_isolations_filtered,by=c('patient_id','state_block_nr','unit_in'),suffix=c('','_isolation')) %>%
+#                             mutate(in_hospital_before=if_else(!is.na(date_in),(date_in_isolation-date_in)>1,FALSE)) %>%
+#                             mutate(date_in=date_in_isolation,
+#                                    date_time_in=date_time_in_isolation,
+#                                    date_out=date_out_isolation,
+#                                    date_time_out=date_time_out_isolation
+#                                    ) %>%
+#                             inner_join(select(individs,patient_id),by='patient_id') %>%
+#                             arrange(patient_id,date_time_in) %>%
+#                             select(patient_id,unit_in,date_in,date_time_in,date_out,date_time_out,text_out,in_hospital_before)
+#                             
+# 
+# hospital_visit_first_date_new <- group_by(hospital_visits_filtered,patient_id) %>%
+#                               arrange(date_time_in) %>%
+#                               summarize(min_date_in=min(date_in,na.rm=TRUE)) %>%
+#                               ungroup()
+
+
+hospital_visit_first_date <- group_by(hospital_visits,patient_id) %>%
+                              arrange(date_time_in) %>%
+                              summarize(min_date_in=min(date_in,na.rm=TRUE)) %>%
+                              ungroup()
+
+hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
+                              filter(unit_category!='home') %>%
+                              mutate(unit_in=unit_category) %>%
+                              select(-unit_category)  %>%
+                              inner_join(.,select(text_out_categories,text_out_category_raw,text_out_category),by=c('text_out'='text_out_category_raw')) %>%
+                              mutate(.,text_out=text_out_category) %>%
+                              select(.,-text_out_category) %>%
+                              arrange(patient_id,date_time_in) #arrange precisely in time
+                           
 hospital_outcomes <- group_by(hospital_visits_filtered,patient_id) %>%
-                      summarize(.,outcome_tmp=if_else(any(grepl('death',text_out)),'death',NULL),
-                                date_outcome_tmp=Min(date_out[grepl('death',text_out)],na.rm=TRUE)) %>%
-                      ungroup()
+                       summarize(.,outcome_tmp=if_else(any(grepl('death',text_out)),'death',NULL),
+                                   date_outcome_tmp=Min(date_out[grepl('death',text_out)],na.rm=TRUE)) %>%
+                       ungroup()
 
 interview_extra_first_date <- group_by(interview_extra,patient_id) %>%
                               summarize(priority_tmp=Min(priority,na.rm=TRUE),min_date_clincial_assessment=Min(date_clinical_assessment,na.rm=TRUE)) %>%
@@ -334,8 +438,55 @@ interview_last_date <- bind_rows(select(interview_first,patient_id,date_clinical
                         ungroup() %>% 
                         left_join(.,interview_last,by='patient_id') %>% 
                         mutate(date_last_known=if_else(is.finite(date_clinical_assessment),date_clinical_assessment,date_last_known))
-                      
 
+# individs_extended_new <- left_join(individs,covid_diagnosis,by='patient_id') %>%
+#   left_join(.,hospital_visit_first_date,by='patient_id') %>%
+#   mutate(.,date_diagnosis=pmin(date_diagnosis,min_date_in)) %>%
+#   left_join(.,interview_first,by='patient_id') %>%
+#   left_join(.,interview_extra)
+  
+
+  
+# interview_first_new <- rename(interview_first_raw,patient_id=`Person Key`,date_first_symptoms=`Upphafsdagur einkenna`, date_diagnosis=`Dagsetning greiningar`,
+#          priority=`Forgangur`, clinical_assessment=`Klínískt mat - flokkun`,date_clinical_assessment=`Síma eftirfylgd hefst`,comorbidities_raw=`Sjúkdómar`) %>% 
+#   select(.,patient_id,date_first_symptoms,date_diagnosis,priority,date_clinical_assessment,clinical_assessment,comorbidities_raw) %>%
+#   filter_at(vars(-patient_id),any_vars(!is.na(.))) %>%
+#   mutate_at(.,vars(matches('date')),~as.Date(gsub('\\s.*','',.),"%Y-%m-%d")) %>%
+#   mutate(priority=gsub('\\s.*','', priority),clinical_assessment=gsub('\\s.*','', clinical_assessment)) %>%
+#   left_join(.,select(priority_categories,priority_raw,priority_all,priority_all_order),by=c('priority'='priority_raw')) %>%
+#   mutate(.,priority=priority_all,
+#          priority_order=priority_all_order) %>%
+#   select(-priority_all,-priority_all_order) %>%
+#   left_join(.,select(clinical_assessment_categories,clinical_assessment_category_raw,clinical_assessment_category,clinical_assessment_category_order),
+#             by=c('clinical_assessment'='clinical_assessment_category_raw')) %>%
+#   mutate(.,clinical_assessment=clinical_assessment_category,
+#             clinical_assessment_order=clinical_assessment_category_order) %>%
+#   select(-clinical_assessment_category,-clinical_assessment_category_order) %>%
+#   mutate(.,comorbidities_raw=gsub('; ',';',comorbidities_raw)) %>%
+#   separate_rows(.,comorbidities_raw,sep = ';') %>%
+#   left_join(select(comorbidities_categories,comorbidities_raw,comorbidities_names),by='comorbidities_raw') %>%
+#   select(-comorbidities_raw) %>%
+#   group_by_at(vars(-comorbidities_names)) %>%
+#   filter(!duplicated(comorbidities_names)) %>%
+#   filter(if_else(n()>1 & comorbidities_names=='healthy',FALSE,TRUE)) %>%
+#   summarise(comorbidities=paste(comorbidities_names,collapse=';'),
+#             num_comorbidity=sum(comorbidities_names!='healthy')) %>%
+#   ungroup() %>%
+#   inner_join(select(individs,patient_id,age,clinically_diagnosed),by='patient_id') %>%
+#   left_join(covid_diagnosis,by='patient_id',suffix=c('','_pcr')) %>%
+#   mutate(is_valid=interview_first_is_valid(age,num_comorbidity,priority,date_first_symptoms,date_diagnosis,date_diagnosis_pcr)) %>%
+#   group_by(patient_id) %>%
+#   filter(.,if(any(!is.na(date_diagnosis))) !is.na(date_diagnosis) else TRUE) %>%
+#   filter(.,if(any(is_valid)) is_valid else TRUE) %>%
+#   mutate(.,num_na=is.na(num_comorbidity) + is.na(priority) + is.na(date_first_symptoms) + is.na(date_diagnosis) + is.na(clinical_assessment)) %>%
+#   filter(num_na==min(num_na)) %>%
+#   filter(if_else(!is.na(date_diagnosis) & !is.na(date_diagnosis_pcr),abs(date_diagnosis-date_diagnosis_pcr)==min(abs(date_diagnosis-date_diagnosis_pcr)),TRUE)) %>%
+#   slice(1) %>%
+#   filter(.,if_else(is.finite(date_diagnosis),date_diagnosis<=date_last_known_state,TRUE)) %>% #remove entries where date_diagnosis is after yesterday
+#   select(patient_id,priority,comorbidities,num_comorbidity,date_first_symptoms,date_diagnosis,clinical_assessment)
+
+
+                   
 #Add information about first diagnosis, first symptoms, and priority to individs
 #First diagnosis is found by extracting the minimum date from hospital visits, interview extra and interview_first 
 individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id') %>%
