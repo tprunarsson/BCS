@@ -191,6 +191,49 @@ get_state_worst <- function(state_vec,order_vec){
   return(state_worst_vec)
 }
 
+
+get_patient_transitions_at_date <- function(model,date_observed){
+  patient_transitions_at_date <- filter(patient_transitions,date<=date_observed) %>%
+    mutate(state_tomorrow=if_else(date==date_observed,NA_character_,state_tomorrow),
+           severity_tomorrow=if_else(date==date_observed,NA_character_,severity_tomorrow))
+  if(model=='extended'){
+    patient_transitions_at_date <- mutate(patient_transitions_at_date,state=paste0(state,'-',severity),
+                                          state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
+                                                                   is.na(severity_tomorrow) ~ state_tomorrow,
+                                                                   TRUE ~ paste0(state_tomorrow,'-',severity_tomorrow)))
+  }
+  return(patient_transitions_at_date)
+}
+
+get_patient_transitions_state_blocks <- function(patient_transitions,model){
+  patient_transition_state_blocks <- group_by(patient_transitions,patient_id) %>%
+    mutate(state_block_nr=get_state_block_numbers(state),
+           state_with_severity_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
+    group_by(.,patient_id,state_block_nr,state_with_severity_block_nr,state,severity) %>%
+    arrange(.,date) %>% 
+    summarize(state_block_nr_start=min(date),
+              state_block_nr_end=max(date),
+              state_next=state_tomorrow[which.max(date)],
+              severity_next=severity_tomorrow[which.max(date)]) %>%
+    mutate(censored=(is.na(state_next))) %>%
+    mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+1) %>%
+    ungroup()
+  if(model=='base'){
+    patient_transition_state_blocks <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+      summarize(state_block_nr_start=min(state_block_nr_start,na.rm=T),
+                state_block_nr_end=max(state_block_nr_end,na.rm=T),
+                state_next=state_next[which.max(state_with_severity_block_nr)],
+                censored=censored[which.max(state_with_severity_block_nr)],
+                state_duration=sum(state_duration)) %>%
+      ungroup()
+  }
+  return(patient_transitions_state_blocks)
+}
+
+
+
+
+
 lognormal_objective_function <- function(x,x_c,max_num_days,theta){
   n <- length(x)+length(x_c)
   L=sum(log(plnorm(x+0.5,theta[1],theta[2])-plnorm(x-0.5,theta[1],theta[2]))) + sum(log(plnorm(max_num_days+0.5,theta[1],theta[2])-plnorm(x_c,theta[1],theta[2])))-n*log(plnorm(max_num_days+0.5,theta[1],theta[2]))
@@ -290,7 +333,7 @@ get_prop_outpatient_clinic <- function(current_state_per_date_summary,window_siz
     left_join(.,nr_at_home_per_day,by=c('date_in'='date')) %>%
     mutate(prop_visits=nr_visits/nr_at_home)
   
-  date_for_calculation <- current_date-window_size
+  date_for_calculation <- date_data-window_size
   prop_outpatient_clinic_per_window <- filter(outpatient_clinic_visits_per_day, date_in >= date_for_calculation) %>%
     summarize(prop_visits_per_window=sum(prop_visits)/window_size)
   return(prop_outpatient_clinic_per_window)

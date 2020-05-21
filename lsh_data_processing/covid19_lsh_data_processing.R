@@ -11,9 +11,9 @@ source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
-start_date_tmp <- as.Date('2020-03-02','%Y-%m-%d')
-current_date_tmp <- as.Date('2020-05-08','%Y-%m-%d')
-prediction_date_tmp <- as.Date('2020-04-20','%Y-%m-%d')
+date_data_tmp <- as.Date('2020-05-08','%Y-%m-%d')
+date_prediction_tmp <- as.Date('2020-04-20','%Y-%m-%d')
+date_observed_start_tmp <- date_data_tmp-1
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
 write_tables_tmp <- TRUE
@@ -29,15 +29,15 @@ isolation_category_type <- 'simple'
 clinical_assessment_category_type <- 'simple_red'
 
 option_list <-  list(
-  make_option(c("-c", "--current_date"), type="character", default=NULL, 
+  make_option(c("-d", "--date_data"), type="character", default=NULL, 
               help="current date of data being used", metavar="character"),
-  make_option(c("-p", "--prediction_date"), type="character", default=NULL, 
+  make_option(c("-p", "--date_prediction"), type="character", default=NULL, 
               help="date of prediction from covid.hi.is", metavar="character"),
-  make_option(c("-s", "--start_date"), type="character", default=NULL, 
-              help="start date of simulation", metavar="character"),
+  make_option(c("-o", "--date_observed_start"), type="character", default=NULL, 
+              help="oberved date start", metavar="character"),
   make_option(c("-r", "--run_id"), type="integer", default=NULL, 
               help="run_id to identify run of a set of experiments", metavar="integer"),
-  make_option(c("-d", "--path_to_lsh_data"), type="character", default=NULL, 
+  make_option(c("-l", "--path_to_lsh_data"), type="character", default=NULL, 
               help="path to data from LSH", metavar="character")
   
 )
@@ -45,25 +45,25 @@ option_list <-  list(
 opt_parser <-  OptionParser(option_list=option_list);
 opt <-  parse_args(opt_parser);
 
-if(is.null(opt[['current_date']])){
-  current_date <- current_date_tmp 
-  warning(paste0('You did not provide a current date. ',current_date,' will be used'))
+if(is.null(opt[['date_data']])){
+  date_data <- date_data_tmp 
+  warning(paste0('You did not provide a current date. ',date_data,' will be used'))
 }else{
-  current_date <- as.Date(as.character(opt[['current_date']]),'%Y-%m-%d')
+  date_data <- as.Date(as.character(opt[['date_data']]),'%Y-%m-%d')
 }
 
-if(is.null(opt[['prediction_date']])){
-  prediction_date <- prediction_date_tmp 
-  warning(paste0('You did not provide a prediction date. ',prediction_date,' will be used'))
+if(is.null(opt[['date_prediction']])){
+  date_prediction <- date_prediction_tmp 
+  warning(paste0('You did not provide a prediction date. ',date_prediction,' will be used'))
 }else{
-  prediction_date <- as.Date(as.character(opt[['prediction_date']]),'%Y-%m-%d')
+  date_prediction <- as.Date(as.character(opt[['date_prediction']]),'%Y-%m-%d')
 }
 
-if(is.null(opt[['start_date']])){
-  start_date <- start_date_tmp 
-  warning(paste0('You did not provide a prediction date. ',start_date,' will be used'))
+if(is.null(opt[['date_observed_start']])){
+  date_observed_start <- date_observed_start_tmp 
+  warning(paste0('You did not provide a prediction date. ',date_observed_start,' will be used'))
 }else{
-  start_date <- as.Date(as.character(opt[['start_date']]),'%Y-%m-%d')
+  date_observed_start <- as.Date(as.character(opt[['date_observed_start']]),'%Y-%m-%d')
 }
 
 if(is.null(opt[['path_to_lsh_data']])){
@@ -89,8 +89,8 @@ if (length(opt)>1){
 #date of prediction by covid.hi.is
 
 
-#we assume we only know the state of patient at midnight before current_date (except for patients diagnosed on current date)
-date_last_known_state <- current_date-1
+#we assume we only know the state of patient at midnight before date_data (except for patients diagnosed on current date)
+date_last_known_state <- date_data-1
 
 #Assuming working directory is lsh_data_processing in github repo
 path_tables <- '../input/'
@@ -98,7 +98,7 @@ path_sensitive_tables <- '../lsh_data/'
 path_dashboard_tables <- '../dashboard/input/'
 path_outpatient_clinic <- '../outpatient_clinic_history/'
 
-file_name_lsh_data <- paste0(current_date,'_lsh_covid_data.xlsx')
+file_name_lsh_data <- paste0(date_data,'_lsh_covid_data.xlsx')
 file_path_coding <- 'lsh_coding.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 file_path_experiment_template <- 'experiment_template.xlsx'
@@ -432,7 +432,7 @@ interview_extra_first_date <- group_by(interview_extra,patient_id) %>%
 #Find latest interview for each patient
 interview_last_date <- bind_rows(select(interview_first,patient_id,date_clinical_assessment),select(interview_follow_up,patient_id,date_clinical_assessment),
                                  select(interview_extra,patient_id,date_clinical_assessment)) %>%
-                        filter(date_clinical_assessment<=current_date) %>% # We have some future dates - check.
+                        filter(date_clinical_assessment<=date_data) %>% # We have some future dates - check.
                         group_by(.,patient_id) %>%
                         summarize(.,date_last_known=max(date_clinical_assessment,na.rm=TRUE)) %>%
                         ungroup() %>% 
@@ -512,10 +512,10 @@ individs_extended <- left_join(individs,hospital_visit_first_date,by='patient_id
                             
 #patient transitions.
 #Start by assuming everybody is at home from the time diagnosed to today
-#Note: patients diagnosed on current_date have a known state on that date, but others do not. Applies both for dates_home and dates_hospital
+#Note: patients diagnosed on date_data have a known state on that date, but others do not. Applies both for dates_home and dates_hospital
 
 dates_home <- lapply(1:nrow(individs_extended),function(i){  
-    #date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==current_date,current_date, date_last_known_state)
+    #date_home_latest_imputed <- if_else(individs_extended$date_diagnosis[i]==date_data,date_data, date_last_known_state)
                 return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_last_known_state,by=1))) 
               }) %>% 
               bind_rows() %>%
@@ -571,8 +571,8 @@ patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','d
                                 left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
                                 left_join(select(individs_extended,patient_id,outcome,date_outcome),by='patient_id') %>%
                                 filter(!(is.na(state_tomorrow) & outcome!='in_hospital_system')) %>%
-                                mutate(state_tomorrow=if_else(outcome=='recovered' & date_tomorrow==date_outcome,'recovered',state_tomorrow),
-                                      severity_tomorrow=if_else(outcome %in% c('death','recovered') & date_tomorrow==date_outcome,NA_character_,severity_tomorrow)) %>%
+                                mutate(state_tomorrow=if_else(outcome=='recovered' & date_tomorrow==date_outcome & date_outcome<=date_last_known_state,'recovered',state_tomorrow),
+                                      severity_tomorrow=if_else(outcome %in% c('death','recovered') & date_tomorrow==date_outcome & date_outcome<=date_last_known_state,NA_character_,severity_tomorrow)) %>%
                                 select(-yesterday,-date_tomorrow,-outcome,-date_outcome) %>%
                                 ungroup() %>%
                                 select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow)
@@ -634,35 +634,33 @@ historical_state_sequences_extended <- get_state_sequences(model='extended',seq_
 
 
 ################# ----- Predicted number of infections ------ ##############################
-infections_predicted_per_date <- get_infections_predicted_per_date(source='hi',prediction_date)
+infections_predicted_per_date <- get_infections_predicted_per_date(source='hi',date_prediction)
 
 ################# ----- proportion of patients going to outpatient clinic ------ #################
 prop_outpatient_clinic <- get_prop_outpatient_clinic(historical_data)
 
 
 if(write_tables){
-  write.table(historical_data, file = paste0(path_tables,current_date,'_historical_data.csv'), quote = F,row.names=F,sep=',')
-  write.table(historical_turnover, file = paste0(path_tables,current_date,'_historical_turnover.csv'), quote = F,row.names=F,sep=',')
-  write.table(prop_outpatient_clinic, file=paste0(path_outpatient_clinic,current_date,'_prop_outpatient_clinic.csv'), quote = F,row.names=F,sep=',')
-  write.table(infections_predicted_per_date, file = paste0(path_tables,current_date,'_infections_predicted.csv'), quote = F,row.names=F,sep=',')
+  write.table(historical_data, file = paste0(path_tables,date_data,'_historical_data.csv'), quote = F,row.names=F,sep=',')
+  write.table(historical_turnover, file = paste0(path_tables,date_data,'_historical_turnover.csv'), quote = F,row.names=F,sep=',')
+  write.table(prop_outpatient_clinic, file=paste0(path_outpatient_clinic,date_data,'_prop_outpatient_clinic.csv'), quote = F,row.names=F,sep=',')
+  write.table(infections_predicted_per_date, file = paste0(path_tables,date_data,'_infections_predicted.csv'), quote = F,row.names=F,sep=',')
 }
 
 ################# ----- Transition summary and length of stay distribution for all experiments ------ ##############################
 run_info <- get_run_info(run_id) 
 
 if(write_tables){
-  write.table(run_info, file = paste0(path_tables,current_date,'_',run_id,'_run_info.csv'), quote = F,row.names=F,sep='\t',col.names=F)
+  write.table(run_info, file = paste0(path_tables,date_data,'_',run_id,'_run_info.csv'), quote = F,row.names=F,sep='\t',col.names=F)
 }
-
+dates_observed <- seq(date_observed_start,date_last_known_state,by=1) 
 for(id in run_info$experiment_id){
-  experiment_table_list <- get_tables_for_experiment(id)
-  tables_to_convert_to_cdf <- c('transition_summary','length_of_stay','first_state')
+  experiment_table_list <- get_tables_for_experiment(id,dates_observed)
   if(write_tables){
-    write.table(experiment_table_list$transition_summary,file=paste0(path_tables,current_date,'_',id,'_transition_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
-    write.table(experiment_table_list$length_of_stay,file=paste0(path_tables,current_date,'_',id,'_length_of_stay.csv'),sep=',',row.names=F,quote=F)
-    write.table(experiment_table_list$current_state_per_date,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
-    write.table(experiment_table_list$current_state_filtered,file=paste0(path_sensitive_tables,current_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
-    write.table(experiment_table_list$current_state_from_start,file=paste0(path_sensitive_tables,start_date,'_',id,'_current_state.csv'),sep=',',row.names=FALSE,quote=FALSE)
-    write.table(experiment_table_list$first_state,file=paste0(path_tables,current_date,'_',id,'_first_state.csv'),sep=',',row.names=F,quote=F)
+    write.table(experiment_table_list$current_state_per_date,file=paste0(path_sensitive_tables,date_data,'_',id,'_current_state_per_date.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(experiment_table_list$current_state_per_date_filtered,file=paste0(path_sensitive_tables,date_data,'_',id,'_current_state_per_date_filtered.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(experiment_table_list$first_state,file=paste0(path_tables,date_data,'_',id,'_first_state.csv'),sep=',',row.names=F,quote=F)
+    write.table(experiment_table_list$transition_summary,file=paste0(path_tables,date_data,'_',id,'_transition_summary.csv'),sep=',',row.names=FALSE,quote=FALSE)
+    write.table(experiment_table_list$length_of_stay,file=paste0(path_tables,date_data,'_',id,'_length_of_stay.csv'),sep=',',row.names=F,quote=F)
   }
 }
