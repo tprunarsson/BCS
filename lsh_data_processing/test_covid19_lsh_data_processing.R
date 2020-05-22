@@ -181,6 +181,13 @@ test_lsh_data_file <- function(){
     warning_text <- 'BCS:New COVID19 groups have been added to the LSH data file'
     display_warning_if_items_not_found(not_found_in_data,warning_text)
     
+    #Check if new units categories in isolation data
+    distinct_iuc_data <- distinct(rename(hospital_isolations_raw, unit_category_raw=`Deild heiti`),unit_category_raw) %>% filter(!is.na(unit_category_raw))
+    distinct_iuc_coding <- distinct(unit_categories,unit_category_raw)
+    not_found_in_data <- setdiff(distinct_iuc_data,distinct_iuc_coding)
+    warning_text <- 'BCS:New unit categories have been added to the isolation sheet in the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
+    
     return('Finished testing data files')
 }
 
