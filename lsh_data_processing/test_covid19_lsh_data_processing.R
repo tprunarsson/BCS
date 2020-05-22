@@ -143,6 +143,23 @@ list_hash <- function(dat,cols=names(dat),verbose=FALSE){
         return(md4(paste(out_vec,collapse='')))      
      }
 }
+
+# Test which entries are not continuous, i.e. where last entry has a different date_time_out than current date_time_in 
+# inner_join(hospital_isolations,select(unit_categories,unit_category_raw,unit_category),by=c('unit_in'='unit_category_raw')) %>%
+#   filter(unit_category!='home') %>%
+#   mutate(unit_in=unit_category) %>%
+#   filter(isolation_category!='covid19_quarantine') %>%
+#   anti_join(.,.,by=c('patient_id',c('date_time_in'='date_time_out'))) %>% group_by(patient_id) %>%
+#   filter(n()>1) %>% 
+#   distinct(patient_id) %>%
+#   inner_join(.,hospital_isolations,by='patient_id') %>%
+#   arrange(patient_id,date_time_in) %>%
+#   inner_join(individs,by='patient_id') 
+
+
+
+
+
 ################ ---- Test functions ---- ##################
 
 test_lsh_data_file <- function(){
