@@ -206,26 +206,26 @@ get_patient_transitions_at_date <- function(model,date_observed){
 }
 
 get_patient_transitions_state_blocks <- function(patient_transitions,model){
-  patient_transition_state_blocks <- group_by(patient_transitions,patient_id) %>%
-    mutate(state_block_nr=get_state_block_numbers(state),
-           state_with_severity_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
-    group_by(.,patient_id,state_block_nr,state_with_severity_block_nr,state,severity) %>%
-    arrange(.,date) %>% 
-    summarize(state_block_nr_start=min(date),
-              state_block_nr_end=max(date),
-              state_next=state_tomorrow[which.max(date)],
-              severity_next=severity_tomorrow[which.max(date)]) %>%
-    mutate(censored=(is.na(state_next))) %>%
-    mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+1) %>%
-    ungroup()
+  patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
+                                      mutate(state_block_nr=get_state_block_numbers(state),
+                                             state_with_severity_block_nr=get_state_block_numbers(paste0(state,severity))) %>%
+                                      group_by(.,patient_id,state_block_nr,state_with_severity_block_nr,state,severity) %>%
+                                      arrange(.,date) %>% 
+                                      summarize(state_block_nr_start=min(date),
+                                                state_block_nr_end=max(date),
+                                                state_next=state_tomorrow[which.max(date)],
+                                                severity_next=severity_tomorrow[which.max(date)]) %>%
+                                      mutate(censored=(is.na(state_next))) %>%
+                                      mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+1) %>%
+                                      ungroup()
   if(model=='base'){
-    patient_transition_state_blocks <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
-      summarize(state_block_nr_start=min(state_block_nr_start,na.rm=T),
-                state_block_nr_end=max(state_block_nr_end,na.rm=T),
-                state_next=state_next[which.max(state_with_severity_block_nr)],
-                censored=censored[which.max(state_with_severity_block_nr)],
-                state_duration=sum(state_duration)) %>%
-      ungroup()
+    patient_transitions_state_blocks <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+                                        summarize(state_block_nr_start=min(state_block_nr_start,na.rm=T),
+                                                  state_block_nr_end=max(state_block_nr_end,na.rm=T),
+                                                  state_next=state_next[which.max(state_with_severity_block_nr)],
+                                                  censored=censored[which.max(state_with_severity_block_nr)],
+                                                  state_duration=sum(state_duration)) %>%
+                                        ungroup()
   }
   return(patient_transitions_state_blocks)
 }

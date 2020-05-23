@@ -4,9 +4,12 @@ get_current_state_per_date <- function(model,date_observed,max_splitting_dat){
                     group_by(.,patient_id) %>%
                     mutate(.,state_block_nr=get_state_block_numbers(state)) %>%
                     ungroup()
-    state_block_starts <- get_patient_transitions_state_blocks(transitions,model) %>%
-                            select(.,patient_id,state_with_severity_block_nr,state_block_nr_start) %>%
-                            rename(state_block_nr=state_with_severity_block_nr)
+    state_block_starts <- get_patient_transitions_state_blocks(transitions,model)
+    if(model=='extended'){
+        state_block_starts <- rename(state_block_starts,state_block_nr=state_with_severity_block_nr)
+    }
+    state_block_starts <- select(state_block_starts,patient_id,state_block_nr,state_block_nr_start)
+                            
     #TODO: decide how date variable is thought, that is whether we represent the state in which an id was in before or after midnight of the date
     current_state_per_date <- inner_join(transitions,state_block_starts,by=c('patient_id','state_block_nr')) %>%
                                 mutate(days_in_state=as.numeric(date-state_block_nr_start)+1) %>%
@@ -49,9 +52,9 @@ get_first_state <- function(model,date_observed,max_splitting_dat){
 ################# ----- Transition counts between states ---- #############
 get_transition_summary <- function(model,date_observed,recovered_imputed_date_observed,s,splitting_variable_name,max_splitting_mapping,time_splitting_variable_name){
     transitions <- get_patient_transitions_at_date(model,date_observed) %>%
-                    left_join(recovered_imputed_date_observed,by=c('date','patient_id'),suffix=c('','_imputed')) %>%
-                    mutate(state_tomorrow=if_else(!is.na(state_tomorrow_imputed),state_tomorrow_imputed,state_tomorrow),
-                           severity_tomorrow=if_else(!is.na(state_tomorrow_imputed),NA_character_,severity_tomorrow)) %>%
+                    # left_join(recovered_imputed_date_observed,by=c('date','patient_id'),suffix=c('','_imputed')) %>%
+                    # mutate(state_tomorrow=if_else(!is.na(state_tomorrow_imputed),state_tomorrow_imputed,state_tomorrow),
+                    #        severity_tomorrow=if_else(!is.na(state_tomorrow_imputed),NA_character_,severity_tomorrow)) %>%
                     select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow)
     transitions_state_blocks <- get_patient_transitions_state_blocks(transitions,model) %>%
                                 filter(.,!censored,grepl(s,state)) %>%
