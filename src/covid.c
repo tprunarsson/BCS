@@ -750,7 +750,7 @@ int main(int argc, char *argv[]) {
   outfile = fopen (fname, "w");
   
   /* Generate output run file name and pointer */
-  sprintf(fname, "%s%s_%s_covid_simulation.csv",path_output, date_start, experiment_id);
+  sprintf(fname, "%s%s_%s_%s_covid_simulation.csv",path_output, date_start, experiment_id, date_observed);
 	printf(" reading files from %s%s_%s*.csv\n reading files from %s%s_%s*.csv\n writing result in: %s\n and run data into: %s%s_%s_covid.out\n\n",path_input, date_start, experiment_id, path_lsh_data, date_start, experiment_id, fname, path_output, date_start, experiment_id);
 	
 #ifdef TRACK_PERSON
