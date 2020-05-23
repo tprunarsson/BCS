@@ -1,5 +1,6 @@
 void track_person(int person_id, int sim_no,char *transition, int sim_date, int state);
 void write_tracking_info(char *file_name);
+size_t get_day_before(char *date_day_before, size_t max_size, char *date_day);
 size_t get_next_day(char *date_next_day,size_t max_size, char *date_day);
 int get_sim_day(char *date, char *start_date);
 void printProgress (double percentage);

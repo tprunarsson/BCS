@@ -34,6 +34,9 @@ char *szStateVariable[MAX_NUM_STATES] = {"home", "home-green", "home-red", "inpa
 person iPerson[MAXINFECTED];	// Infected in historical data
 person sPerson[MAXINFECTED];	// Infected in scenario
 
+person_state_time infectedAtStart[MAXINFECTED];			// Infected at the start of the simulation (from current_state file)
+
+int numInfectedAtStart = 0;
 int numInfected = 0;
 int numScenarioInfected = 0;
 
@@ -148,6 +151,47 @@ int whereToNext(int splitting, state_time_data *data) {
   individuals in each state and puts them into a list associated.
   Note that init_simlib() will set global wall clock (sim_time) to zero.
 */
+int init_model() {
+  int i;
+  int new_state;
+  double length_of_stay, departure_day;
+ 
+ 
+	for (i = 0; i < numInfectedAtStart; i++) {
+		infectedAtStart[i].state_time.state_next = -1;
+		infectedAtStart[i].state_time.length_of_stay = -1;
+		infectedAtStart[i].state_time.days_from_symthoms = -1;
+		
+		if(heuristics[LOS_BEFORE_TRANSITION]){
+			length_of_stay = lengthOfStay(infectedAtStart[i].splitting, &infectedAtStart[i].state_time);
+			new_state = whereToNext(infectedAtStart[i].splitting, &infectedAtStart[i].state_time);
+		} else {
+			new_state = whereToNext(infectedAtStart[i].splitting, &infectedAtStart[i].state_time);
+			length_of_stay = lengthOfStay(infectedAtStart[i].splitting, &infectedAtStart[i].state_time);
+    }
+		
+		departure_day = floor(sim_time) + length_of_stay + 0.5;
+		
+		transfer[ATTR_PERSON] = (double)infectedAtStart[i].person_id;
+		transfer[ATTR_SPLITTING] = (double)infectedAtStart[i].splitting;
+		transfer[ATTR_DAYSINSTATE] = (double)infectedAtStart[i].state_time.days_in_state + length_of_stay;
+    transfer[ATTR_DAYSDIAGNOSIS] = (double)infectedAtStart[i].state_time.days_from_diagnosis + length_of_stay;
+    transfer[ATTR_STATE] = (double)infectedAtStart[i].state_time.state_current;
+    transfer[ATTR_WORSTSTATE] = (double)infectedAtStart[i].state_time.state_worst;
+    transfer[ATTR_NEXTSTATE] = (double)new_state;
+		transfer[ATTR_DEPARTDAY] = (double)departure_day;
+		
+    list_file (INCREASING, infectedAtStart[i].state_time.state_current);
+    transfer[ATTR_STATE] = (double)infectedAtStart[i].state_time.state_current;
+    event_schedule(departure_day, EVENT_DEPARTURE);
+		
+		#ifdef TRACK_PERSON
+			track_person(infectedAtStart[i].person_id,repeat,STATE_CURRENT,(int)floor(sim_time),infectedAtStart[i].state_time.state_current);
+		#endif
+  }
+  return 0;
+}
+/*
 int init_model(char *fname) {
   FILE *fid;
   int person_id, day;
@@ -225,7 +269,7 @@ int init_model(char *fname) {
   }
   fclose(fid);
   return 0;
-}
+}*/
 
 /*
   The init_model function using real historical data, from given day
@@ -618,14 +662,18 @@ int main(int argc, char *argv[]) {
   FILE *statfid;
 	char path_input[2048], path_output[2048], path_lsh_data[2048];
 	char *item;
+	char date_tmp[12]="";
+	int num_forecast_arrivals = 0;
 	
 	int	max_sim_time = MIN(28,MAX_SIM_TIME);
+	int use_forecast_data = 0;
 	int use_scenario_data = 0;
 	int use_historical_data = 0;
 	int historical_reset_days = 0;	// default is no historical reset
 	int use_historical_states = 0;
 	char date_start[12]="";
 	char date_data[12]="";
+	char date_observed[12]="";
 	char experiment_id[12]="1";
 	char heuristics_tmp[1024]="1;1;1;0;0";
 	char splitting_values_tmp[2048]="age_0-50;age_51+";
@@ -633,16 +681,18 @@ int main(int argc, char *argv[]) {
 
   maxatr = 15; /* NEVER SET maxatr TO BE SMALLER THAN 4. */
 	
-	while ((opt = getopt(argc, argv, "s:i:h:v:d:n:p:r:at")) != -1) {
+	while ((opt = getopt(argc, argv, "s:i:h:v:d:o:n:p:r:fat")) != -1) {
 			switch (opt) {
 			case 's': strcpy(date_start,optarg); break;
 			case 'i': strcpy(experiment_id,optarg); break;
 			case 'h': strcpy(heuristics_tmp,optarg); break;
 			case 'v': strcpy(splitting_values_tmp,optarg); break;
 			case 'd': strcpy(date_data,optarg); break;
+			case 'o': strcpy(date_observed,optarg); break;
 			case 'n': max_sim_time=MIN(MAX_SIM_TIME, atoi(optarg)); break;
 			case 'p': strcpy(path,optarg); break;
 			case 'r': use_historical_data=1;historical_reset_days=atoi(optarg); break;
+			case 'f': use_forecast_data=1; break;
 			case 'a': use_scenario_data=1; break;
 			case 't': use_historical_states=1; break;
 			default:
@@ -657,6 +707,11 @@ int main(int argc, char *argv[]) {
 	else if (strcmp(date_data,"")==0)
 		strcpy(date_data,date_start);
 	
+	if (strcmp(date_observed,"")==0){
+		get_day_before(date_tmp, 12, date_data);	// the day before date_data is the last known state.
+		strcpy(date_observed,date_tmp);
+	}
+					 
   /* check user input arguments number */
 /*  printf("\nCovid: Discrete Event Simulator (%s)\n\n", VERSION);
   if (argc < 3) {
@@ -717,17 +772,27 @@ int main(int argc, char *argv[]) {
 
   /* read the length of stay data */
   sprintf(fname, "%s%s_%s_length_of_stay.csv", path_input, date_data, experiment_id);
-  readLosP(fname);
+  readLosCDF(fname, date_observed);
 
   /* load first location for new persons arrivals */
   sprintf(fname, "%s%s_%s_first_state.csv", path_input, date_data,experiment_id);
-  readFirstCDF(fname);
+  readFirstCDF(fname, date_observed);
+	
+	/* Read the transition probability matrix */
+	 sprintf(fname, "%s%s_%s_transition_summary.csv", path_input, date_data, experiment_id);
+	 readTransitionCDF(fname, date_observed);
+	
+	/* Read information about infected at the start of the simulation */
+	sprintf(fname, "%s%s_%s_current_state_per_date_filtered.csv", path_lsh_data, date_data, experiment_id);
+	numInfectedAtStart = readInfectedAtStart(fname, date_start);
+	
+  /* Read the forecast from covid.hi.is */
+	if (use_forecast_data == 1){
+		sprintf(fname, "%s%s_infections_predicted.csv", path_input, date_data);
+		readForecast(fname, date_start, max_sim_time);
+	}
 
-  /* load posterior predicted values on current date and day number */
-  sprintf(fname, "%s%s_infections_predicted.csv", path_input, date_data);
-	readForecast(fname, date_start);
-
-	numHistoryDays=0;
+	numHistoryDays = 0;
 	
 /* load historical data about people in the Covid system if we have any  */
 	if (use_historical_data==1 && 0!=strcmp(date_start,date_data)){
@@ -761,10 +826,6 @@ int main(int argc, char *argv[]) {
 		}
   }
 
-  /* Read the transition probability matrix */
-  sprintf(fname, "%s%s_%s_transition_summary.csv", path_input, date_data, experiment_id);
-  readTransitionCDF(fname);
-
   report(statfid,0,0); /* write header in output stats file */
   countStatistics(-1);
 #ifdef TIME
@@ -778,8 +839,7 @@ int main(int argc, char *argv[]) {
     printProgress((double)repeat / (MAX_REPEAT-1));
     #endif
     /* Initialize the model and fire up departure event for this in system */
-    sprintf(fname, "%s%s_%s_current_state.csv", path_lsh_data, date_start, experiment_id);
-    init_model(fname);
+    init_model();
 		if (use_historical_data == 1 && historical_reset_days > 0){
 			event_schedule(sim_time + historical_reset_days, EVENT_REINITIALIZE); /* used for validation purposes only */
 		}
@@ -830,40 +890,44 @@ int main(int argc, char *argv[]) {
 
         case EVENT_ARRIVAL:
           if (sim_time >= numHistoryDays) {
-            //printf("we should not new here?!\n");
-            i = discrete_empirical(forecastCDF[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_FORECAST);
+						if (use_forecast_data == 1){
+							num_forecast_arrivals = discrete_empirical(forecastCDF[(int)floor(sim_time)], MAX_INFECTED_PER_DAY, STREAM_FORECAST);
 					#ifdef TIME
-						if (repeat==1){
-							start = clock();
-						}
+							if (repeat==1){
+								start = clock();
+							}
 					#endif
-            forecast_arrive(i); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */
+							forecast_arrive(num_forecast_arrivals); /* schedule a total number of new arrivals, this value is determined by covid.hi.is model */
 					#ifdef TIME
-						if (repeat==1){
-							end = clock();
-							printf("%s:forecast_arrive of %d persons took %f sec\n", szAllDates[(int)floor(sim_time)], i, ((double) (end - start)) / CLOCKS_PER_SEC);
-						}
+							if (repeat==1){
+								end = clock();
+								printf("%s:forecast_arrive of %d persons took %f sec\n", szAllDates[(int)floor(sim_time)], i, ((double) (end - start)) / CLOCKS_PER_SEC);
+							}
 					#endif
-            scenario_arrive((int)floor(sim_time));
+						}
+						if (use_scenario_data == 1){
+							scenario_arrive((int)floor(sim_time));
+						}
             #ifdef TRACE
             if (repeat == 1)
               printf("trace[main-arrive] covid.hi.is arrivals @ sim_time = %g / %d the event list size is %d\n", sim_time, max_sim_time, list_size[LIST_EVENT]);
             #endif
           }
           else {
+						if (use_historical_data == 1){
 					#ifdef TIME
-						if (repeat==1){
-							start = clock();
-						}
+							if (repeat==1){
+								start = clock();
+							}
 					#endif
-            historical_arrive((int)floor(sim_time), use_historical_states);
+							historical_arrive((int)floor(sim_time), use_historical_states);
 					#ifdef TIME
-						if (repeat==1){
-							end = clock();
-							printf("%s: historical arrive of %d persons took %f sec\n", szAllDates[(int)floor(sim_time)], iPersonArrival[(int)floor(sim_time)], ((double) (end - start)) / CLOCKS_PER_SEC);
-						}
+							if (repeat==1){
+								end = clock();
+								printf("%s: historical arrive of %d persons took %f sec\n", szAllDates[(int)floor(sim_time)], iPersonArrival[(int)floor(sim_time)], ((double) (end - start)) / CLOCKS_PER_SEC);
+							}
 					#endif
-//            real_arrive((int)floor(sim_time)+1); // ATH + 1 
+						}
             #ifdef TRACE
             if (repeat == 1)
               printf("trace[main-arrive] real arrivals @ sim_time = %g / %d the event list size is %d\n", sim_time, max_sim_time, list_size[LIST_EVENT]);
