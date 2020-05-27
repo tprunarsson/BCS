@@ -108,7 +108,7 @@ impute_severity <- function(state,severity_vec){
   return(output_vec)
 }
 
-interview_first_is_valid <- function(age,num_comorbidity,priority,date_first_symptoms,date_diagnosis,date_diagnosis_pcr){
+interview_first_is_valid <- function(age,num_comorbidity,priority,date_first_symptoms,date_diagnosis_interview,date_diagnosis_pcr){
   priority_test <- if_else(!is.na(age) & !is.na(num_comorbidity) & !is.na(priority),
                            (age<=50 & num_comorbidity==0 & priority=='low') |
                              (age<=50 & num_comorbidity>0 & priority=='medium') |
@@ -116,8 +116,8 @@ interview_first_is_valid <- function(age,num_comorbidity,priority,date_first_sym
                              (age>50 & num_comorbidity>0 & priority=='high') |
                              (age>70 &  priority=='high'),
                            TRUE)
-  #date_first_symptoms_test <- if_else(is.finite(date_first_symptoms) & is.finite(date_diagnosis),date_first_symptoms<=date_diagnosis,TRUE)
-  date_diagnosis_test <- if_else(is.finite(date_diagnosis) & is.finite(date_diagnosis_pcr),date_diagnosis<=date_diagnosis_pcr,TRUE)
+  #date_first_symptoms_test <- if_else(is.finite(date_first_symptoms) & is.finite(date_diagnosis_interview),date_first_symptoms<=date_diagnosis_interview,TRUE)
+  date_diagnosis_test <- if_else(is.finite(date_diagnosis_interview) & is.finite(date_diagnosis_pcr),date_diagnosis_interview<=date_diagnosis_pcr,TRUE)
   return(priority_test & date_diagnosis_test)
 }
 
@@ -274,7 +274,7 @@ fit_distr <- function(x,x_c,max_num_days,distr){
 }
 
 
-sample_from_distr <- function(x,x_c,max_num_days,distr,nr_samples=1e6){
+sample_from_distr <- function(x,x_c,max_num_days,distr,nr_samples=1e3){
   if(!(distr %in% c('lognormal','beta'))){
     stop('Distribution not yet supported')
   }
