@@ -13,7 +13,7 @@ source('help_functions.R')
 
 date_data_tmp <- as.Date('2020-05-08','%Y-%m-%d')
 date_prediction_tmp <- as.Date('2020-04-20','%Y-%m-%d')
-date_observed_start_tmp <- date_data_tmp-1
+date_observed_start_tmp <- date_data_tmp-3
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
 write_tables_tmp <- TRUE
