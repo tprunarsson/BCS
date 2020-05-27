@@ -73,24 +73,24 @@ performance_data_list <- list()
 paths_data_list <- list()
 turnover_plot_list <- list()
 for(id in run_info$experiment_id){
-    path_simulation_data <- paste0('../output/',date_start,'_',id,'_covid_simulation.csv')
+    path_simulation_data <- paste0('../output/',date_start,'_',id,'_',date_data-1,'_covid_simulation.csv')
     simulation_all <- read_csv(file = path_simulation_data,col_types=cols()) %>%
-        mutate(.,date=as.Date(date_start+day)) %>%
-        pivot_longer(.,-matches('date|day'),names_to='state',values_to ='count') %>%
-        filter(.,state %in% c('home','inpatient_ward','intensive_care_unit')) %>%
-        mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
+                        mutate(.,date=as.Date(date_start+day)) %>%
+                        pivot_longer(.,-matches('date|day'),names_to='state',values_to ='count') %>%
+                        filter(.,state %in% c('home','inpatient_ward','intensive_care_unit')) %>%
+                        mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
     
     simulation_summary <- inner_join(simulation_all,historical_data,by=c('date','state'),suffix=c('_sim','_historical')) %>%
-        group_by(.,date,state) %>%
-        summarize(median=median(count_sim),
-                  lower=quantile(count_sim,probs=0.025),
-                  upper=quantile(count_sim,probs=0.975),
-                  historical_value=unique(count_historical),
-                  historical_quantile=ecdf(count_sim)(historical_value)) %>%
-        ungroup() %>%
-        mutate(experiment_id=factor(as.character(id),levels=as.character(run_info$experiment_id))) %>%
-        select(experiment_id,date,state,median,lower,upper,historical_value,historical_quantile) %>%
-        bind_rows(simulation_summary,.)
+                            group_by(.,date,state) %>%
+                            summarize(median=median(count_sim),
+                                      lower=quantile(count_sim,probs=0.025),
+                                      upper=quantile(count_sim,probs=0.975),
+                                      historical_value=unique(count_historical),
+                                      historical_quantile=ecdf(count_sim)(historical_value)) %>%
+                            ungroup() %>%
+                            mutate(experiment_id=factor(as.character(id),levels=as.character(run_info$experiment_id))) %>%
+                            select(experiment_id,date,state,median,lower,upper,historical_value,historical_quantile) %>%
+                            bind_rows(simulation_summary,.)
 }
 if(tracking){
     for(id in run_info$experiment_id){
