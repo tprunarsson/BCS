@@ -376,20 +376,17 @@ get_state_sequences <- function(model,seq_type='finished'){
   return(state_sequences)
 }
 
-get_length_of_stay_empirical <- function(model){
-  if(model=='extended'){
-    transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
-      select(.,patient_id,state_with_severity_block_nr,state,censored,state_duration) %>%
-      rename(state_block_nr=state_with_severity_block_nr)
-  }else{
-    transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
-      summarize(censored=censored[which.max(state_with_severity_block_nr)],state_duration=sum(state_duration)) %>%
-      ungroup()
-  }
-  length_of_stay_empirical <- group_by(transitions_state_blocks_summary,state,censored,state_duration) %>%
-    summarize(count=n()) %>%
-    arrange(state,censored) %>%
-    ungroup()
+get_length_of_stay_empirical <- function(model,date_observed){
+  transitions <- get_patient_transitions_at_date(model,date_observed) %>%
+                  select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow)
+  transitions_state_blocks <- get_patient_transitions_state_blocks(transitions,model) %>%
+                              select(.,patient_id,state_block_nr,state,state_next,state_duration,censored)
+  length_of_stay_empirical <- group_by(transitions_state_blocks,state,censored,state_duration) %>%
+                              summarize(count=n()) %>%
+                              arrange(state,censored) %>%
+                              ungroup() %>%
+                              mutate(date=date_observed) %>%
+                              select(date,everything())
   return(length_of_stay_empirical)
 }
 

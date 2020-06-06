@@ -96,6 +96,7 @@ path_outpatient_clinic <- '../outpatient_clinic_history/'
 
 file_name_lsh_data <- paste0(date_data,'_lsh_covid_data.xlsx')
 file_path_coding <- 'lsh_coding.xlsx'
+file_path_priors <- 'priors.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 file_path_experiment_template <- 'experiment_template.xlsx'
 
@@ -126,13 +127,15 @@ clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_
                                   mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
                                          clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
 priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories')
-priority_mapping <- 
 age_groups <- read_excel(file_path_coding,sheet = 'age_groups')
 length_of_stay_categories <- read_excel(file_path_coding,sheet = 'length_of_stay_categories') 
 
 comorbidities_categories <- read_excel(file_path_coding,sheet = 'comorbidities') %>%
                               arrange(comorbidities_raw)
 sheet_names <- read_excel(file_path_coding,sheet = 'lsh_sheet_names',trim_ws = FALSE)
+prior_transitions <- read_excel(file_path_priors,sheet = 'transitions')
+prior_length_of_stay <- read_excel(file_path_priors,sheet = 'length_of_stay')
+
 
 experiment_description <- read_excel(file_path_experiment_template,sheet='experiment_description')
 experiment_specification <- read_excel(file_path_experiment_template,sheet='experiment_specification')
