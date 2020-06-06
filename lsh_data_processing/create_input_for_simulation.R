@@ -36,7 +36,7 @@ get_first_state <- function(model,date_observed,max_splitting_dat){
     first_state_expanded<- expand_grid(initial_state=active_states,splitting_variable=max_splitting_values)
     
     first_state <- group_by(transitions,patient_id) %>%
-    summarize(date_diagnosis=min(date),initial_state=state[which.min(date)]) %>%
+    summarize(date_diagnosis=min(date),initial_state=if_else(model=='ferguson','home',state[which.min(date)])) %>%
     ungroup() %>%
     inner_join(.,select(max_splitting_dat,patient_id,max_splitting_values) %>% rename(splitting_variable=max_splitting_values),by='patient_id') %>%
     select(-matches('severity'),-matches('state_block_nr')) %>%
