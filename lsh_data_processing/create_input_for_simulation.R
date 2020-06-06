@@ -218,7 +218,8 @@ get_ferguson_length_of_stay <- function(s,splitting_variable_name,splitting_vari
     length_of_stay <- mutate(prior_dat,count=1000*prob) %>%
         select(splitting_variable,state,state_duration,count) %>%
         left_join(length_of_stay_expanded,.,by=c('splitting_variable','state','state_duration')) %>%
-        mutate(count=if_else(is.na(count),0,count))
+        mutate(count=if_else(is.na(count),0,count)) %>%
+        select(state,splitting_variable,state_duration,count)
     return(length_of_stay)
 }
 
