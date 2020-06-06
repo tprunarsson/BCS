@@ -5,9 +5,9 @@ library(dplyr)
 library(ggplot2)
 
 
-date_data_tmp <- as.Date('2020-04-20','%Y-%m-%d')
+date_data_tmp <- as.Date('2020-05-08','%Y-%m-%d')
 date_start_tmp <- as.Date('2020-03-02','%Y-%m-%d')
-run_id_tmp <- 1
+run_id_tmp <- 8
 tracking_tmp <- FALSE
 display_tmp <- FALSE
 
@@ -61,7 +61,7 @@ if (length(opt)>1){
     display <- display_tmp
 }
 path_run_info <- paste0('../input/',date_data,'_',run_id,'_run_info.csv')
-run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','splitting_variable_name','splitting_variable_values','heuristic_string'),col_types = cols())
+run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','prior_info','splitting_variable_name','splitting_variable_values','heuristic_string'),col_types = cols())
 
 states_in_order <- c('home','inpatient_ward','intensive_care_unit')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
