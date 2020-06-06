@@ -52,8 +52,9 @@
 #define IMPUTE_RECOVERED                2
 #define LOS_BEFORE_TRANSITION						3
 #define HOSPITAL_LESS_THAN_14_DAYS			4
+#define FERGUSON_WORST_STATE						5
 
-#define NUM_HEURISTICS                  5
+#define NUM_HEURISTICS                  6
 
 #define COLS_FILE_FIRST_STATE                   4
 #define COLS_FILE_CURRENT_STATE                 7

@@ -84,7 +84,13 @@ double lengthOfStay(int splitting, state_time_data *data) {
 	int count;
 	
 	if (heuristics[LOS_BEFORE_TRANSITION] == 1){
-		length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
+		if (heuristics[FERGUSON_WORST_STATE]){
+			if(((*data).state_current == INPATIENT_WARD) && ((*data).state_worst == INTENSIVE_CARE_UNIT)){
+				length_of_stay = 1;
+			}
+		} else {
+			length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
+		}
 	} else {
 		if (heuristics[RECOVER_MIN_14_DAYS] && (((*data).state_current == HOME_RED) || ((*data).state_current == HOME_GREEN) || ((*data).state_current == HOME)) && ((*data).state_next == RECOVERED)) {
 			length_of_stay = discrete_empirical(losCDF[splitting][(*data).state_current], MAX_LOS_DAYS, STREAM_LOS) + 1.0;
@@ -129,7 +135,14 @@ int whereToNext(int splitting, state_time_data *data) {
 	} else {
 		length_of_stay = 1;	// The transition matrix is time-invariant when transitions are made before los so we can select any value between 1 and MAX_LOS_DAYS-1. We select 1.
 	}
-	state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current][length_of_stay], MAX_NUM_STATES, STREAM_TRANSITION);
+	
+	if (heuristics[FERGUSON_WORST_STATE]){
+		if(((*data).state_current == INPATIENT_WARD) && ((*data).state_worst == INTENSIVE_CARE_UNIT)){
+			state_next = RECOVERED;
+		}
+	} else {
+		state_next = discrete_empirical(transitionCDF[splitting][(*data).state_current][length_of_stay], MAX_NUM_STATES, STREAM_TRANSITION);
+	}
 	
 	if (heuristics[NO_REENTER_ICU]){
 		/* this first check will only activate in case we are using the simple model */
