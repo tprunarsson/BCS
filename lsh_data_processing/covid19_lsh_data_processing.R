@@ -17,7 +17,7 @@ date_observed_start_tmp <- date_data_tmp-3
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
 write_tables_tmp <- TRUE
-run_id_tmp <- 1
+run_id_tmp <- 8
 
 #Supported unit category types: all,simple
 unit_category_type <- 'simple'
