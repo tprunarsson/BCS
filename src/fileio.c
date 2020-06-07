@@ -300,7 +300,7 @@ int readLosCDF(char *fname, char *date_last_observed) {
 		if (strcmp(szdate,date_last_observed)==0){
 			splitting = get_splitting_variable(szsplitting);
 			state = get_state(szstate);
-			losCDF[splitting][state][days] = (double)value;
+			losCDF[splitting][state][days-1] = (double)value;		// stay duration of 1 day is at index 0 in the cdf
 		}
   }
 	
