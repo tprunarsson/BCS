@@ -63,30 +63,29 @@ individs_extended <-select(data_pcr , kt, sex, age, test_nr, date, result) %>%
                     rename(date_diagnosis=date) %>%
                     ungroup()
 
-# Þarf að skoða, ekkert death inni í þessu
-hospital_visits_filtered <- select(data_lsh , kt, mortality, date, hospital_day, icu_given, date_start_icu, date_end_icu, date_admission, date_discharge, admitted_from) %>%
+hospital_visits_filtered <- select(data_lsh , kt, mortality, date_mort, date, hospital_day, icu_given, date_start_icu, date_end_icu, date_admission, date_discharge, admitted_from) %>%
                             filter_at(vars(-kt, -hospital_day), any_vars(!is.na(.))) %>%
-                            filter(., date_admission<date_discharge) %>% #Einhverjir með rangar dagsetningar
+                            filter(., date_admission<date_discharge | is.na(date_discharge)) %>% #Einhverjir með rangar dagsetningar
                             mutate(., date=if_else(is.na(date), date_admission+hospital_day-1, date)) %>%
                             mutate(., outcome=if_else(mortality=="Já", "death", "recovered")) %>%
                             mutate(., in_hospital_before=admitted_from %in% c("Annarri deild"), text_out=ifelse(is.finite(date_discharge), "home", "at_hospital"),
                                     unit_in=if_else(icu_given == 'Nei', "inpatient_ward", if_else((date>=date_start_icu & date <= date_end_icu) | (date>=date_start_icu & !is.finite(date_end_icu)), "intensive_care_unit", "inpatient_ward")), 
                                     unit_in=if_else(is.na(unit_in), "inpatient_ward", unit_in)) %>%
-                            group_by(kt, unit_in, text_out, in_hospital_before, date_start_icu, date_end_icu, date_admission, date_discharge, outcome) %>%
+                            group_by(kt, unit_in, text_out, in_hospital_before, date_start_icu, date_end_icu, date_admission, date_discharge, outcome, date_mort) %>%
                             summarize(date_in=min(date), date_out=max(date)) %>%
                             ungroup() %>%
                             mutate(date_in=if_else(unit_in=="intensive_care_unit", date_start_icu, date_admission), 
                                     date_out=if_else(unit_in=="intensive_care_unit", date_end_icu, date_discharge)) %>%
                             mutate(.,date_in=as.Date(date_in,"%Y-%m-%d")) %>%
                             mutate(.,date_out=as.Date(date_out,"%Y-%m-%d")) %>%
-                            select(kt, unit_in, date_in, date_out, text_out, in_hospital_before, outcome) %>%
+                            select(kt, unit_in, date_in, date_out, text_out, in_hospital_before, outcome, date_mort) %>%
                             ungroup()
 
 # skoða reglu með state_first=home
-individs_extended <- left_join(individs_extended, select(hospital_visits_filtered, kt, outcome, unit_in, date_in, in_hospital_before), by="kt") %>%
+individs_extended <- left_join(individs_extended, select(hospital_visits_filtered, kt, outcome, unit_in, date_in, in_hospital_before, date_mort), by="kt") %>%
                      left_join(., select(unit_categories, unit_category, unit_category_order), by=c("unit_in" = "unit_category")) %>%
                      mutate(state_first=if_else(!in_hospital_before | is.na(in_hospital_before), "home", "inpatient_ward")) %>%
-                     group_by(kt, age, sex, date_diagnosis, state_first, outcome) %>%
+                     group_by(kt, age, sex, date_diagnosis, state_first, outcome, date_mort) %>%
                      summarise(state_worst_order=max(unit_category_order)) %>%
                      left_join(., select(unit_categories, unit_category, unit_category_order), by=c("state_worst_order"="unit_category_order")) %>%
                      select(., -state_worst_order) %>%
@@ -165,8 +164,8 @@ dates_home <- lapply(1:nrow(individs_extended),function(i){
               select(.,kt,state,date) %>%
               ungroup()
 
-individs_extended <- mutate(individs_extended,date_outcome=date_discharge)
-
+individs_extended <- mutate(individs_extended, date_outcome=if_else(is.na(date_mort), date_discharge, date_mort)) %>%
+                     select(., -date_mort)
 patient_transitions <- right_join(dates_hospital,dates_home,by=c('kt','date'),suffix=c('_hospital','_home')) %>%
                        mutate(.,state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
                        arrange(.,kt,date) %>%
