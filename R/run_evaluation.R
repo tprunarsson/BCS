@@ -3,11 +3,12 @@ library(readr)
 library(tidyr)
 library(dplyr)
 library(ggplot2)
+library(readxl)
 
 
 date_data_tmp <- as.Date('2020-05-08','%Y-%m-%d')
 date_start_tmp <- as.Date('2020-03-02','%Y-%m-%d')
-run_id_tmp <- 8
+run_id_tmp <- 4
 tracking_tmp <- FALSE
 display_tmp <- FALSE
 
@@ -62,17 +63,25 @@ if (length(opt)>1){
 }
 path_run_info <- paste0('../input/',date_data,'_',run_id,'_run_info.csv')
 run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','prior_info','splitting_variable_name','splitting_variable_values','heuristic_string'),col_types = cols())
+path_experiment_description <- '../lsh_data_processing/experiment_template.xlsx'
+path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
 
 states_in_order <- c('home','inpatient_ward','intensive_care_unit')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
-path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
+
 historical_data <- read_csv(path_historical_data,col_types=cols()) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
+experiment_description <- read_excel('../lsh_data_processing/experiment_template.xlsx',sheet='experiment_description') %>%
+                            mutate(label_icelandic=if_else(is.na(label_icelandic),'dummy',label_icelandic))
+                            filter(experiment_id %in% run_info$experiment_id)
+
+
 
 simulation_summary=tibble(experiment_id=factor(character(0),levels=as.character(run_info$experiment_id)),date=as.Date(x = integer(0), origin = "1970-01-01"),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric(),historical_value=numeric(),historical_quantile=numeric())
 performance_data_list <- list()
 paths_data_list <- list()
 turnover_plot_list <- list()
 for(id in run_info$experiment_id){
+    experiment_name <- experiment_description$label_icelandic[experiment_description$experiment_id==id]
     path_simulation_data <- paste0('../output/',date_start,'_',id,'_',date_data-1,'_covid_simulation.csv')
     simulation_all <- read_csv(file = path_simulation_data,col_types=cols()) %>%
                         mutate(.,date=as.Date(date_start+day)) %>%
@@ -88,8 +97,9 @@ for(id in run_info$experiment_id){
                                       historical_value=unique(count_historical),
                                       historical_quantile=ecdf(count_sim)(historical_value)) %>%
                             ungroup() %>%
-                            mutate(experiment_id=factor(as.character(id),levels=as.character(run_info$experiment_id))) %>%
-                            select(experiment_id,date,state,median,lower,upper,historical_value,historical_quantile) %>%
+                            mutate(experiment_id=factor(as.character(id),levels=as.character(run_info$experiment_id)),
+                                   experiment_name=factor(as.character(experiment_name),levels=unique(experiment_description$label_icelandic))) %>%
+                            select(experiment_id,experiment_name,date,state,median,lower,upper,historical_value,historical_quantile) %>%
                             bind_rows(simulation_summary,.)
 }
 if(tracking){
@@ -116,20 +126,21 @@ if(tracking){
     }
 }
 
-performance_dat <- group_by(simulation_summary,experiment_id,state) %>%
+performance_dat <- group_by(simulation_summary,experiment_id,experiment_name,state) %>%
                         summarise(mse=mean((median-historical_value)^2),
                                   days_from_peak=date[which.max(median)]-date[which.max(historical_value)],
                                   peak_diff=max(median)-max(historical_value)) %>%
                         ungroup() %>%
-                        select(experiment_id,state,mse,days_from_peak,peak_diff)
+                        select(experiment_id,experiment_name,state,mse,days_from_peak,peak_diff)
 
 ggplot(data=simulation_summary) +
-    geom_line(aes(x=date,y=median,group=experiment_id,color=experiment_id)) +
-    geom_line(aes(x=date,y=lower,group=experiment_id,color=experiment_id),linetype = "dashed") +
-    geom_line(aes(x=date,y=upper,group=experiment_id,color=experiment_id),linetype = "dashed") +
+    geom_line(aes(x=date,y=median,group=experiment_id,color=experiment_name)) +
+    geom_line(aes(x=date,y=lower,group=experiment_id,color=experiment_name),linetype = "dashed") +
+    geom_line(aes(x=date,y=upper,group=experiment_id,color=experiment_name),linetype = "dashed") +
     geom_point(data=historical_data,aes(date,count)) +
     facet_wrap(~state,scales='free') + 
-    theme_bw()
+    theme_bw()+
+    theme(legend.title=element_blank())
 if(display){
     ggsave(paste0('../output/run_',run_id,'.png'),device='png',width=16,height=10)
     system(paste0('open ../output/run_',run_id,'.png'))
