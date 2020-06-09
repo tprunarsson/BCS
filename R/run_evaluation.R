@@ -138,7 +138,9 @@ ggplot(data=simulation_summary) +
     geom_line(aes(x=date,y=lower,group=experiment_id,color=experiment_name),linetype = "dashed") +
     geom_line(aes(x=date,y=upper,group=experiment_id,color=experiment_name),linetype = "dashed") +
     geom_point(data=historical_data,aes(date,count)) +
-    facet_wrap(~state,scales='free') + 
+    facet_wrap(~state,scales='free') +
+    xlab('Dagsetning') + 
+    ylab('Fjöldi')+
     theme_bw()+
     theme(legend.title=element_blank())
 if(display){
