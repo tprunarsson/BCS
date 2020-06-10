@@ -15,10 +15,10 @@ source('help_functions.R')
 ##### ----- Read data ----- #####
 
 path_to_data <- '~/projects/covid/BCS/lsh_data_new/'
-#path_to_data <- '../lsh_data_new/'
+#path_to_data <- ''
 
 
-date_data <- as.Date('2020-05-05','%Y-%m-%d')
+date_data <- as.Date('2020-05-03','%Y-%m-%d')
 date_last_known_state <- date_data-1
 date_observed_start <- date_data-3
 
@@ -39,6 +39,7 @@ data_phone_raw  <- suppressMessages(read_csv(file_path_phone_data, col_types = c
 
 data_covid_id  <- read_excel(file_path_covid_id, skip = 3)
 covid_id <- rename(data_covid_id , kt = `Kennitala/gervikennitala`, patient_id = `Person Key`)
+
 experiment_description <- read_excel(file_path_experiment_template,sheet='experiment_description')
 experiment_specification <- read_excel(file_path_experiment_template,sheet='experiment_specification')
 run_description <- read_excel(file_path_experiment_template,sheet='run_description')
@@ -47,9 +48,6 @@ heuristics_description <- read_excel(file_path_experiment_template,sheet='heuris
 clinical_assessment_categories <- read_excel(file_path_coding,sheet = 'clinical_assessment_categories') %>%
   mutate(clinical_assessment_category=!!as.name(paste0('clinical_assessment_category_',clinical_assessment_category_type)),
          clinical_assessment_category_order=!!as.name(paste0('clinical_assessment_category_order_',clinical_assessment_category_type)))
-
-
-
 
 # Categories töflur
 priority_categories <- read_excel(file_path_coding,sheet = 'priority_categories')
@@ -60,10 +58,12 @@ unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>
   mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
          unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
 
+
 ##### -----Cleaning----- #####
+
 #Tengjum kennitölur og patient_id saman
 data_bb_raw  <- left_join(data_bb_raw,covid_id, by ='kt') 
-data_lsh_raw  <- left_join(data_lsh_raw,covid_id, by ='kt') 
+data_lsh_raw  <- left_join(data_lsh_raw,covid_id, by ='kt')
 data_pcr_raw  <- left_join(data_pcr_raw,covid_id, by ='kt') 
 data_phone_raw  <- left_join(data_phone_raw,covid_id, by ='kt') 
 
@@ -72,15 +72,14 @@ for(i in data_lsh_raw$patient_id) if(i %in% 428857) data_lsh_raw$date_discharge[
 for(i in data_lsh_raw$patient_id) if(i %in% 405117) data_lsh_raw$date_admission[data_lsh_raw$date_admission == as.Date('2020-04-18',"%Y-%m-%d")] <- as.Date('2020-03-18',"%Y-%m-%d")
 for(i in data_lsh_raw$patient_id) if(i %in% 410748) data_lsh_raw$date_admission[data_lsh_raw$date_admission == as.Date('2020-04-27',"%Y-%m-%d")] <- as.Date('2020-03-27',"%Y-%m-%d")
 
-
-data_bb <- select(data_bb_raw,-kt) 
-data_bb <- data_bb[c(ncol(data_bb),1:(ncol(data_bb)-1))]
-data_lsh <- select(data_lsh_raw,-kt)
-data_lsh <- data_lsh[c(ncol(data_lsh),1:(ncol(data_lsh)-1))]
-data_pcr <- select(data_pcr_raw,-kt)
-data_pcr <- data_pcr[c(ncol(data_pcr),1:(ncol(data_pcr)-1))]
-data_phone <- select(data_phone_raw,-kt)
-data_phone <- data_phone[c(ncol(data_phone),1:(ncol(data_phone)-1))]
+data_bb_raw <- select(data_bb_raw,-kt) 
+data_bb <- data_bb_raw[c(ncol(data_bb_raw),1:(ncol(data_bb_raw)-1))]
+data_lsh_raw <- select(data_lsh_raw,-kt)
+data_lsh <- data_lsh_raw[c(ncol(data_lsh_raw),1:(ncol(data_lsh_raw)-1))]
+data_pcr_raw <- select(data_pcr_raw,-kt)
+data_pcr <- data_pcr_raw[c(ncol(data_pcr_raw),1:(ncol(data_pcr_raw)-1))]
+data_phone_raw <- select(data_phone_raw,-kt)
+data_phone <- data_phone_raw[c(ncol(data_phone_raw),1:(ncol(data_phone_raw)-1))]
 
 data_phone <- mutate(data_phone,state=ifelse(green==1,'green',
                                              ifelse(yellow==1,'yellow',
@@ -99,6 +98,21 @@ individs_extended <-select(data_pcr , patient_id, sex, age, test_nr, date, resul
   select(., patient_id, age, sex, date) %>%
   rename(date_diagnosis=date) %>%
   ungroup()
+
+
+# Bæta við þeim sem eru clinically diagnosed
+clinically_diagnosed_yes <- select(data_phone, patient_id, call_nr, age, sex, date_diagnosis, `diagnosis_clinical:Yes`) %>%
+  group_by(patient_id) %>%
+  filter(call_nr==min(call_nr)) %>%
+  filter(`diagnosis_clinical:Yes`==1) %>%
+  mutate(.,date_diagnosis=as.Date(date_diagnosis,"%Y-%m-%d")) %>%
+  filter(!is.na(date_diagnosis)) %>%
+  select(.,patient_id,age,sex,date_diagnosis) %>%
+  ungroup() %>%
+  filter(!is.na(patient_id))
+
+individs_extended <- rbind(individs_extended,clinically_diagnosed_yes) 
+
 
 # Bæta við línum fyrir þá sem vantar línur vegna icu
 tmp <- bind_rows(select(data_lsh, patient_id, mortality, date_mort, date, hospital_day, icu_given, date_start_icu, date_end_icu, date_admission, date_discharge, admitted_from),
@@ -165,47 +179,52 @@ individs_extended <- left_join(individs_extended, select(hospital_visits_filtere
   # select(-priority_all,-priority_all_order, -priority_order)
   ungroup()
 
-interview_last_date <- data_phone  %>%
-  group_by(.,patient_id) %>%
-  filter(call_nr==min(call_nr)) %>%
-  filter(`diagnosis_clinical:Yes`==0) %>%
-  filter(!is.na(patient_id)) %>% #tokum bara ut thar sem vantar patient_id, i lagi?
-  ungroup() 
 
-individs_extended <- left_join(individs_extended,select(interview_last_date,patient_id), by= 'patient_id')
+#hafa recovered í outcome úr data_phone 
+recovered_phone <- select(data_phone,patient_id,call_nr,date_discharge) %>%
+  group_by(.,patient_id) %>%
+  filter(call_nr == min(call_nr)) %>%
+  mutate(.,outcome_phone=if_else(!is.na(patient_id),"recovered","NA")) %>%
+  filter(!is.na(patient_id)) %>% 
+  ungroup()
+
+individs_extended <- left_join(individs_extended,select(recovered_phone,patient_id,outcome_phone),by='patient_id') %>%
+  mutate(.,outcome_lagad=if_else(is.na(outcome),outcome_phone,outcome)) %>%
+  select(.,patient_id,age,sex,date_diagnosis,state_first,outcome_lagad,date_mort,state_worst) %>%
+  rename(outcome = outcome_lagad)
 
 
 date_discharge_phone <- data_phone  %>%
   group_by(.,patient_id) %>%
   filter(call_nr==min(call_nr)) %>%
-  filter(`diagnosis_clinical:Yes`==0) %>%
   mutate(.,date_discharge=as.Date(date_discharge,"%Y-%m-%d")) %>%
-  filter(!is.na(patient_id)) %>% #tokum bara ut thar sem vantar patient_id, i lagi?
+  filter(!is.na(patient_id)) %>%
   ungroup() 
 
 individs_extended <- left_join(individs_extended,select(date_discharge_phone,patient_id,date_discharge), by= 'patient_id') #%>% 
 
+
 date_symptoms_phone <- data_phone  %>%
   group_by(.,patient_id) %>%
   filter(call_nr==min(call_nr)) %>%
-  filter(`diagnosis_clinical:Yes`==0) %>%
   mutate(.,date_symptoms=as.Date(date_symptoms,"%Y-%m-%d")) %>%
-  filter(!is.na(patient_id)) %>% # aftur..
+  filter(!is.na(patient_id)) %>%
   ungroup()
 
 individs_extended <- left_join(individs_extended,select(date_symptoms_phone,patient_id,date_symptoms), by= 'patient_id') #%>%
 
+
 #Undirliggjandi sjukdomar ur data_phone 
-comorbidities_tafla <- select(data_phone ,patient_id,call_nr,date,dm_i,dm_ii,cardiovascular_disease,hypertension,pulmonary_disease,chronic_kidney_disease,current_cancer) 
-comorbidities_phone <- comorbidities_tafla %>%
-  mutate(.,num_comorbidity=rowSums(comorbidities_tafla[,-c(1,2,3)],na.rm=FALSE)) %>%
+comorbidities_table <- select(data_phone ,patient_id,call_nr,date,dm_i,dm_ii,cardiovascular_disease,hypertension,pulmonary_disease,chronic_kidney_disease,current_cancer) 
+comorbidities_phone <- comorbidities_table %>%
+  mutate(.,num_comorbidity=rowSums(comorbidities_table[,-c(1,2,3)],na.rm=FALSE)) %>%
   group_by(.,patient_id,num_comorbidity) %>%
   filter(call_nr==min(call_nr)) %>%
-  filter(!is.na(patient_id)) %>% # aftur..
+  filter(!is.na(patient_id)) %>%
   ungroup()
 
-individs_extended <- left_join(individs_extended,select(comorbidities_phone,patient_id,num_comorbidity), by= 'patient_id')
-
+individs_extended <- left_join(individs_extended,select(comorbidities_phone,patient_id,num_comorbidity), by= 'patient_id') %>%
+  unique()
 
 
 dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
@@ -218,15 +237,15 @@ dates_hospital <- lapply(1:nrow(hospital_visits_filtered),function(i){
                                 state=hospital_visits_filtered$text_out[i],
                                 date=hospital_visits_filtered$date_out[i]))
   }
-  return(tmp)}) %>% 
+  return(tmp)}) %>%
   bind_rows() %>%
   group_by(.,patient_id,date) %>%
   summarize(state=tail(state,1)) %>%
   ungroup()
 
-dates_home <- lapply(1:nrow(individs_extended),function(i){  
-  return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_last_known_state,by=1))) 
-}) %>% 
+dates_home <- lapply(1:nrow(individs_extended),function(i){
+  return(tibble(patient_id=individs_extended$patient_id[i],state='home',date=seq(individs_extended$date_diagnosis[i],date_last_known_state,by=1)))
+}) %>%
   bind_rows() %>%
   left_join(.,select(individs_extended,patient_id,date_discharge),by='patient_id') %>%
   group_by(patient_id) %>%
@@ -235,9 +254,9 @@ dates_home <- lapply(1:nrow(individs_extended),function(i){
   ungroup()
 
 
-
 individs_extended <- mutate(individs_extended, date_outcome=if_else(is.na(date_mort), date_discharge, date_mort)) %>%
-  select(., -date_mort) 
+  select(., -date_mort)
+
 
 patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','date'),suffix=c('_hospital','_home')) %>%
   mutate(.,state=if_else(!is.na(state_hospital) & state_hospital!=state_home,state_hospital,state_home)) %>%
@@ -249,7 +268,7 @@ patient_transitions <- right_join(dates_hospital,dates_home,by=c('patient_id','d
   ungroup() %>%
   #mutate(state=paste0(state,'_',severity)) %>%
   select(patient_id,date,state) %>%
-  mutate(yesterday=date-1) %>% 
+  mutate(yesterday=date-1) %>%
   left_join(.,.,by=c('patient_id'='patient_id','date'='yesterday'),suffix=c('','_tomorrow')) %>%
   left_join(select(individs_extended,patient_id,outcome,date_outcome),by='patient_id') %>%
   filter(!(is.na(state_tomorrow) & outcome!='in_hospital_system')) %>%
