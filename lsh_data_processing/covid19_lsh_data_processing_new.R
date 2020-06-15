@@ -19,7 +19,7 @@ path_to_data <- '../lsh_data_new/'
 path_sensitive_tables <- '../lsh_data/'
 
 # Dates
-date_data <- as.Date('2020-05-08','%Y-%m-%d')
+date_data <- as.Date('2020-05-05','%Y-%m-%d')
 date_last_known_state <- date_data-1
 date_observed_start <- date_data-3
 date_prediction <- as.Date('2020-04-20','%Y-%m-%d')
@@ -34,7 +34,7 @@ file_path_bb_data <- paste0(path_to_data,'df_bb_2020-05-05.csv')
 file_path_lsh_data <- paste0(path_to_data,'df_lsh_2020-05-05.csv')
 file_path_pcr_data <- paste0(path_to_data,'df_pcr_2020-05-09.csv')
 file_path_phone_data <- paste0(path_to_data,'df_phone_2020-05-13.csv')
-file_path_covid_id <- paste0(path_to_data,'2020-06-04_covid_id_conversion.xlsx')
+file_path_covid_id <- paste0(path_to_data,'2020-06-12_covid_id_conversion.xlsx')
 path_outpatient_clinic <- '../outpatient_clinic_history/'
 path_to_lsh_data <- '../lsh_data/'
 file_path_coding <- 'lsh_coding.xlsx'
@@ -251,8 +251,8 @@ tmp2 <- tmp2 %>% fill(patient_id, date_admission) %>%
 
 hospital_visits_filtered <- tmp2 %>%
   left_join(., select(tmp1, patient_id, admitted_from, mortality, date_discharge, date_admission, date_mort), by=c("patient_id", "date_admission")) %>%
-  mutate(., outcome=if_else(mortality=="Já", "death", "recovered")) %>%
   mutate(., in_hospital_before=admitted_from %in% c("Annarri deild"), text_out=ifelse(!is.finite(date_discharge), "at_hospital", text_out)) %>%
+  mutate(., outcome=if_else(mortality=="Já", "death", if_else(text_out=="at_hospital", "in_hospital_system", "recovered"))) %>%
   select(-admitted_from, -mortality) %>%
   group_by(patient_id) %>%
   arrange(date_in) %>%
@@ -297,8 +297,8 @@ individs_extended <- left_join(individs_extended, select(hospital_visits_filtere
 recovered_phone <- select(data_phone,patient_id,call_nr,date_discharge) %>%
   group_by(.,patient_id) %>%
   filter(call_nr == min(call_nr)) %>%
-  mutate(.,outcome_phone=if_else(!is.na(patient_id),"recovered","NA")) %>%
   filter(!is.na(patient_id)) %>%
+  mutate(.,outcome_phone=if_else(date_discharge>=date_data | is.na(date_discharge),"in_hospital_sysyem","recovered")) %>%
   ungroup()
 
 individs_extended <- left_join(individs_extended,select(recovered_phone,patient_id,outcome_phone),by='patient_id') %>%
