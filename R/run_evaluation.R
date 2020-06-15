@@ -3,11 +3,12 @@ library(readr)
 library(tidyr)
 library(dplyr)
 library(ggplot2)
+library(readxl)
 
 
-date_data_tmp <- as.Date('2020-04-20','%Y-%m-%d')
+date_data_tmp <- as.Date('2020-05-08','%Y-%m-%d')
 date_start_tmp <- as.Date('2020-03-02','%Y-%m-%d')
-run_id_tmp <- 1
+run_id_tmp <- 4
 tracking_tmp <- FALSE
 display_tmp <- FALSE
 
@@ -60,49 +61,51 @@ if (length(opt)>1){
 }else{
     display <- display_tmp
 }
-
-print(opt[['run_id']])
-print(date_data)
 path_run_info <- paste0('../input/',date_data,'_',run_id,'_run_info.csv')
-run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','splitting_variable_name','splitting_variable_values','heuristic_string'))
+run_info <- read_tsv(path_run_info,col_names = c('experiment_id','model','prior_info','splitting_variable_name','splitting_variable_values','heuristic_string'),col_types = cols())
+path_experiment_description <- '../lsh_data_processing/experiment_template.xlsx'
+path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
 
 states_in_order <- c('home','inpatient_ward','intensive_care_unit')
 states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
-path_historical_data <- paste0('../input/',date_data,'_historical_data.csv')
-historical_data <- read_csv(path_historical_data) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 
-plot_data=tibble(date=as.Date(x = integer(0), origin = "1970-01-01"),experiment_id=factor(character(0),levels=as.character(run_info$experiment_id)),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric())
+historical_data <- read_csv(path_historical_data,col_types=cols()) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
+experiment_description <- read_excel('../lsh_data_processing/experiment_template.xlsx',sheet='experiment_description') %>%
+                            mutate(label_icelandic=if_else(is.na(label_icelandic),'dummy',label_icelandic))
+                            filter(experiment_id %in% run_info$experiment_id)
+
+
+
+simulation_summary=tibble(experiment_id=factor(character(0),levels=as.character(run_info$experiment_id)),date=as.Date(x = integer(0), origin = "1970-01-01"),state=factor(character(0),levels=states_in_order,labels=states_labels_in_order),median=numeric(),lower=numeric(),upper=numeric(),historical_value=numeric(),historical_quantile=numeric())
 performance_data_list <- list()
 paths_data_list <- list()
 turnover_plot_list <- list()
 for(id in run_info$experiment_id){
-    path_simulation_data <- paste0('../output/',date_start,'_',id,'_covid_simulation.csv')
-    simulation_all <- read_csv(file = path_simulation_data ) %>%
-        mutate(.,date=as.Date(date_start+day)) %>%
-        pivot_longer(.,-matches('date|day'),names_to='state',values_to ='count') %>%
-        filter(.,state %in% c('home','inpatient_ward','intensive_care_unit')) %>%
-        mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
+    experiment_name <- experiment_description$label_icelandic[experiment_description$experiment_id==id]
+    path_simulation_data <- paste0('../output/',date_start,'_',id,'_',date_data-1,'_covid_simulation.csv')
+    simulation_all <- read_csv(file = path_simulation_data,col_types=cols()) %>%
+                        mutate(.,date=as.Date(date_start+day)) %>%
+                        pivot_longer(.,-matches('date|day'),names_to='state',values_to ='count') %>%
+                        filter(.,state %in% c('home','inpatient_ward','intensive_care_unit')) %>%
+                        mutate(.,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
     
-    simulation_summary <- group_by(simulation_all,date,state) %>%
-        summarize(median=median(count),lower=quantile(count,probs=0.025),upper=quantile(count,probs=0.975)) %>%
-        ungroup() %>%
-        mutate(experiment_id=factor(as.character(id),levels=as.character(run_info$experiment_id))) %>%
-        select(date,experiment_id,state,median,lower,upper)
-    
-    plot_data <- bind_rows(plot_data,simulation_summary)
-    
-    performance_data_list[[id]] <- inner_join(historical_data,simulation_summary,by=c('date','state')) %>%
-        group_by(experiment_id,state) %>%
-        summarise(mse=mean((median-count)^2),
-                  days_from_peak=date[which.max(median)]-date[which.max(count)],
-                  peak_diff=max(median)-max(count)) %>%
-        ungroup() %>%
-        select(experiment_id,state,mse,days_from_peak,peak_diff)
+    simulation_summary <- inner_join(simulation_all,historical_data,by=c('date','state'),suffix=c('_sim','_historical')) %>%
+                            group_by(.,date,state) %>%
+                            summarize(median=median(count_sim),
+                                      lower=quantile(count_sim,probs=0.025),
+                                      upper=quantile(count_sim,probs=0.975),
+                                      historical_value=unique(count_historical),
+                                      historical_quantile=ecdf(count_sim)(historical_value)) %>%
+                            ungroup() %>%
+                            mutate(experiment_id=factor(as.character(id),levels=as.character(run_info$experiment_id)),
+                                   experiment_name=factor(as.character(experiment_name),levels=unique(experiment_description$label_icelandic))) %>%
+                            select(experiment_id,experiment_name,date,state,median,lower,upper,historical_value,historical_quantile) %>%
+                            bind_rows(simulation_summary,.)
 }
 if(tracking){
     for(id in run_info$experiment_id){
         path_to_tracking_data <- paste0('../output/',date_start,'_',id,'_tracking_info.csv')
-        tracking_info <- read_csv(path_to_tracking_data)
+        tracking_info <- read_csv(path_to_tracking_data,col_types=cols())
         paths_data_list[[id]] <- group_by(tracking_info,person_id,sim_no) %>%
             filter(transition!='state_current' & (transition != 'state_out' | (transition == 'state_out' & date==min(date[transition=='state_out'])))) %>%
             filter(tail(state,1) %in% c('recovered','death')) %>%
@@ -123,16 +126,36 @@ if(tracking){
     }
 }
 
-performance_data <- bind_rows(performance_data_list) %>% mutate(experiment_id=factor(experiment_id))
-ggplot(data=plot_data) +
-    geom_line(aes(x=date,y=median,group=experiment_id,color=experiment_id)) +
-    geom_line(aes(x=date,y=lower,group=experiment_id,color=experiment_id),linetype = "dashed") +
-    geom_line(aes(x=date,y=upper,group=experiment_id,color=experiment_id),linetype = "dashed") +
+performance_dat <- group_by(simulation_summary,experiment_id,experiment_name,state) %>%
+                        summarise(mse=mean((median-historical_value)^2),
+                                  days_from_peak=date[which.max(median)]-date[which.max(historical_value)],
+                                  peak_diff=max(median)-max(historical_value)) %>%
+                        ungroup() %>%
+                        select(experiment_id,experiment_name,state,mse,days_from_peak,peak_diff)
+
+ggplot(data=simulation_summary) +
+    geom_line(aes(x=date,y=median,group=experiment_id,color=experiment_name)) +
+    geom_line(aes(x=date,y=lower,group=experiment_id,color=experiment_name),linetype = "dashed") +
+    geom_line(aes(x=date,y=upper,group=experiment_id,color=experiment_name),linetype = "dashed") +
     geom_point(data=historical_data,aes(date,count)) +
-    facet_wrap(~state,scales='free') + 
-    theme_bw()
+    facet_wrap(~state,scales='free') +
+    xlab('Dagsetning') + 
+    ylab('Fjöldi')+
+    theme_bw()+
+    theme(legend.title=element_blank())
 if(display){
     ggsave(paste0('../output/run_',run_id,'.png'),device='png',width=16,height=10)
     system(paste0('open ../output/run_',run_id,'.png'))
 }
+#quantile errors
+ggplot(simulation_summary,aes(date,historical_quantile)) +
+    geom_point() +
+    geom_abline(slope=0,intercept=0.5) +
+    geom_abline(slope=0,intercept=0.975,linetype='dashed') +
+    geom_abline(slope=0,intercept=0.025,linetype='dashed') +
+    facet_wrap(~state)
+ggplot(simulation_summary,aes(historical_quantile)) +
+    geom_histogram() +
+    facet_wrap(~state)
+
 

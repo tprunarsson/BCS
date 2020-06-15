@@ -52,14 +52,15 @@
 #define IMPUTE_RECOVERED                2
 #define LOS_BEFORE_TRANSITION						3
 #define HOSPITAL_LESS_THAN_14_DAYS			4
+#define FERGUSON_WORST_STATE						5
 
-#define NUM_HEURISTICS                  5
+#define NUM_HEURISTICS                  6
 
-#define COLS_FILE_FIRST_STATE                   3
-#define COLS_FILE_CURRENT_STATE                 6
+#define COLS_FILE_FIRST_STATE                   4
+#define COLS_FILE_CURRENT_STATE                 7
 #define COLS_FILE_CURRENT_STATE_PER_DATE        7
-#define COLS_FILE_LOS                           4
-#define COLS_FILE_TRANSITIONS                   5
+#define COLS_FILE_LOS                           5
+#define COLS_FILE_TRANSITIONS                   6
 #define COLS_FILE_SCENARIOS											2
 #define COLS_FILE_FORECAST											3
 
@@ -99,3 +100,8 @@ typedef struct{
 	int days_from_symthoms;
 } state_time_data;
 	
+typedef struct{
+	int person_id;
+	int splitting;
+	state_time_data state_time;
+} person_state_time;

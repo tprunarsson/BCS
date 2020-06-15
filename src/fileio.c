@@ -23,6 +23,8 @@ extern char *szAllDates[MAX_SIM_TIME][32];
 
 extern person iPerson[MAXINFECTED];
 extern person sPerson[MAXINFECTED];
+extern person_state_time infectedAtStart[MAXINFECTED];
+
 extern int numInfected;
 extern int numScenarioInfected;
 extern int iPersonArrivalIndex[MAX_SIM_TIME][MAX_INFECTED_PER_DAY];
@@ -114,10 +116,10 @@ int get_scenario_person_index(int person_id) {
 	File header: date, new cases, probability
 */
 			
-int readForecast(char *fname, char *szStartDate) {
+int readForecast(char *fname, char *szStartDate, int num_sim_days) {
   FILE *fid;
   char buffer[8192], szdate[64];
-  int i, j, num_infected, count, sim_day, sumForecast=0;
+  int i, j, num_infected, count, sim_day = 0, sumForecast = 0;
  
 	// zero the CDF
   for (i = 0; i < MAX_SIM_TIME; i++){
@@ -149,6 +151,11 @@ int readForecast(char *fname, char *szStartDate) {
 		}
 	}
 	
+	if (sim_day < num_sim_days) {
+    printf("[fatal error]: forecast file %s does not have values for the whole simulation\n", fname);
+    exit(1);
+  }
+	
   for (i = 0; i < MAX_SIM_TIME; i++) {
     sumForecast = forecastCDF[i][0];
     for (j = 1; j < MAX_INFECTED_PER_DAY; j++) {
@@ -178,12 +185,12 @@ int readForecast(char *fname, char *szStartDate) {
 	File header: initial_state, splitting_variable, count
 */
 
-int readFirstCDF(char *fname) {
+int readFirstCDF(char *fname, char *date_last_observed) {
   FILE *fid;
   int state, splitting, count;
   int i, j;
   double sumSplitting,sumState;
-	char buffer[1024], szstate[128], szsplitting[128];
+	char buffer[1024], szstate[128], szsplitting[128], szdate[12];
  
   // zero the CDFs
   for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++){
@@ -210,11 +217,13 @@ int readFirstCDF(char *fname) {
 	
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_symbol(buffer,',');
-    sscanf(buffer, "%s %s %d", szstate, szsplitting, &count);
-    splitting = get_splitting_variable(szsplitting);
-    state = get_state(szstate);
-    firstSplittingCDF[splitting] = firstSplittingCDF[splitting] + (double)count;
-    firstStateCDF[splitting][state] = firstStateCDF[splitting][state] + (double)count;
+    sscanf(buffer, "%s %s %s %d", szdate, szstate, szsplitting, &count);
+		if (strcmp(szdate,date_last_observed)==0){
+			splitting = get_splitting_variable(szsplitting);
+			state = get_state(szstate);
+			firstSplittingCDF[splitting] = firstSplittingCDF[splitting] + (double)count;
+			firstStateCDF[splitting][state] = firstStateCDF[splitting][state] + (double)count;
+		}
   }
   sumSplitting=0;
   for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
@@ -255,14 +264,14 @@ int readFirstCDF(char *fname) {
 
 /*
  Computes the CDF for length of stay.
- File header: state,splitting_variable,days,count
+ File header: date,state,splitting_variable,days,count
 */
-int readLosP(char *fname) {
+int readLosCDF(char *fname, char *date_last_observed) {
   FILE *fid;
   int splitting, state, days, value;
   int i, j, k;
   double sum;
-  char buffer[1024], szsplitting[128], szstate[128];
+  char buffer[1024], szsplitting[128], szstate[128], szdate[12];
  
   /* zero the losCDF */
   for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
@@ -287,11 +296,14 @@ int readLosP(char *fname) {
 	
   while (NULL != fgets(buffer, 1024, fid)) {
     clear_symbol(buffer,',');
-    sscanf(buffer, "%s %s %d %d", szstate, szsplitting, &days, &value);
-    splitting = get_splitting_variable(szsplitting);
-    state = get_state(szstate);
-    losCDF[splitting][state][days] = (double)value;
+    sscanf(buffer, "%s %s %s %d %d", szdate, szstate, szsplitting, &days, &value);
+		if (strcmp(szdate,date_last_observed)==0){
+			splitting = get_splitting_variable(szsplitting);
+			state = get_state(szstate);
+			losCDF[splitting][state][days-1] = (double)value;		// stay duration of 1 day is at index 0 in the cdf
+		}
   }
+	
   for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++) {
     for (j = 0; j < MAX_NUM_STATES; j++){
       sum = losCDF[i][j][0];
@@ -322,12 +334,12 @@ int readLosP(char *fname) {
  Calculating CDF for state transitions
  File header: splitting_variable,state,state_duration,state_next,count
 */
-int readTransitionCDF(char *fname) {
+int readTransitionCDF(char *fname, char *date_last_observed) {
   FILE *fid;
   int splitting, state, state_next, state_duration;
   int i, j, k,l, count;
   double P[MAX_NUM_SPLITTING_VALUES][MAX_NUM_STATES][MAX_LOS_DAYS][MAX_NUM_STATES], sum;
-	char buffer[2048], szsplitting[128], szstate[128], szstatenext[128];
+	char buffer[2048], szsplitting[128], szstate[128], szstatenext[128], szdate[12];
  
   /* initialize the memory to zero */
   for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++)
@@ -355,11 +367,13 @@ int readTransitionCDF(char *fname) {
   /* scan the entire file for transition counts */
   while (NULL != fgets(buffer, 8192, fid)) {
 		clear_symbol(buffer,',');
-    sscanf(buffer, "%s %s %d %s %d", szsplitting, szstate, &state_duration, szstatenext, &count);
-    splitting = get_splitting_variable(szsplitting);
-    state = get_state(szstate);
-    state_next = get_state(szstatenext);
-    P[splitting][state][state_duration][state_next] = count;
+    sscanf(buffer, "%s %s %s %d %s %d", szdate, szsplitting, szstate, &state_duration, szstatenext, &count);
+		if (strcmp(szdate,date_last_observed)==0){
+			splitting = get_splitting_variable(szsplitting);
+			state = get_state(szstate);
+			state_next = get_state(szstatenext);
+			P[splitting][state][state_duration][state_next] = count;
+		}
   }
 	
 	for (i = 0; i < MAX_NUM_SPLITTING_VALUES; i++){
@@ -411,6 +425,48 @@ int readTransitionCDF(char *fname) {
 	fclose(fout);
   fclose(fid);
   return 0;
+}
+
+int readInfectedAtStart(char *fname, char *sim_start_date){
+	FILE *fid;
+	int person_id, days_from_diagnosis, days_in_state;
+	char buffer[1024], szstate[32], szsplitting[128], szworststate[32], szdate[12], date_inital_state[12];
+	int person_idx = 0;
+	int found_date = 0;
+	
+	get_day_before(date_inital_state, 12, sim_start_date);
+	
+	fid = fopen(fname, "r");
+	if (fid == NULL) {
+		printf("[fatal error]: could not open file %s for reading information about infected at the start of simulation \n", fname);
+		exit(1);
+	}
+	if (NULL == fgets(buffer, 1024, fid)) {
+		printf("[fatal error]: the file %s seems to be corrupt (1)\n", fname);
+		exit(1);
+	}
+	if (COLS_FILE_CURRENT_STATE-1 != clear_symbol(buffer,',')) {
+		printf("[fatal error]: the file %s seems to be corrupt (2)\n", fname);
+		exit(1);
+	}
+
+	while ((NULL != fgets(buffer, 1024, fid)) && (found_date == 0)) {
+		clear_symbol(buffer,',');
+		sscanf(buffer, "%s %d %s %s %d %d %s", szdate, &person_id, szsplitting, szstate, &days_in_state, &days_from_diagnosis, szworststate);
+		if (strcmp(szdate,date_inital_state)==0){
+			infectedAtStart[person_idx].person_id = person_id;
+			infectedAtStart[person_idx].splitting = get_splitting_variable(szsplitting);
+			infectedAtStart[person_idx].state_time.state_current = get_state(szstate);
+			infectedAtStart[person_idx].state_time.state_worst = get_state(szworststate);
+			infectedAtStart[person_idx].state_time.days_from_diagnosis = days_from_diagnosis;
+			infectedAtStart[person_idx].state_time.days_in_state = days_in_state;
+			person_idx++;
+		} else if (strcmp(szdate,sim_start_date)==0){
+			found_date = 1;
+		}
+	}
+	fclose(fid);
+	return person_idx;
 }
 
 /*

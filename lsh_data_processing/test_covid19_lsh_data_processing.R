@@ -2,13 +2,13 @@
 
 write_data_health_info <- function(){
     #date of diagnosis
-    interview_first_filtered <- filter(interview_first, is.finite(date_diagnosis)) 
-    date_diagnosis_last_info <- sprintf(paste0("Most recent date of diagnosis in forms: ", max(interview_first_filtered$date_diagnosis,na.rm=T)))
+    interview_first_filtered <- filter(interview_first, is.finite(date_diagnosis_interview)) 
+    date_diagnosis_last_info <- sprintf(paste0("Most recent date of diagnosis in forms: ", max(interview_first_filtered$date_diagnosis_interview,na.rm=T)))
     
     interview_last_filtered <- filter(interview_last, is.finite(date_clinical_assessment)) 
     date_interview_last_info <- sprintf(paste0("Most recent date of last interview in forms: ", max(interview_last_filtered$date_clinical_assessment,na.rm=T)))
     
-    num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis)) %>% summarize(n()) %>% unlist()
+    num_with_date_diagnosis <- left_join(individs,interview_first, by='patient_id') %>% filter(is.finite(date_diagnosis_interview)) %>% summarize(n()) %>% unlist()
     date_diagnosis_info <- sprintf("Number of individs missing date of diagnosis in forms: %.0f (%.1f%%)", nrow(individs)-num_with_date_diagnosis,100*(nrow(individs)-num_with_date_diagnosis)/nrow(individs))
     
     #clinical assessment
@@ -21,7 +21,7 @@ write_data_health_info <- function(){
     recovered_info <- sprintf("Number of recovered individs missing date of last interview in forms: %.0f (%.1f%%)", num_recovered-num_recovered_with_last_interview,100*(num_recovered-num_recovered_with_last_interview)/num_recovered)
     
     #
-    potential_wrong_date_diagnosis <- mutate(interview_first,diff_call=date_clinical_assessment-date_diagnosis) %>%
+    potential_wrong_date_diagnosis <- mutate(interview_first,diff_call=date_clinical_assessment-date_diagnosis_interview) %>%
                                       filter(is.finite(diff_call)) %>%
                                       filter(diff_call<0) %>%
                                       select(patient_id) %>%
@@ -196,6 +196,13 @@ test_lsh_data_file <- function(){
     distinct_cg_coding <- distinct(covid_groups,covid_group_raw)
     not_found_in_data <- setdiff(distinct_cg_data,distinct_cg_coding)
     warning_text <- 'BCS:New COVID19 groups have been added to the LSH data file'
+    display_warning_if_items_not_found(not_found_in_data,warning_text)
+    
+    #Check if new units categories in isolation data
+    distinct_iuc_data <- distinct(rename(hospital_isolations_raw, unit_category_raw=`Deild heiti`),unit_category_raw) %>% filter(!is.na(unit_category_raw))
+    distinct_iuc_coding <- distinct(unit_categories,unit_category_raw)
+    not_found_in_data <- setdiff(distinct_iuc_data,distinct_iuc_coding)
+    warning_text <- 'BCS:New unit categories have been added to the isolation sheet in the LSH data file'
     display_warning_if_items_not_found(not_found_in_data,warning_text)
     
     return('Finished testing data files')
