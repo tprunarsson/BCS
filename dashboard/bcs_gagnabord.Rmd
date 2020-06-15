@@ -18,7 +18,7 @@ library(dplyr)
 library(readr)
 library(tidyr)
 library(RCurl)
-library(shinySIR)
+library(deSolve)
 source('dashboard_functions.R')
 
 #Load csv data
@@ -92,7 +92,7 @@ plot_simulation <- function(state) {
                                     quantile975 = "Svartsýn spá"))
     ggplot(data = p_data, aes(x = date_spa, y = value)) +
         geom_line(aes(linetype = key, alpha = key), col = "blue4") +
-        geom_text(aes(label = value, alpha = key), col = "blue4") +
+        # geom_text(aes(label = value, alpha = key), col = "blue4") +
         # scale_x_date(date_breaks = "2 days", date_labels = "%m-%d", expand = c(0,0.5)) +
         labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
         scale_alpha_manual(values = c(1, 0.7)) +
@@ -244,69 +244,194 @@ Stillingar {.sidebar}
 ---------------------------------------------------
 
 ```{r}
+# Fyrir plottun
 dateInput('sir_start_date', 'Dagsetning fyrsta smits',
-          value = Sys.Date() + 1, min = '2020-03-01', max = Sys.Date() + 30)
-numericInput("sir_utsettir", 'Fjöldi útsettra',
-            min = 10, max = 1000, value = 300)
-radioButtons('sir_aldur_val', 'Aldursdreifing', choices = c('Þjóðar', 'Faraldurs', 'Skv. Stillingu:'))
-sliderInput("sir_aldur_dreif", '0-50 -- +51',
-            min = 0, max = 100, value = c(60))
-p('Staða við greiningu (%)')
-sliderInput("sir_stada", 'Heima -- Legudeild -- Gjörgæsla',
-            min = 0, max = 100, value = c(40, 70))
+          value = Sys.Date() + 1, min = '2020-05-01', max = Sys.Date() + 30)
+numericInput("sir_utsettir", 'Fjöldi smita',
+            min = 10, max = 1000, value = 100, step = 10)
+sliderInput("sir_r_eff", 'Virkur smitstuðull (R)',
+            min = 0.1, max = 3, step = 0.1, value = 1)
 
-ratio_heima <- reactive(as.numeric(input$sv_stada[1]))
-ratio_legu <- reactive(as.numeric(input$sv_stada[2]) - as.numeric(input$sv_stada[1]))
-ratio_gjor <- reactive(100 - as.numeric(input$sv_stada[2]))
-renderText(paste0('Heima: ', ratio_heima(), '%'))
-renderText(paste0('Legudeild: ', ratio_legu(), '%'))
-renderText(paste0('Gjörgæsla: ', ratio_gjor(), '%'))
+sliderInput("sir_smitdagar", 'Meðallengd veikinda í dögum',
+            min = 7, max = 21, value = 14)
+sliderInput("sir_dagar", 'Fjöldi daga til að teikna',
+            min = 5, max = 75, step = 5, value = 25)
+
+# Fyrir hermun
+# Staða við greiningu
+hr()
+sliderInput("sir_stada", 
+            HTML('Hlutfall sem greinist heima (%)'),
+            min = 0, max = 100, value = 70)
+
+renderText(
+  paste0('Heima: ', as.numeric(input$sir_stada), '%', 
+  ' , ', 
+  'Í innlögn: ', 100 - as.numeric(input$sir_stada), '%'))
+
+hr()
+# Aldursdreifing
+radioButtons('sir_aldur_val', 'Aldursdreifing', choices = c('Þjóðar', 'Faraldurs', 'Skv. Stillingu:'))
+conditionalPanel(
+  "input.sir_aldur_val == 'Skv. Stillingu:'",
+  sliderInput("sir_aldur_dreif", 
+              HTML('Hlutfall undir 50 ára aldri (%)'),
+              min = 0, max = 100, value = c(60))
+)
+renderText(
+  if (input$sir_aldur_val == 'Skv. Stillingu:') {
+    paste0('0-50 ára: ', as.numeric(input$sir_aldur_dreif), '%', ' , ',
+           '>50 ára: ', 100 - as.numeric(input$sir_aldur_dreif), '%')
+})
 
 actionButton("sir_keyra", "Keyra hermun")
 ```
 
+```{r}
+# Create placeholder for the downloadButton
+uiOutput("downloadUI")
+```
+
+```{r}
+# Create the actual downloadButton
+output$downloadUI <- renderUI( {
+  tagList(
+    downloadButton("downBtn1", "Sækja nýsmit"),
+    downloadButton("downBtn2", "Sækja first state")
+  )
+})
+
+# Add download handling
+output$downBtn1 <- downloadHandler(
+  filename = function() {
+    paste0(Sys.Date(), "_1_scenario_infected.csv")
+  },
+  content = function(file) {
+    write.csv(round(out() * input$sir_utsettir) %>%
+                mutate(I_diff = c(1, diff(I)),
+                       R_diff = c(0, diff(R)),
+                       date_diagnosis = input$sir_start_date + row_number() - 1,
+                       count = I_diff + R_diff,
+                       count = pmax(count, 0)) %>% 
+                select(date_diagnosis, count), 
+              file, row.names = FALSE)
+  }
+)
+output$downBtn1 <- downloadHandler(
+  filename = function() {
+    paste0(Sys.Date(), "_1_scenario_infected.csv")
+  },
+  content = function(file) {
+    write.csv(round(out() * input$sir_utsettir) %>%
+                mutate(I_diff = c(1, diff(I)),
+                       R_diff = c(0, diff(R)),
+                       date_diagnosis = input$sir_start_date + row_number() - 1,
+                       count = I_diff + R_diff,
+                       count = pmax(count, 0)) %>% 
+                select(date_diagnosis, count), 
+              file, row.names = FALSE)
+  }
+)
+```
 
 Sviðsmyndir SIR
 ------------------------------
 
-### SIR kúrfa
-```{r fig.height=2}
-# staerd <- sliderInput(sir_staerd, 'Útsettir', min = 10, max = 1000)
-# observeEvent(input$sir_keyra, ({
-  shinySIR::run_shiny(model = "SIR", tmax = 60, ics =c(S = 100, I = 1, R = 2), showtable = F)
-# }))
+### Ný smit
+```{r}
+## Create an SIR function
+sir <- function(time, state, parameters) {
+  
+  with(as.list(c(state, parameters)), {
+    
+    dS <- -beta * S * I
+    dI <-  beta * S * I - gamma * I
+    dR <-                 gamma * I
+    
+    return(list(c(dS, dI, dR)))
+  })
+}
+
+### Set parameters
+out <- reactive({
+  r_eff <- reactiveVal(input$sir_r_eff, 1)
+  n_sus <- reactiveVal(input$sir_utsettir, 100)
+  n_sus2 <- 200
+  n_dagar_smit <- reactiveVal(input$sir_smitdagar, 14)
+  n_dagar <- reactiveVal(input$sir_dagar, 30)
+  dags_upphaf <- reactiveVal(input$sir_start_date, Sys.Date() + 1)
+  ## Proportion in each compartment: Susceptible 0.999999, Infected 0.000001, Recovered 0
+  init       <- c(S = 1-1/n_sus(), I = 1/n_sus(), R = 0.0)
+  ## beta: infection parameter; gamma: recovery parameter
+  parameters <- c(beta = r_eff(), gamma = 1/n_dagar_smit())
+  ## Time frame
+  times      <- seq(0, n_dagar(), by = 1)
+  
+  ## Solve using ode (General Solver for Ordinary Differential Equations)
+  out <- ode(y = init, times = times, func = sir, parms = parameters)
+  # change to data frame
+  out <- as.data.frame(out)
+  ## Delete time variable
+  out$time <- NULL
+  out
+})
+
+renderPlot({
+  smit_folk <- round(out() * input$sir_utsettir) %>%
+    mutate(I_diff = c(1, diff(I)),
+           R_diff = c(0, diff(R)),
+           nysmit = I_diff + R_diff,
+           nysmit = pmax(nysmit, 0),
+           dags = input$sir_start_date + row_number() - 1)
+  sum(smit_folk$nysmit)
+  ggplot(smit_folk) +
+    geom_col(aes(x=dags, y=nysmit)) +
+    theme_minimal()
+})
 ```
 
-sviðsmyndir-legudeild-gjörgæsla
+### SIR kúrfur
+```{r}
+renderPlot({
+  matplot(x = 0:input$sir_dagar, y = out() * input$sir_utsettir, type = "l",
+          xlab = "Dagar", ylab = "Fjöldi einstaklinga", main = "Fjöldi smita - SIR Model",
+          lwd = 1, lty = c(1,1,2), bty = "l", col = c('Grey', 'Red', 'Grey'))
+  legend(input$sir_dagar, max(out() * input$sir_utsettir), 
+         c("Útsettir", "Smitaðir", "Batnað"), yjust = 1, xjust = 1,
+         lty = c(1,1,2), col = c('Grey', 'Red', 'Grey'), bg = 'White', box.col = 'White')
+})
+```
+
+
+sviðsmyndir-hermunarútkoma
 -------------------------------
 
-### Legudeild
+### Niðurstaða hermunar
+
 
 ```{r}
-renderPlotly({
-  p <- plot_simulation('Legudeild') + ylim(0, 100)
-  ggplotly(p, tooltip = list('linetype', 'date', 'value'))
-  observeEvent(input$sv_keyra, {
-    p <- p + geom_line(aes(y = value + 5, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
-    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
-  })
-  ggplotly(p, tooltip = list('linetype', 'date', 'value'))
-})
+# renderPlotly({
+#   p <- plot_simulation('Legudeild') + ylim(0, 100)
+#   ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+#   observeEvent(input$sv_keyra, {
+#     p <- p + geom_line(aes(y = value + 5, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
+#     ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+#   })
+#   ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+# })
 
 ```
 
 
-### Gjörgæsla
-
 ```{r}
-renderPlotly({
-    p <- plot_simulation('Gjörgæsla') + ylim(0, 50)
-    if (input$sv_fjoldi > 0) {
-    p <- p +
-      geom_line(aes(y = value + 2, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
-    }
-    ggplotly(p, tooltip = list('linetype', 'date', 'value'))
-})
+# renderPlotly({
+#     p <- plot_simulation('Gjörgæsla') + ylim(0, 50)
+#     if (input$sv_fjoldi > 0) {
+#     p <- p +
+#       geom_line(aes(y = value + 2, lty = key, size = 'Ný sviðsmynd'), col = "red", size = 0.7)
+#     }
+#     ggplotly(p, tooltip = list('linetype', 'date', 'value'))
+# })
 ```
 
 Forsendur {data-icon="fa-chart-bar"}
