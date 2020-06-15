@@ -8,3 +8,4 @@ readr
 tidyr
 RCurl
 stringr
+deSolve
