@@ -71,7 +71,7 @@ states_labels_in_order <- c('Heimaeinangrun','Legudeild','Gjörgæsla')
 
 historical_data <- read_csv(path_historical_data,col_types=cols()) %>% mutate(.,date=date-1,state=factor(state,levels=states_in_order,labels=states_labels_in_order))
 experiment_description <- read_excel('../lsh_data_processing/experiment_template.xlsx',sheet='experiment_description') %>%
-                            mutate(label_icelandic=if_else(is.na(label_icelandic),'dummy',label_icelandic))
+                            mutate(label_icelandic=if_else(is.na(label_icelandic),'dummy',label_icelandic)) %>%
                             filter(experiment_id %in% run_info$experiment_id)
 
 
