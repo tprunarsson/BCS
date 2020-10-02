@@ -131,3 +131,140 @@ join_prop_outpatient_to_sim <- function(window_size = 7) {
         dplyr::full_join(bcs_data$prop_visits, by = c('date_prop' = 'date')) %>% 
         mutate(outpatient = home * prop_visits_last_week)
 }
+
+##For Ferguson simulation
+run_ferguson_simulation <- function(splitting_variable_name,infected_distr,transitions_location='wuhan',los_location='wuhan'){
+    if(transitions_location=='wuhan'){
+        transition_prob <- filter(prior_transitions,location=='wuhan') %>%
+            inner_join(select(age_groups,age_official,matches(paste0('^',splitting_variable_name,'$'))),by='age_official') %>%
+            rename(splitting_variable=!!splitting_variable_name) %>%
+            group_by(splitting_variable) %>%
+            summarise(p_hospital=sum(infected*inpatient_ward)/sum(infected),
+                      p_icu=sum(infected*intensive_care_unit)/sum(infected),
+                      p_death=sum(infected*deceased)/sum(infected))
+    }else{
+        transition_prob <- patient_transitions_state_blocks %>%
+            inner_join(select(individs_splitting_variables,patient_id,matches(paste0('^',splitting_variable_name,'$'))),by='patient_id') %>%
+            rename(splitting_variable=!!splitting_variable_name) %>%
+            group_by(patient_id,splitting_variable) %>%
+            summarise(hospital=any(state!='home'),icu=any(state=='intensive_care_unit'),death=any(if_else(is.na(state_next),FALSE,state_next=='death'))) %>%
+            group_by(splitting_variable) %>%
+            summarise(p_hospital=sum(hospital)/n(),p_icu=sum(icu)/sum(hospital),p_death=sum(death)/n()) %>%
+            ungroup() %>%
+            mutate(p_icu=if_else(is.na(p_icu),0,as.numeric(p_icu)))
+    }
+    
+    splitting_distribution <- get_patient_transitions_at_date('base',date_observed = as.Date('2020-05-08')) %>%
+        distinct(patient_id) %>%
+        inner_join(individs_splitting_variables,by='patient_id') %>%
+        rename(splitting_variable=!!splitting_variable_name) %>%
+        group_by(splitting_variable) %>%
+        summarise(prop=n()) %>%
+        ungroup() %>%
+        mutate(prop=prop/sum(prop))
+    dates <- seq(min(infected_distr$dags), max(infected_distr$dags), by=1)
+    #dates <- seq(min(infected_distr$date),max(infected_distr$date),by=1)
+    active_cases <- matrix(0,ncol=length(dates)+21,nrow=1000) 
+    hospital_cases <- matrix(0,ncol=length(dates)+21,nrow=1000)
+    icu_cases <- matrix(0,ncol=length(dates)+21,nrow=1000)
+    for(i in 1:length(dates)){
+        new_cases <- rep(infected_distr$new_cases[infected_distr$dags==dates[i]],1000)
+        # new_cases <- sample(infected_distr$new_cases[infected_distr$date==dates[i]],
+        #                     size = 1000,
+        #                     prob=infected_distr$prob[infected_distr$date==dates[i]],
+        #                     replace = T)
+        active_cases[,i:(i+21-1)] <-active_cases[,i:(i+21-1)] + matrix(rep(new_cases,21),ncol=21)
+        splitting_new_cases <- sapply(new_cases,function(x){
+            splitting_samples <- sample(1:nrow(splitting_distribution),size=x,replace=T,prob=splitting_distribution$prop)
+            splitting_samples_summary <- rep(0,nrow(splitting_distribution))
+            for(s in splitting_samples){
+                splitting_samples_summary[s] <- splitting_samples_summary[s]+1 
+            }
+            return(splitting_samples_summary)
+        }) %>% t()
+        hospital_cases_per_splitting <- matrix(0,nrow=nrow(splitting_new_cases),ncol=ncol(splitting_new_cases))
+        for(j in 1:ncol(splitting_new_cases)){
+            hospital_cases_per_splitting[,j] <- rbinom(size=splitting_new_cases[,j],n=nrow(splitting_new_cases),prob=transition_prob$p_hospital[j])
+        }
+        hospital_cases[,(i+7):(i+21-1)] <- hospital_cases[,(i+7):(i+21-1)] + matrix(rep(rowSums(hospital_cases_per_splitting),14),ncol=14) 
+        icu_cases_per_splitting <- matrix(0,nrow=nrow(hospital_cases_per_splitting),ncol=ncol(hospital_cases_per_splitting))
+        for(j in 1:ncol(hospital_cases_per_splitting)){
+            icu_cases_per_splitting[,j] <- rbinom(size=hospital_cases_per_splitting[,j],n=nrow(hospital_cases_per_splitting),prob=transition_prob$p_icu[j])
+        }
+        icu_cases[,(i+10):(i+10+10-1)] <- icu_cases[,(i+10):(i+10+10-1)] + matrix(rep(rowSums(icu_cases_per_splitting),10),ncol=10)
+    }
+    hospital_dat <- tibble(date=dates,
+                           state='hospital',
+                           median=apply(hospital_cases,2,quantile,probs=0.5)[1:length(dates)],
+                           lower=apply(hospital_cases,2,quantile,probs=0.025)[1:length(dates)],
+                           upper=apply(hospital_cases,2,quantile,probs=0.975)[1:length(dates)])
+    icu_dat <- tibble(date=dates,
+                      state='intensive_care_unit',
+                      median=apply(icu_cases,2,quantile,probs=0.5)[1:length(dates)],
+                      lower=apply(icu_cases,2,quantile,probs=0.025)[1:length(dates)],
+                      upper=apply(icu_cases,2,quantile,probs=0.975)[1:length(dates)])
+    return(bind_rows(hospital_dat,icu_dat))
+}
+
+#Nýtt Ferguson simulation með best LOS
+
+run_ferguson_simulation_new <- function(infected_distr, los, splitting_distribution){
+    transition_prob <- patient_transitions_state_blocks %>%
+        inner_join(select(individs_splitting_variables,patient_id,matches(paste0('^','age_official','$'))),by='patient_id') %>%
+        rename(splitting_variable=!!'age_official') %>%
+        group_by(patient_id,splitting_variable) %>%
+        summarise(hospital=any(state!='home'),icu=any(state=='intensive_care_unit'),death=any(if_else(is.na(state_next),FALSE,state_next=='death'))) %>%
+        group_by(splitting_variable) %>%
+        summarise(p_hospital=sum(hospital)/n(),p_icu=sum(icu)/sum(hospital),p_death=sum(death)/n()) %>%
+        ungroup() %>%
+        mutate(p_icu=if_else(is.na(p_icu),0,as.numeric(p_icu)))
+
+    dates <- seq(min(infected_distr$date), max(infected_distr$date),by=1)
+    
+    active_cases <- matrix(0,ncol=length(dates)+los$vd,nrow=1000) 
+    hospital_cases <- matrix(0,ncol=length(dates)+los$vd,nrow=1000)
+    icu_cases <- matrix(0,ncol=length(dates)+los$vd,nrow=1000)
+    for(i in 1:length(dates)){
+        new_cases <- rep(infected_distr$new_cases[infected_distr$date==dates[i]],1000)
+        # new_cases <- sample(infected_distr$new_cases[infected_distr$date==dates[i]],
+        #                     size = 1000,
+        #                     prob=infected_distr$prob[infected_distr$date==dates[i]],
+        #                     replace = T)
+        active_cases[,i:(i+los$vd-1)] <-active_cases[,i:(i+los$vd-1)] + matrix(rep(new_cases,los$vd),ncol=los$vd)
+        splitting_new_cases <- sapply(new_cases,function(x){
+            splitting_samples <- sample(1:nrow(splitting_distribution),size=x,replace=T,prob=splitting_distribution$prop)
+            splitting_samples_summary <- rep(0,nrow(splitting_distribution))
+            for(s in splitting_samples){
+                splitting_samples_summary[s] <- splitting_samples_summary[s]+1 
+            }
+            return(splitting_samples_summary)
+        }) %>% t()
+        hospital_cases_per_splitting <- matrix(0,nrow=nrow(splitting_new_cases),ncol=ncol(splitting_new_cases))
+        for(j in 1:ncol(splitting_new_cases)){
+            hospital_cases_per_splitting[,j] <- rbinom(size=splitting_new_cases[,j],n=nrow(splitting_new_cases),prob=transition_prob$p_hospital[j])
+        }
+        hospital_cases[,(i+los$pre_lega):(i+los$vd-1)] <- hospital_cases[,(i+los$pre_lega):(i+los$vd-1)] + matrix(rep(rowSums(hospital_cases_per_splitting),los$ld),ncol=los$ld) 
+        icu_cases_per_splitting <- matrix(0,nrow=nrow(hospital_cases_per_splitting),ncol=ncol(hospital_cases_per_splitting))
+        for(j in 1:ncol(hospital_cases_per_splitting)){
+            icu_cases_per_splitting[,j] <- rbinom(size=hospital_cases_per_splitting[,j],n=nrow(hospital_cases_per_splitting),prob=transition_prob$p_icu[j])
+        }
+        icu_cases[,(i+los$pre_lega+los$pre_icu):(i+los$pre_lega+los$pre_icu+los$gd-1)] <- icu_cases[,(i+los$pre_lega+los$pre_icu):(i+los$pre_lega+los$pre_icu+los$gd-1)] + matrix(rep(rowSums(icu_cases_per_splitting),los$gd),ncol=los$gd)
+    }
+    home_dat <- tibble(date=dates,
+                       state='home',
+                       median=apply(active_cases-hospital_cases-icu_cases,2,quantile,probs=0.5)[1:length(dates)],
+                       lower=apply(active_cases-hospital_cases-icu_cases,2,quantile,probs=0.025)[1:length(dates)],
+                       upper=apply(active_cases-hospital_cases-icu_cases,2,quantile,probs=0.975)[1:length(dates)])
+    hospital_dat <- tibble(date=dates,
+                           state='hospital',
+                           median=apply(hospital_cases,2,quantile,probs=0.5)[1:length(dates)],
+                           lower=apply(hospital_cases,2,quantile,probs=0.025)[1:length(dates)],
+                           upper=apply(hospital_cases,2,quantile,probs=0.975)[1:length(dates)])
+    icu_dat <- tibble(date=dates,
+                      state='intensive_care_unit',
+                      median=apply(icu_cases,2,quantile,probs=0.5)[1:length(dates)],
+                      lower=apply(icu_cases,2,quantile,probs=0.025)[1:length(dates)],
+                      upper=apply(icu_cases,2,quantile,probs=0.975)[1:length(dates)])
+    return(bind_rows(home_dat,hospital_dat,icu_dat))
+}
+

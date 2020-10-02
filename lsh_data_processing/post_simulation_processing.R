@@ -4,7 +4,7 @@ library(dplyr)
 library(tidyr)
 library(readr)
 
-current_date_tmp <- as.Date('2020-04-06','%Y-%m-%d')
+current_date_tmp <- as.Date('2020-10-02','%Y-%m-%d')
 path_simulation_tmp <- '~/projects/covid/BCS/output/'
 path_summary_hospital_tmp <- '~/projects/covid/BCS/output_lsh/'
   
@@ -27,7 +27,8 @@ if(is.null(opt[['current_date']])){
   path_summary_hospital <- "../output_lsh/"
 }
 
-file_path_simulation <- paste0(path_simulation,current_date,'_covid_simulation.csv')
+file_path_simulation <- paste0(path_simulation,current_date,'_4_', current_date-1, '_covid_simulation.csv')
+#file_path_simulation <- paste0(path_simulation,current_date,'_covid_simulation.csv')
 file_path_summary_hospital <- paste0(path_summary_hospital,current_date,'_covid_simulation_summary_hospital.csv')
 #file_path_summary_hospital_all <- paste0('~/projects/covid/BCS/output/',current_date_tmp,'_covid_simulation_summary_all.csv')
 

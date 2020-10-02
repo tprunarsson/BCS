@@ -6,18 +6,24 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(tidyr)
   library(readr)
+  library(lubridate)
 })
+
+options(dplyr.summarise.inform = FALSE) #Óþolandi skilaboð
+
+cat("Processing data...\n")
 source('test_covid19_lsh_data_processing.R')
 source('create_input_for_simulation.R')
 source('help_functions.R')
 
-date_data_tmp <- as.Date('2020-05-08','%Y-%m-%d')
-date_prediction_tmp <- as.Date('2020-04-20','%Y-%m-%d')
+date_data_tmp <- as.Date('2020-10-02','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
+date_prediction_tmp <- as.Date('2020-09-29','%Y-%m-%d')
 date_observed_start_tmp <- date_data_tmp-3
 path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 #path_to_lsh_data_tmp <- '../../'
 write_tables_tmp <- TRUE
-run_id_tmp <- 8
+run_id_tmp <- 17
+forecast_tmp <- 'from_file'
 
 #Supported unit category types: all,simple
 unit_category_type <- 'simple'
@@ -38,8 +44,9 @@ option_list <-  list(
   make_option(c("-r", "--run_id"), type="integer", default=NULL, 
               help="run_id to identify run of a set of experiments", metavar="integer"),
   make_option(c("-l", "--path_to_lsh_data"), type="character", default=NULL, 
-              help="path to data from LSH", metavar="character")
-  
+              help="path to data from LSH", metavar="character"),
+  make_option(c("-c", "--forecast"), type="character", default=NULL, 
+              help="Which forecast to use, hi, manual or from_file", metavar="character")
 )
 
 opt_parser <-  OptionParser(option_list=option_list);
@@ -79,6 +86,19 @@ if(is.null(opt[['run_id']])){
   run_id <- opt[['run_id']]
 }
 
+if(is.null(opt[['forecast']])){
+  forecast=forecast_tmp
+  warning(paste0('You did not provide a forecast. ', forecast_tmp,' will be used'))
+}else{
+  forecast <- opt[['forecast']]
+}
+if(!(forecast=='from_file')){
+  if(date_prediction>ymd("2020-04-20")){
+    forecast <- 'manual'
+    warning(paste0('No forecast available for this date. ', forecast,' will be used'))
+  }
+}
+
 if (length(opt)>1){
   write_tables <- TRUE
 }else{
@@ -95,7 +115,8 @@ path_dashboard_tables <- '../dashboard/input/'
 path_outpatient_clinic <- '../outpatient_clinic_history/'
 
 file_name_lsh_data <- paste0(date_data,'_lsh_covid_data.xlsx')
-file_path_coding <- 'lsh_coding.xlsx'
+file_path_coding <- 'lsh_coding_new.xlsx'
+#file_path_coding <- 'lsh_coding.xlsx'
 file_path_priors <- 'priors.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
 file_path_experiment_template <- 'experiment_template.xlsx'
@@ -104,7 +125,12 @@ file_path_experiment_template <- 'experiment_template.xlsx'
 
 individs_raw <- read_excel(file_path_data,sheet = 'Einstaklingar', skip=3)
 hospital_visits_raw <- read_excel(file_path_data,sheet ='Komur og innlagnir', skip=3)
-hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3)
+if(date_data>ymd("2020-05-08")){ #BREYTA (kannski) með nýjum lsh-gögnum. passa að skoða amk
+  hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3, n_max = 2762)
+} else{
+  hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3)
+}
+#hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3)
 covid_diagnosis_raw <- read_excel(file_path_data,sheet ='Dag. greiningar frá veirurannsó', skip=6)
 interview_first_raw <- read_excel(file_path_data,sheet = 'Fyrsta viðtal úr forms', skip=3)
 interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr forms Pivot', skip=1)
@@ -114,8 +140,7 @@ NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
 treatment_contraints_raw <- read_excel(file_path_data,sheet = 'Takmörkun meðferðar', skip=3)
 
-
-covid_groups <- read_excel(file_path_coding,sheet = 'lsh_covid_groups')
+covid_groups <- read_excel(file_path_coding, sheet = 'lsh_covid_groups')
 unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
                     mutate(unit_category=!!as.name(paste0('unit_category_',unit_category_type)),
                            unit_category_order=!!as.name(paste0('unit_category_order_',unit_category_type)))
@@ -151,7 +176,8 @@ test_lsh_data_file()
 covid_diagnosis <- rename(covid_diagnosis_raw,patient_id=`Person Key`,date_time_diagnosis_pcr=`Dagsetning greiningar`) %>%
                     separate(.,col='date_time_diagnosis_pcr',into=c('date_diagnosis_pcr','time_diagnosis_pcr'),sep=' ',remove=FALSE) %>%
                     mutate(.,date_diagnosis_pcr=as.Date(date_diagnosis_pcr,"%Y-%m-%d")) %>%
-                    select(patient_id,date_diagnosis_pcr)
+                    select(.,patient_id, date_diagnosis_pcr) #%>%
+                    #filter(!(patient_id %in% bad_ids))
 
 individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, sex=`Yfirfl. kyns`,zip_code=`Póstnúmer`,
                    covid_group_raw=`Heiti sjúklingahóps`) %>%
@@ -165,10 +191,11 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
                         sex=min(sex,na.rm=T),
                         clinically_diagnosed=any(clinically_diagnosed),
                         recovered=any(recovered)) %>%
-              ungroup()
-#hospital_visits
+              ungroup() %>%
+              filter(zip_code != "999") #%>%
+              #filter(!(patient_id %in% bad_ids))
 
-
+#hospital visits
 hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`Deild Heiti`,date_time_in=`Dagurtími innskriftar`, date_time_out=`Dagurtími útskriftar`,
                           text_out=`Heiti afdrifa`,date_diagnosis_hospital=`Dagsetning skráningar - NR 1`) %>%
                     select(patient_id,unit_in,date_time_in,date_time_out,text_out,date_diagnosis_hospital) %>%
@@ -182,7 +209,8 @@ hospital_visits <- rename(hospital_visits_raw, patient_id=`Person Key`,unit_in=`
                     separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
                     mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
                     filter(date_in<=date_last_known_state) %>%
-                    select(patient_id,unit_in,unit_category_all,date_time_in,date_in,date_time_out,date_out,text_out,date_diagnosis_hospital)
+                    select(patient_id,unit_in,unit_category_all,date_time_in,date_in,date_time_out,date_out,text_out,date_diagnosis_hospital) #%>%
+                    #filter(!(patient_id %in% bad_ids))
 
 hospital_isolations <- rename(hospital_isolations_raw,patient_id=`Person Key`,isolation=`Einangrun`,unit_in=`Deild heiti`,
                               date_time_in=`Dags einangrun byrjar`,date_time_out=`Dags einangrun endar`) %>%
@@ -198,7 +226,8 @@ hospital_isolations <- rename(hospital_isolations_raw,patient_id=`Person Key`,is
                         separate(col='date_time_out',into=c('date_out','time_out'),sep=' ',remove=FALSE) %>%
                         mutate(.,date_in=as.Date(date_in,"%Y-%m-%d"),date_out=as.Date(date_out,"%Y-%m-%d")) %>%
                         filter(date_in<=date_last_known_state) %>%
-                        select(patient_id,isolation_category,unit_in,date_time_in,date_in,date_time_out,date_out)
+                        select(patient_id,isolation_category,unit_in,date_time_in,date_in,date_time_out,date_out) #%>%
+                        #filter(!(patient_id %in% bad_ids))
                     
 #forms data
 interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first_symptoms=`Upphafsdagur einkenna`, date_diagnosis_interview=`Dagsetning greiningar`,
@@ -237,7 +266,8 @@ interview_first <- rename(interview_first_raw,patient_id=`Person Key`,date_first
                         filter(if_else(!is.na(date_diagnosis_interview) & !is.na(date_diagnosis_pcr),abs(date_diagnosis_interview-date_diagnosis_pcr)==min(abs(date_diagnosis_interview-date_diagnosis_pcr)),TRUE)) %>%
                         slice(1) %>%
                         filter(.,if_else(is.finite(date_diagnosis_interview),date_diagnosis_interview<=date_last_known_state,TRUE)) %>% #remove entries where date_diagnosis_interview after date_last_known_state
-                        select(patient_id,priority,comorbidities,num_comorbidity,date_first_symptoms,date_diagnosis_interview,clinical_assessment)
+                        select(patient_id,priority,comorbidities,num_comorbidity,date_first_symptoms,date_diagnosis_interview,clinical_assessment) #%>%
+                        #filter(!(patient_id %in% bad_ids))
 
 #note, min clinical assessment chosen for each date. TODO: get time stamps of interviews
 interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,date_clinical_assessment=`Dagsetning símtals`,clinical_assessment=`Klínískt mat`) %>%
@@ -251,7 +281,8 @@ interview_follow_up <- rename(interview_follow_up_raw,patient_id=`Person Key`,da
                         mutate(.,clinical_assessment=clinical_assessment_category) %>%
                         select(.,patient_id,date_clinical_assessment,clinical_assessment,clinical_assessment_category_order) %>%
                         group_by(.,patient_id,date_clinical_assessment) %>%
-                        summarize(.,clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)])
+                        summarize(.,clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)]) #%>%
+                        #filter(!(patient_id %in% bad_ids))
                         
 
 #date_clinical_assessment is the last interview by a physician. Remove scheduled future phone calls
@@ -261,7 +292,8 @@ interview_last <- rename(interview_last_raw,patient_id=`Person Key`,date_clinica
                   filter(is.finite(date_clinical_assessment)) %>%
                   filter(date_clinical_assessment<=date_last_known_state) %>%
                   group_by(.,patient_id) %>%
-                  summarize(.,date_clinical_assessment=max(date_clinical_assessment,na.rm=T))
+                  summarize(.,date_clinical_assessment=max(date_clinical_assessment,na.rm=T)) #%>%
+                  #filter(!(patient_id %in% bad_ids))
     
 
 interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_clinical_assessment=`Dags breytingar`,col_name=`Heiti dálks`,col_value=`Skráningar - breytingar.Skráð gildi`) %>% 
@@ -285,7 +317,8 @@ interview_extra <- rename(interview_extra_raw,patient_id=`Person Key`,date_time_
                     group_by(.,patient_id,date_clinical_assessment) %>%
                     summarize(.,priority=if(all(is.na(priority))) NA_character_ else priority[which.max(priority_all_order)],
                               clinical_assessment=if(all(is.na(clinical_assessment))) NA_character_ else clinical_assessment[which.max(clinical_assessment_category_order)]) %>%
-                    select(patient_id,priority, date_clinical_assessment,clinical_assessment) 
+                    select(patient_id,priority, date_clinical_assessment,clinical_assessment) #%>%
+                    #filter(!(patient_id %in% bad_ids))
 
 NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtími skráningar`,NEWS_score=`News score`) %>% 
               select(.,patient_id,date_time,NEWS_score) %>%
@@ -296,7 +329,8 @@ NEWS_score <- rename(NEWS_score_raw, patient_id=`Person Key`,date_time=`Dagurtí
               group_by(.,patient_id,date) %>%
               #summarize(NEWS_score=NEWS_score[which.max(date_time)]) %>%
               summarize(NEWS_score=mean(as.numeric(NEWS_score),na.rm=T)) %>%
-              mutate(NEWS_score=if_else(NEWS_score>5,'red','green'))
+              mutate(NEWS_score=if_else(NEWS_score>5,'red','green')) #%>%
+              #filter(!(patient_id %in% bad_ids))
 
 ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_time_ventilator_start=`Dags settur í öndunarvél`,date_time_ventilator_end=`Dags tekin úr öndunarvél`) %>% 
                       select(.,patient_id,date_time_ventilator_start,date_time_ventilator_end) %>%
@@ -313,7 +347,8 @@ ventilator_times <- rename(ventilator_times_raw, patient_id=`Person Key`,date_ti
                       filter(is.finite(date)) %>%
                       mutate(ventilator=if_else(ventilator=='date_ventilator_start','red','green')) %>%
                       group_by(patient_id,unit_in,date) %>%
-                      summarize(ventilator=ventilator[which.max(ventilator=='red')])
+                      summarize(ventilator=ventilator[which.max(ventilator=='red')]) #%>%
+                      #filter(!(patient_id %in% bad_ids))
 
 treatment_contraints <- rename(treatment_contraints_raw,patient_id=`Person Key`,intensive_care_unit_restriction=`Gjörgæsluvistun`,ventilator_restriction=`Öndunarvél`) %>%
                         select(patient_id,intensive_care_unit_restriction,ventilator_restriction) %>%
@@ -529,6 +564,49 @@ patient_transitions_state_blocks <- group_by(patient_transitions,patient_id) %>%
                                     mutate(censored=(is.na(state_next))) %>%
                                     mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+1) %>%
                                     ungroup()
+
+#### Lagað fyrir hermun{ (kannski til betri leið til að gera þetta)
+# Tökum út þá sem eru lengur en 59 daga í stöðu, veldur vandræðum í gögnum eftir ákveðinn tíma
+flawed_state_duration_ids <- patient_transitions_state_blocks %>% filter(state_duration>59) %>% select(patient_id)
+environment_objects <- objects()
+
+dfs <- list()
+
+#Finnur allt í environment sem inniheldur þessi id
+for(i in environment_objects){
+  x=get(i)
+  if(is.data.frame(x)) {
+    if("patient_id" %in% colnames(x)){
+      dfs[[i]] <- get(i)
+    }
+  }
+}
+
+filter_bad_LOS <- function(dataframe){
+  dataframe <- dataframe %>% filter(!(patient_id %in% flawed_state_duration_ids$patient_id))
+}
+
+dfs <- within(dfs, rm(flawed_state_duration_ids)) 
+
+#Tökum út raðir með þessi id
+dfs <- lapply(dfs, filter_bad_LOS)
+
+#Yfirskrifum í environment
+list2env(dfs, env=globalenv())
+rm(dfs, flawed_state_duration_ids, environment_objects)
+
+#### }Lagað fyrir hermun
+
+#Fyrir sankey í dashboard
+patient_transitions_state_blocks2 <- group_by(patient_transitions,patient_id) %>%
+  mutate(state_block_nr=get_state_block_numbers(state)) %>%
+  group_by(.,patient_id,state_block_nr,state) %>% arrange(.,date) %>% 
+  summarize(state_block_nr_start=min(date),state_block_nr_end=max(date),state_next=state_tomorrow[which.max(date)]) %>%
+  mutate(censored=(is.na(state_next))) %>%
+  mutate(state_duration=as.numeric(state_block_nr_end-state_block_nr_start)+1) %>%
+  ungroup() %>%
+  select(patient_id, state, date_start = 'state_block_nr_start', date_end = 'state_block_nr_end', state_next)
+
 # TODO: fix tests
 #test_data_processing()
 
@@ -544,8 +622,16 @@ historical_state_sequences_extended <- get_state_sequences(model='extended',seq_
 
 
 ################# ----- Predicted number of infections ------ ##############################
-infections_predicted_per_date <- get_infections_predicted_per_date(source='hi',date_prediction)
-
+if(forecast=='hi'){
+  infections_predicted_per_date <- get_infections_predicted_per_date(source='hi', date_prediction)
+}
+if(forecast=='from_file'){
+  infections_predicted_per_date <- get_infections_predicted_per_date(source='from_file', date_prediction)
+}
+if(forecast=='manual'){
+  stikar_manual <- read.csv(paste0(path_tables, "stikar_manual.csv"))
+  infections_predicted_per_date <- get_infections_predicted_per_date(source='manual', date_prediction, stikar_manual$alpha, stikar_manual$beta, stikar_manual$S, stikar_manual$nu, stikar_manual$day_n)
+}
 ################# ----- proportion of patients going to outpatient clinic ------ #################
 prop_outpatient_clinic <- get_prop_outpatient_clinic(historical_data)
 

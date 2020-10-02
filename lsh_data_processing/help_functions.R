@@ -193,9 +193,16 @@ get_state_worst <- function(state_vec,order_vec){
 
 
 get_patient_transitions_at_date <- function(model,date_observed){
+  if(model=='symptoms'){
+    patient_transitions_at_date <- filter(patient_transitions_symptoms,date<=date_observed) %>%
+      mutate(state_tomorrow=if_else(date==date_observed,NA_character_,state_tomorrow),
+             severity_tomorrow=if_else(date==date_observed,NA_character_,severity_tomorrow))
+  }
+  else{
   patient_transitions_at_date <- filter(patient_transitions,date<=date_observed) %>%
     mutate(state_tomorrow=if_else(date==date_observed,NA_character_,state_tomorrow),
            severity_tomorrow=if_else(date==date_observed,NA_character_,severity_tomorrow))
+  }
   if(model=='extended'){
     patient_transitions_at_date <- mutate(patient_transitions_at_date,state=paste0(state,'-',severity),
                                           state_tomorrow=case_when(is.na(state_tomorrow) ~ NA_character_,
@@ -226,6 +233,15 @@ get_patient_transitions_state_blocks <- function(patient_transitions,model){
                                                   censored=censored[which.max(state_with_severity_block_nr)],
                                                   state_duration=sum(state_duration)) %>%
                                         ungroup()
+  }
+  if(model=='symptoms'){
+    patient_transitions_state_blocks <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
+      summarize(state_block_nr_start=min(state_block_nr_start,na.rm=T),
+                state_block_nr_end=max(state_block_nr_end,na.rm=T),
+                state_next=state_next[which.max(state_with_severity_block_nr)],
+                censored=censored[which.max(state_with_severity_block_nr)],
+                state_duration=sum(state_duration)) %>%
+      ungroup()
   }
   return(patient_transitions_state_blocks)
 }
@@ -358,15 +374,39 @@ get_historical_turnover <- function(){
   return(historical_turnover)
 }
 
+get_historical_turnover_symptoms <- function(){
+  transition_turnover <- select(patient_transitions_symptoms,patient_id,date,state,state_tomorrow) %>%
+    filter(state!=state_tomorrow) %>%
+    pivot_longer(.,cols = c('state','state_tomorrow'),names_to = 'state_type',values_to = 'state') %>%
+    mutate(date=date+1) %>%
+    mutate(turnover_type=if_else(state_type=='state_tomorrow','state_in','state_out'))
+  
+  first_states <- select(patient_transitions_symptoms,patient_id,date,state) %>%
+    group_by(.,patient_id) %>%
+    slice(which.min(date)) %>%
+    mutate(turnover_type='state_in') %>%
+    select(patient_id,date,turnover_type,state)
+  
+  historical_turnover <- bind_rows(transition_turnover,first_states) %>%
+    group_by(.,date,turnover_type,state) %>%
+    summarise(count=n())
+  return(historical_turnover)
+}
+
 get_state_sequences <- function(model,seq_type='finished'){
   if(model=='extended'){
     transitions_state_blocks_summary <- mutate(patient_transitions_state_blocks,state=paste0(state,'-',severity)) %>%
       select(.,patient_id,state_block_nr,state,state_next,censored)
   }else{
+    if(model=='symptoms'){
+      transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks_symptoms,patient_id,state_block_nr,state) %>%
+        summarize(state_next=state_next[which.max(state_with_severity_block_nr)],censored=censored[which.max(state_with_severity_block_nr)]) %>%
+        ungroup()
+    }else{
     transitions_state_blocks_summary <- group_by(patient_transitions_state_blocks,patient_id,state_block_nr,state) %>%
       summarize(state_next=state_next[which.max(state_with_severity_block_nr)],censored=censored[which.max(state_with_severity_block_nr)]) %>%
       ungroup()
-  }
+  }}
   state_sequences <- group_by(transitions_state_blocks_summary,patient_id) %>%
     filter(if(seq_type=='finished')!is.na(tail(state_next,1)) else if(seq_type=='active') is.na(tail(state_next,1)) else TRUE) %>%
     summarise(path=paste0(paste(state,collapse=' -> '),if_else(!tail(censored,1),paste0(' -> ',tail(state_next,1)),''))) %>%

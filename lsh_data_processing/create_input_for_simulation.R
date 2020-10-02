@@ -14,6 +14,17 @@ get_current_state_per_date <- function(model,date_observed,max_splitting_dat){
     state_block_starts <- select(state_block_starts,patient_id,state_block_nr,state_block_nr_start)
                             
     #TODO: decide how date variable is thought, that is whether we represent the state in which an id was in before or after midnight of the date
+    if(model=='symptoms'){
+      current_state_per_date <- inner_join(transitions,state_block_starts,by=c('patient_id','state_block_nr')) %>%
+        mutate(days_in_state=as.numeric(date-state_block_nr_start)+1) %>%
+        inner_join(select(individs_extended,patient_id,date_diagnosis),.,by='patient_id') %>%
+        mutate(days_from_diagnosis=as.numeric(date-date_diagnosis)+1) %>%
+        inner_join(.,state_worst_case_per_date_symptoms,by=c('patient_id','date')) %>%
+        mutate(state_worst=if(model=='extended') paste0(state_worst,'-',state_worst_severity) else state_worst) %>%
+        inner_join(.,select(max_splitting_dat,patient_id,max_splitting_values) %>% rename(splitting_variable=max_splitting_values),by='patient_id') %>%
+        select(-state_tomorrow,-date_diagnosis,-matches('severity'),-matches('state_block_nr')) %>%
+        select(patient_id,date,splitting_variable,state,days_in_state,days_from_diagnosis,state_worst)
+    }else{
     current_state_per_date <- inner_join(transitions,state_block_starts,by=c('patient_id','state_block_nr')) %>%
                                 mutate(days_in_state=as.numeric(date-state_block_nr_start)+1) %>%
                                 inner_join(select(individs_extended,patient_id,date_diagnosis),.,by='patient_id') %>%
@@ -23,6 +34,7 @@ get_current_state_per_date <- function(model,date_observed,max_splitting_dat){
                                 inner_join(.,select(max_splitting_dat,patient_id,max_splitting_values) %>% rename(splitting_variable=max_splitting_values),by='patient_id') %>%
                                 select(-state_tomorrow,-date_diagnosis,-matches('severity'),-matches('state_block_nr')) %>%
                                 select(patient_id,date,splitting_variable,state,days_in_state,days_from_diagnosis,state_worst)
+    }
     return(current_state_per_date)
 }
 
@@ -230,8 +242,8 @@ get_ferguson_length_of_stay <- function(s,splitting_variable_name,splitting_vari
 
 
 ################# ----- Extract CDF from posterior predictive distribution from the stats group model of number infected
-get_infections_predicted_per_date <- function(source,date_prediction){
-    if(source=='hi'){
+get_infections_predicted_per_date <- function(source, date_prediction, alpha, beta, S, nu, day_n){
+    if(source=='hi'){ #Hér er date_prediction skilið sem dagur sem spá var búin til
         hi_posterior_predictive_distr <- read_csv(paste0('https://raw.githubusercontent.com/bgautijonsson/covid19/master/Output/Iceland_Posterior/Iceland_Posterior_',date_prediction,'.csv'),col_types=cols())
         hi_mat_CDF_expanded <- expand_grid(date=unique(hi_posterior_predictive_distr$date),new_cases=0:max(hi_posterior_predictive_distr$new_cases))
         hi_mat_CDF <- group_by(hi_posterior_predictive_distr,date,new_cases) %>%
@@ -242,7 +254,56 @@ get_infections_predicted_per_date <- function(source,date_prediction){
                         #get_cdf(.,num_groups=1)
         return(hi_mat_CDF)
     }
+    if(source=='manual'){ #Hér er date_prediction skilið sem upphafsdagur spáar
+      pop_iceland <- 364134
+      new_cases_manual <- data.frame("date"=rep(seq.Date(from=date_prediction, length.out = day_n, by=1), each=257),
+                              "day_n"=rep(1:day_n, each=257)) 
+      
+      new_cases_manual <- new_cases_manual %>% mutate("total_cases"=sapply(new_cases_manual$day_n, logistic_growth,
+                                                             alpha=alpha,
+                                                             beta=beta,
+                                                             S=S/pop_iceland,
+                                                             nu=nu))
+      
+      new_cases_manual <- new_cases_manual %>% mutate("new_cases"=sapply(new_cases_manual$total_cases, logistic_growth_deriv,
+                                                                         beta=beta,
+                                                                         S=S/pop_iceland,
+                                                                         nu=nu))
+      
+      new_cases_manual <- new_cases_manual %>% mutate(., "total_cases"=round(new_cases_manual$total_cases*pop_iceland),
+                                        "new_cases"=round(new_cases_manual$new_cases*pop_iceland))
+      
+      new_cases_manual <- new_cases_manual %>% select(date, new_cases) %>% 
+        mutate(count=0) %>% 
+        mutate(new_cases2=rep(0:256, times=day_n)) %>% 
+        mutate(count=if_else(new_cases2==new_cases, 7000, if_else(new_cases2==new_cases+1, 1000, 0))) %>%
+        mutate(new_cases=new_cases2) %>% select(-new_cases2)
+        
+      return(new_cases_manual)
+    }
+    if(source=='from_file'){ #Hér er date_prediction skilið sem dagur sem spá var búin til
+      path_from_file <- "../predictions/"
+      posterior_predictive_distr <- read_csv(paste0(path_from_file, 'Iceland_Posterior_',date_prediction,'.csv'),col_types=cols())
+      mat_CDF_expanded <- expand_grid(date=unique(posterior_predictive_distr$date),new_cases=0:max(posterior_predictive_distr$new_cases))
+      mat_CDF <- group_by(posterior_predictive_distr,date,new_cases) %>%
+        summarise(count=n()) %>%
+        ungroup() %>%
+        right_join(mat_CDF_expanded,by=c('date','new_cases')) %>%
+        mutate(count=if_else(is.na(count),0,as.numeric(count)))
+    return(mat_CDF)
+    }
     return()
+}
+
+# Functions for making new predictions
+
+logistic_growth <- function(time, alpha, beta, S, nu) {
+  z <- beta*(time-alpha)
+  S-S/((1+nu*exp(z))^(1/nu))
+}
+
+logistic_growth_deriv <- function(g, beta, S, nu){
+  (beta/nu)*(S-g)*(1-((S-g)/S)^nu)
 }
 
 ################# ----- Get information on the current run of a batch of experiments --------
@@ -271,6 +332,7 @@ get_run_info <- function(current_run_id){
                             separate_rows(heuristics,sep=';') %>%
                             mutate(heuristics=as.numeric(heuristics)) %>%
                             right_join(heuristics_description,by=c('heuristics'='heuristic_id')) %>%
+                            arrange(heuristics) %>%
                             mutate(heuristic_in_use=as.numeric(!is.na(experiment_id))) %>%
                             mutate(experiment_id=id) %>%
                             group_by(experiment_id) %>%
