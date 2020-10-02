@@ -9,3 +9,6 @@ tidyr
 RCurl
 stringr
 deSolve
+lubridate
+gdata
+ggthemes
