@@ -2,3 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+lsh_data/
+lsh_data_new/
+graphs/
+input/
+output/
+output_lsh/
+covid2/

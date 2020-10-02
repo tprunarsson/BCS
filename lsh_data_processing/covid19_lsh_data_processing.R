@@ -19,8 +19,8 @@ source('help_functions.R')
 date_data_tmp <- as.Date('2020-10-02','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
 date_prediction_tmp <- as.Date('2020-09-29','%Y-%m-%d')
 date_observed_start_tmp <- date_data_tmp-3
-path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
-#path_to_lsh_data_tmp <- '../../'
+#path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
+path_to_lsh_data_tmp <- '../lsh_data/'
 write_tables_tmp <- TRUE
 run_id_tmp <- 17
 forecast_tmp <- 'from_file'
