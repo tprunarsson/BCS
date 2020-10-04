@@ -14,15 +14,16 @@ library(lubridate)
 library(gdata)
 options(warn = oldw)
 
-best_weighted_function <- function(today, los_setting, prediction_type, date_prediction){
+best_weighted_function <- function(date_data, today, los_setting, prediction_type, date_prediction){
 # Stillingar
 run_id <- 17
-date_data <- '2020-10-02'     #covid19_lsh_data_processing #BREYTA með nýjum lsh gögnum
+#date_data <- '2020-10-02'     #covid19_lsh_data_processing #BREYTA með nýjum lsh gögnum
+#date_data <- today            #dagsetning skýrslu er sú sama og dagsetning gagna
 #date_data <- Sys.Date()-1    #Notar alltaf nýjustu gögnin
 back_in_time <- 7 #Number of days to calculate MSE from
 week_ago <- today-back_in_time
-if(ymd(today)<ymd("2020-03-08")){ # Ef minna en vika er liðin af faraldri, útfæra fyrir almennt
-  week_ago <- ymd("2020-03-01")
+if((historical_data %>% distinct(date) %>% nrow())<7){ # Ef minna en vika er liðin af faraldri
+  week_ago <- min(historical_data$date)
 }
 
 # Keyra bash

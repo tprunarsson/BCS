@@ -1,0 +1,93 @@
+---
+title: "<center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>"
+date: "<center> <h4> `r format(Sys.Date(), '%d-%m-%Y')` </h4></center>"
+output: html_document
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(plotly)
+date_skyrsla <- Sys.Date()
+data <- read.csv(paste0(date_skyrsla, '.csv'))
+data$date <- as.Date(data$date, "%Y-%m-%d")
+color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
+```
+
+```{r, include=FALSE}
+data_home <- data %>% filter(state=="home") %>% 
+  gather(key="key", value="value", median, lower, upper) %>% 
+  mutate(value=round(value, 0)) %>%
+  select(-count_historical, -best_alpha) %>% 
+  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
+data_home$key <- factor(data_home$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+
+data_iw <- data %>% filter(state=="inpatient_ward") %>% 
+  gather(key="key", value="value", median, lower, upper) %>% 
+  mutate(value=round(value, 0)) %>%
+  select(-count_historical, -best_alpha) %>%
+  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
+data_iw$key <- factor(data_iw$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+
+data_icu <- data %>% filter(state=="intensive_care_unit") %>% 
+  gather(key="key", value="value", median, lower, upper) %>% 
+  mutate(value=round(value, 0)) %>%
+  select(-count_historical, -best_alpha) %>%
+  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
+data_icu$key <- factor(data_icu$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+```
+
+$~$
+
+Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu þrjár vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
+
+Spá um fjölda greindra smita er frá 29-09-2020 .<br />
+Söguleg gögn frá Landspítala ná til miðnættis `r format(Sys.Date()-1, '%d-%m-%Y')`.<br />
+
+$~$
+
+### Heimaeinangrun
+
+```{r, echo=FALSE, fig.align='center'}
+data_home %>% ggplot(aes(x=date, y=value)) + 
+        geom_line(aes(lty=key, alpha=key), col = color_palette[1], size=1) + 
+        scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+        labs(x = '', y = 'Fjöldi', linetype = '', title="Heimaeinangrun", alpha='') +
+        scale_alpha_manual(values = c(0.8, 1, 0.8)) +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
+        geom_text(aes(label = round(value, 1)),
+            vjust=-1.8,
+            show.legend = FALSE, size=2.3) + 
+        scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") 
+```
+
+### Legudeild
+
+```{r, echo=FALSE, fig.align='center'}
+data_iw %>% ggplot(aes(x=date, y=value)) + 
+        geom_line(aes(lty=key, alpha=key), col = color_palette[2], size=1) + 
+        scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+        labs(x = '', y = 'Fjöldi', linetype = '', title="Legudeild", alpha='') +
+        scale_alpha_manual(values = c(0.8, 1, 0.8)) +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
+        geom_text(aes(label = round(value, 1)),
+            vjust=-1.8,
+            show.legend = FALSE, size=2.3) + 
+        scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") 
+```
+
+### Gjörgæsla
+
+```{r, echo=FALSE, fig.align='center'}
+data_icu %>% ggplot(aes(x=date, y=value)) + 
+        geom_line(aes(lty=key, alpha=key), col = color_palette[3], size=1) + 
+        scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+        labs(x = '', y = 'Fjöldi', linetype = '', title="Gjörgæsla", alpha='') +
+        scale_alpha_manual(values = c(0.8, 1, 0.8)) +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
+        geom_text(aes(label = round(value, 1)),
+            vjust=-1.8,
+            show.legend = FALSE, size=2.3) + 
+        scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") 
+```
+
+

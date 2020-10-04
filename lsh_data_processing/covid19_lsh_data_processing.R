@@ -18,7 +18,7 @@ source('help_functions.R')
 
 date_data_tmp <- as.Date('2020-10-02','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
 date_prediction_tmp <- as.Date('2020-09-29','%Y-%m-%d')
-date_observed_start_tmp <- date_data_tmp-3
+date_observed_start_tmp <- date_data_tmp-1
 #path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 path_to_lsh_data_tmp <- '../lsh_data/'
 write_tables_tmp <- TRUE
@@ -114,7 +114,8 @@ path_sensitive_tables <- '../lsh_data/'
 path_dashboard_tables <- '../dashboard/input/'
 path_outpatient_clinic <- '../outpatient_clinic_history/'
 
-file_name_lsh_data <- paste0(date_data,'_lsh_covid_data.xlsx')
+#file_name_lsh_data <- paste0(date_data,'_lsh_covid_data.xlsx')
+file_name_lsh_data <- 'lsh_covid_data.xlsx'
 file_path_coding <- 'lsh_coding_new.xlsx'
 #file_path_coding <- 'lsh_coding.xlsx'
 file_path_priors <- 'priors.xlsx'
@@ -139,6 +140,7 @@ interview_extra_raw <- read_excel(file_path_data,sheet = 'Áhættuflokkur ofl ú
 NEWS_score_raw <- read_excel(file_path_data,sheet = 'NEWS score ', skip=3)
 ventilator_times_raw <- read_excel(file_path_data,sheet = 'Öndunarvél - tímar', skip=3)
 treatment_contraints_raw <- read_excel(file_path_data,sheet = 'Takmörkun meðferðar', skip=3)
+date_data_raw <- read_excel(file_path_data,sheet = 'tímasetning', skip=1)
 
 covid_groups <- read_excel(file_path_coding, sheet = 'lsh_covid_groups')
 unit_categories <- read_excel(file_path_coding,sheet = 'lsh_unit_categories') %>%
@@ -168,10 +170,12 @@ run_description <- read_excel(file_path_experiment_template,sheet='run_descripti
 run_specification <- read_excel(file_path_experiment_template,sheet='run_specification')
 heuristics_description <- read_excel(file_path_experiment_template,sheet='heuristics_description')
 
-
 test_lsh_data_file()
 
 ################## ----- Cleaning ----- ##############################################################
+date_data <- date_data_raw$`Dagurtími þegar gögnin sótt` %>% as.Date()
+date_last_known_state <- date_data-1
+date_observed_start <- date_data-1
 
 covid_diagnosis <- rename(covid_diagnosis_raw,patient_id=`Person Key`,date_time_diagnosis_pcr=`Dagsetning greiningar`) %>%
                     separate(.,col='date_time_diagnosis_pcr',into=c('date_diagnosis_pcr','time_diagnosis_pcr'),sep=' ',remove=FALSE) %>%

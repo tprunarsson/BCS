@@ -29,21 +29,23 @@ suppressPackageStartupMessages({
 setwd("../lsh_data_processing")
 source("covid19_lsh_data_processing.R")
 source("help_functions.R")
+setwd("../R")
+source("best_weighted.R")
 setwd("../dashboard")
 source('dashboard_functions.R')
 
 #Load csv data
-env_wdir <- Sys.getenv("ENV_WORKING_DIRECTORY")
-data_path <- ifelse(env_wdir == "", 'input', file.path(env_wdir, 'input'))
-bcs_data <- readRDS(file.path(data_path, 'bcs_data.rds'))
-bcs_data$data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
+# env_wdir <- Sys.getenv("ENV_WORKING_DIRECTORY")
+# data_path <- ifelse(env_wdir == "", 'input', file.path(env_wdir, 'input'))
+# bcs_data <- readRDS(file.path(data_path, 'bcs_data.rds'))
+# bcs_data$data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
 
 # Set constants
-start_date <- min(bcs_data$data_length_of_stay$date) # as.Date('2020-04-02')
-end_date <- Sys.Date()
-gagnagerdir <- unique(bcs_data$data_length_of_stay$censored)
-aldurshopar <- unique(bcs_data$data_length_of_stay$age_group_simple) #list('0-50', '51+')
-states <- unique(bcs_data$data_length_of_stay$state)
+# start_date <- min(bcs_data$data_length_of_stay$date) # as.Date('2020-04-02')
+# end_date <- Sys.Date()
+# gagnagerdir <- unique(bcs_data$data_length_of_stay$censored)
+# aldurshopar <- unique(bcs_data$data_length_of_stay$age_group_simple) #list('0-50', '51+')
+# states <- unique(bcs_data$data_length_of_stay$state)
 color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
 
 # Plot functions
@@ -114,7 +116,7 @@ Stillingar {.sidebar}
 helpText('Veljið dagsetningu til að birta skýrslu fyrir')
 #Calendar dagsetningar:
 dateInput('dagsetning_skyrslu', 'Dagsetning:',
-          value = Sys.Date(), min = min(historical_data$date), max = Sys.Date() + 30)
+          value = Sys.Date(), min = min(historical_data$date), max = date_data)
 helpText('Birtist sem blá lína á grafi')
 hr()
 #Legutímar
@@ -194,12 +196,8 @@ date_prediction <- reactive({
 })
 
 output_best_unfiltered <- eventReactive(input$birta_skyrslu, {
-  setwd("../R")
-  source("best_weighted.R")
-  best_weighted_function(input$dagsetning_skyrslu, los_setting_skyrsla(), prediction_type(), date_prediction())
+  best_weighted_function(date_data, input$dagsetning_skyrslu, los_setting_skyrsla(), prediction_type(), date_prediction())
 })
-
-setwd("../dashboard")
 
 output_best <- reactive({
   output_best_unfiltered() %>%
@@ -220,7 +218,7 @@ dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
 
 ##### Sækja spá #####
 observeEvent(input$saekja_skyrslu_data, {
-  write.table(output_best_unfiltered(), file = paste0("~/Downloads/", input$dagsetning_skyrslu, ".csv"), quote = F,row.names=F,sep=',')
+  write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("~/Downloads/", input$dagsetning_skyrslu, ".csv"), quote = F,row.names=F,sep=',')
 })
 ```
 
@@ -292,7 +290,7 @@ Stillingar {.sidebar}
 
 #Calender dagsetningar
 dateInput('dagsetning', 'Dagsetning:',
-          value = Sys.Date() + 1, min = min(historical_data$date), max = Sys.Date() + 30)
+          value = Sys.Date() - 1, min = min(historical_data$date), max = Sys.Date() + 30)
 
 # selectInput til að ákveða hvað á að sýna
 selectInput('choose_visual_gauge', "Veldu upplýsingar til að sjá á mæli", choices = c("Hlutfall sjúklinga sem hafa verið með einkenni í færri en sex daga", "Hlutfall sjúklinga eldri en 50 ára", "Hlutfall sjúklinga með undirliggjandi sjúkdóma"), multiple = FALSE)
@@ -1047,7 +1045,7 @@ dateInput('logistic_start_date', 'Dagsetning fyrsta smits',
 hr()
 
 #Aldursdreifing
-radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('Fyrsta bylgja Covid-19', 'Önnur bylgja Covid-19', 'Þjóðar', 'Skv. stillingu:'))
+radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('Covid-19', 'Covid-19 án fyrstu bylgju', 'Þjóðar', 'Skv. stillingu:'))
 conditionalPanel(
   "input.logistic_aldur_val == 'Skv. stillingu:'",
   sliderInput("logistic_aldur_dreif1",
@@ -1086,7 +1084,7 @@ conditionalPanel(
 
 hr()
 sliderInput("logistic_dagar", 'Fjöldi daga til að teikna',
-            min = 5, max = 100, step = 5, value = 60, ticks = FALSE)
+            min = 5, max = 250, step = 5, value = 60, ticks = FALSE)
 
 logistic_beta <- reactive({
   if(input$val_stikar_logistic==FALSE){
@@ -1172,10 +1170,16 @@ aldur_faraldur_logistic <- get_patient_transitions_at_date('base', date_observed
     ungroup() %>%
     mutate(prop=prop/sum(prop))
 
-setwd("../lsh_data_processing")
-source('age_dist_new_data.R')
-aldur_faraldur2_logistic <- age_dist_new_data()
-setwd("../dashboard")
+aldur_faraldur2_logistic <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
+    distinct(patient_id) %>%
+    inner_join(individs_splitting_variables,by='patient_id') %>%
+    inner_join(select(individs_extended, patient_id, date_diagnosis), by='patient_id') %>%
+    filter(date_diagnosis>ymd("2020-07-22")) %>%
+    rename(splitting_variable=!!'age_official') %>%
+    group_by(splitting_variable) %>%
+    summarise(prop=n()) %>%
+    ungroup() %>%
+    mutate(prop=prop/sum(prop))
 
 aldur_hagstofa_logistic <- read_delim("aldur_hagstofa.csv", ";", escape_double = FALSE,
                              locale = locale(encoding = "ISO-8859-2"), trim_ws = TRUE, col_types = cols())
@@ -1225,9 +1229,9 @@ los_stilling_logistic <- reactive({
 age_dist_logistic <- reactive({
   if (input$logistic_aldur_val == 'Þjóðar')
     aldur_hagstofa_logistic
-  else if (input$logistic_aldur_val == 'Fyrsta bylgja Covid-19')
+  else if (input$logistic_aldur_val == 'Covid-19')
    aldur_faraldur_logistic
-  else if (input$logistic_aldur_val == 'Önnur bylgja Covid-19')
+  else if (input$logistic_aldur_val == 'Covid-19 án fyrstu bylgju')
    aldur_faraldur2_logistic
   else if (input$logistic_aldur_val == 'Skv. stillingu:')
     aldur_stilling_logistic()
