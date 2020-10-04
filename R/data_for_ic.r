@@ -2,6 +2,8 @@ setwd('../lsh_data_processing')
 source('covid19_lsh_data_processing.R')
 library(tidyverse)
 
+## Hér breytum við spá frá covid.hi.is með því að setja inn raunverulegan fjölda nýrra smita á þeim dögum sem eru liðnir
+
 splitting_distribution <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
   distinct(patient_id) %>%
   inner_join(individs_splitting_variables,by='patient_id') %>%
@@ -97,19 +99,19 @@ color_palette <- c("green"=rgb(171, 202, 106, max=255),
                    "yellow"=rgb(229, 174, 62, max=255), 
                    "red"=rgb(191, 92, 89, max=255))
 
-data_home <- ferguson %>% filter(state=="home") %>% 
+data_home <- ferguson %>% filter(state=="home", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_home$key <- factor(data_home$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
-data_iw <- ferguson %>% filter(state=="inpatient_ward") %>% 
+data_iw <- ferguson %>% filter(state=="inpatient_ward", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_iw$key <- factor(data_iw$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
-data_icu <- ferguson %>% filter(state=="intensive_care_unit") %>% 
+data_icu <- ferguson %>% filter(state=="intensive_care_unit", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
@@ -152,3 +154,17 @@ plot_icu <- data_icu %>% ggplot(aes(x=date, y=value)) +
             show.legend = FALSE, size=2.3) + 
   scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") +
   geom_point(data=filter(historical_data_filtered, state=="intensive_care_unit"), aes(x=date, y=count))
+
+### Vista myndir ###
+
+setwd("~/Downloads")
+ggsave("plot_home.png", plot_home, device='png', width=16, height=10)
+ggsave("plot_iw.png", plot_iw, device='png', width=16, height=10)
+ggsave("plot_icu.png", plot_icu, device='png', width=16, height=10)
+
+
+
+
+
+
+

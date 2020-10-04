@@ -25,6 +25,7 @@ suppressPackageStartupMessages({
   library(gdata)
   library(shinyjs)
   library(shinyWidgets)
+  library(data.table)
 })
 setwd("../lsh_data_processing")
 source("covid19_lsh_data_processing.R")
@@ -858,8 +859,6 @@ row
 ###
 
 ```{r}
-library(data.table)
-
 transitions_simple <- reactive({
   if(input$dagsetning_flow[1] > (input$dagsetning_flow[2])){
       showNotification("Ólöglegar dagsetningar", id = 'error_invalid_dates', type = 'error', duration = 4)
