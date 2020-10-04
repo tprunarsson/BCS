@@ -58,6 +58,7 @@ num_sim_days=30
 #Rscript covid19_lsh_data_processing.R -d "$date_data" -r "$run_id" -c "$forecast" -p "$date_prediction"
 
 cd ../src
+make clean
 make covid
 while read experiment_id model prior_info splitting_variable_name splitting_variable_values heuristic_string
  do ./covid -s "$date_start" -i "$experiment_id" -h "$heuristic_string" -v "$splitting_variable_values" -d "$date_data" -n "$num_sim_days" -p "$path" -f "$use_forecast"
