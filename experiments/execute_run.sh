@@ -51,7 +51,7 @@ path=${path:-"$path_default"}
 use_forecast=${use_forecast:-"$use_forecast_default"}
 
 #num_sim_days=$(Rscript -e 'args <- commandArgs(trailingOnly = TRUE);print(as.numeric(as.Date(args[2])-as.Date(args[1])))' "$date_start" "$date_end" | awk '{print $2}')
-num_sim_days=30
+num_sim_days=25
 
 #Tekur langan tíma að keyra, sleppum því
 #cd "$path"/lsh_data_processing

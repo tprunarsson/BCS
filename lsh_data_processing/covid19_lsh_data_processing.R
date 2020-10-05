@@ -126,12 +126,7 @@ file_path_experiment_template <- 'experiment_template.xlsx'
 
 individs_raw <- read_excel(file_path_data,sheet = 'Einstaklingar', skip=3)
 hospital_visits_raw <- read_excel(file_path_data,sheet ='Komur og innlagnir', skip=3)
-if(date_data>ymd("2020-05-08")){ #BREYTA (kannski) með nýjum lsh-gögnum. passa að skoða amk
-  hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3, n_max = 2762)
-} else{
-  hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3)
-}
-#hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=3)
+hospital_isolations_raw <- read_excel(file_path_data,sheet ='Einangrun-soguleg gogn', skip=6)
 covid_diagnosis_raw <- read_excel(file_path_data,sheet ='Dag. greiningar frá veirurannsó', skip=6)
 interview_first_raw <- read_excel(file_path_data,sheet = 'Fyrsta viðtal úr forms', skip=3)
 interview_follow_up_raw <- read_excel(file_path_data,sheet = 'Spurningar úr forms Pivot', skip=1)

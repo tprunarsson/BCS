@@ -8,6 +8,7 @@ output: html_document
 library(tidyverse)
 library(plotly)
 date_skyrsla <- Sys.Date()
+setwd("~/Downloads")
 data <- read.csv(paste0(date_skyrsla, '.csv'))
 data$date <- as.Date(data$date, "%Y-%m-%d")
 color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
@@ -17,21 +18,18 @@ color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 6
 data_home <- data %>% filter(state=="home") %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
-  select(-count_historical, -best_alpha) %>% 
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_home$key <- factor(data_home$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 data_iw <- data %>% filter(state=="inpatient_ward") %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
-  select(-count_historical, -best_alpha) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_iw$key <- factor(data_iw$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 data_icu <- data %>% filter(state=="intensive_care_unit") %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
-  select(-count_historical, -best_alpha) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_icu$key <- factor(data_icu$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 ```
@@ -89,5 +87,19 @@ data_icu %>% ggplot(aes(x=date, y=value)) +
             show.legend = FALSE, size=2.3) + 
         scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") 
 ```
+
+
+```{r}
+data_for_hospital <- data %>% 
+  filter(state!="home") %>% 
+  arrange(date) %>%
+  mutate(state=ifelse(state=="inpatient_ward", "Legudeild", "Gjörgæsla")) %>%
+  mutate(median=round(median), lower=round(lower), upper=round(upper))
+
+setwd("../output_lsh")
+
+write.table(data_for_hospital, file = paste0(Sys.Date(),'_covid_simulation_summary.csv'), quote = F,row.names=F,sep=',')
+```
+
 
 
