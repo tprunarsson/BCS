@@ -659,3 +659,4 @@ for(id in run_info$experiment_id){
     write.table(experiment_table_list$length_of_stay,file=paste0(path_tables,date_data,'_',id,'_length_of_stay.csv'),sep=',',row.names=F,quote=F)
   }
 }
+

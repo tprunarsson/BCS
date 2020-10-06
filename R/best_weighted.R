@@ -32,7 +32,16 @@ run_data_processing <- paste("Rscript covid19_lsh_data_processing.R -d", date_da
 setwd("../lsh_data_processing")
 system(run_data_processing)
 
-run_execute_run <- paste("./execute_run.sh -d", date_data, "-s", week_ago, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-n 20", "-f")
+#Það sem bash skráin að ofan skrifaði út (í lsh_data_processing)
+infected_distr <- read.csv(paste0(path_tables, date_data,'_infections_predicted.csv')) %>% 
+  mutate(date=ymd(date)) %>%
+  group_by(date) %>%
+  mutate(prob=count/sum(count))
+
+num_sim_days <- as.character(as.numeric(max(infected_distr$date)-today))
+last_day <- max(infected_distr$date)-1
+
+run_execute_run <- paste("./execute_run.sh -d", date_data, "-s", week_ago, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", today, "-f")
 setwd("../experiments")
 system(run_execute_run)
 setwd("../dashboard")
@@ -118,12 +127,6 @@ splitting_distribution <- get_patient_transitions_at_date('base', date_observed 
   ungroup() %>%
   mutate(prop=prop/sum(prop))
 
-#Það sem bash skráin að ofan skrifaði út (í lsh_data_processing)
-infected_distr <- read.csv(paste0(path_tables, date_data,'_infections_predicted.csv')) %>% 
-  mutate(date=ymd(date)) %>%
-  group_by(date) %>%
-  mutate(prob=count/sum(count))
-
 los_wuhan <- data.frame("vd"=21, "ld"=14, "gd"=10, "pre_lega"=7, "pre_icu"=3)
 los_best <- data.frame("vd"=17, "ld"=8, "gd"=6, "pre_lega"=9, "pre_icu"=1)
 
@@ -176,7 +179,7 @@ outcome_table <- outcome_table %>% mutate(MSE_home_scaled=MSE_home/max(combined_
 #Búum svo til nýja spá, 2 vikur fram í tímann frá deginum í dag með þessu alpha
 best_alpha <- outcome_table[which.min(outcome_table$MSE_scaled_sum),]$alpha
 
-run_execute_run_today <- paste("./execute_run.sh -d", date_data, "-s", today, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-n 20", "-f")
+run_execute_run_today <- paste("./execute_run.sh -d", date_data, "-s", today, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", last_day, "-f")
 setwd("../experiments")
 system(run_execute_run_today)
 setwd("../dashboard")

@@ -30,8 +30,7 @@ while getopts ":r:d:s:e:b:h:c:n:apf" opt; do
 	esac
 done
 date_start_default="2020-03-02"
-#date_end_default="$date_data"
-date_end_default="2020-05-24"
+date_end_default="$date_data"
 date_prediction_default="2020-04-20"
 use_scenario_default=""
 use_historical_default="0"
@@ -50,12 +49,12 @@ num_sim_days=${num_sim_days:-"$num_sim_days_defualt"}
 path=${path:-"$path_default"}
 use_forecast=${use_forecast:-"$use_forecast_default"}
 
-#num_sim_days=$(Rscript -e 'args <- commandArgs(trailingOnly = TRUE);print(as.numeric(as.Date(args[2])-as.Date(args[1])))' "$date_start" "$date_end" | awk '{print $2}')
-num_sim_days=25
-
 #Tekur langan tíma að keyra, sleppum því
 #cd "$path"/lsh_data_processing
 #Rscript covid19_lsh_data_processing.R -d "$date_data" -r "$run_id" -c "$forecast" -p "$date_prediction"
+
+#num_sim_days=$(Rscript -e 'args <- commandArgs(trailingOnly = TRUE);print(as.numeric(as.Date(args[2])-as.Date(args[1])))' "$date_start" "$date_end" | awk '{print $2}')
+num_sim_days=25
 
 cd ../src
 make clean

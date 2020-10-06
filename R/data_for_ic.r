@@ -102,19 +102,22 @@ color_palette <- c("green"=rgb(171, 202, 106, max=255),
 data_home <- ferguson %>% filter(state=="home", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
-  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
+  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))%>%
+  filter(date<ymd("2020-10-13"))
 data_home$key <- factor(data_home$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 data_iw <- ferguson %>% filter(state=="inpatient_ward", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
-  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
+  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))%>%
+  filter(date<ymd("2020-10-13"))
 data_iw$key <- factor(data_iw$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 data_icu <- ferguson %>% filter(state=="intensive_care_unit", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
-  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
+  mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá")) %>%
+  filter(date<ymd("2020-10-13"))
 data_icu$key <- factor(data_icu$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 historical_data_filtered <- historical_data %>% filter(date<date_data, date>ymd("2020-09-13"))
@@ -161,6 +164,45 @@ setwd("~/Downloads")
 ggsave("plot_home.png", plot_home, device='png', width=16, height=10)
 ggsave("plot_iw.png", plot_iw, device='png', width=16, height=10)
 ggsave("plot_icu.png", plot_icu, device='png', width=16, height=10)
+
+plot_home_no_history <- data_home %>% ggplot(aes(x=date, y=value)) + 
+  geom_line(aes(lty=key, alpha=key), col = color_palette[1], size=1) + 
+  scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+  labs(x = '', y = 'Fjöldi', linetype = '', title="Heimaeinangrun", alpha='') +
+  scale_alpha_manual(values = c(0.8, 1, 0.8)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
+  geom_text(aes(label = round(value, 1)),
+            vjust=-1.8,
+            show.legend = FALSE, size=2.3) + 
+  scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m")
+
+plot_iw_no_history <- data_iw %>% ggplot(aes(x=date, y=value)) + 
+  geom_line(aes(lty=key, alpha=key), col = color_palette[2], size=1) + 
+  scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+  labs(x = '', y = 'Fjöldi', linetype = '', title="Legudeild", alpha='') +
+  scale_alpha_manual(values = c(0.8, 1, 0.8)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
+  geom_text(aes(label = round(value, 1)),
+            vjust=-1.8,
+            show.legend = FALSE, size=2.3) + 
+  scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m")
+
+plot_icu_no_history <- data_icu %>% ggplot(aes(x=date, y=value)) + 
+  geom_line(aes(lty=key, alpha=key), col = color_palette[3], size=1) + 
+  scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+  labs(x = '', y = 'Fjöldi', linetype = '', title="Gjörgæsla", alpha='') +
+  scale_alpha_manual(values = c(0.8, 1, 0.8)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
+  geom_text(aes(label = round(value, 1)),
+            vjust=-1.8,
+            show.legend = FALSE, size=2.3) + 
+  scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m")
+
+ggsave("plot_home_no_history.png", plot_home_no_history, device='png', width=16, height=10)
+ggsave("plot_iw_no_history.png", plot_iw_no_history, device='png', width=16, height=10)
+ggsave("plot_icu_no_history.png", plot_icu_no_history, device='png', width=16, height=10)
+
+
 
 
 

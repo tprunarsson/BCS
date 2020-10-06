@@ -6,10 +6,8 @@ output: html_document
 
 ```{r, include=FALSE}
 library(tidyverse)
-library(plotly)
 date_skyrsla <- Sys.Date()
-setwd("~/Downloads")
-data <- read.csv(paste0(date_skyrsla, '.csv'))
+data <- read.csv(paste0(date_skyrsla, '_report_data.csv'))
 data$date <- as.Date(data$date, "%Y-%m-%d")
 color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
 ```
@@ -89,16 +87,16 @@ data_icu %>% ggplot(aes(x=date, y=value)) +
 ```
 
 
-```{r}
-data_for_hospital <- data %>% 
-  filter(state!="home") %>% 
-  arrange(date) %>%
-  mutate(state=ifelse(state=="inpatient_ward", "Legudeild", "Gjörgæsla")) %>%
-  mutate(median=round(median), lower=round(lower), upper=round(upper))
-
-setwd("../output_lsh")
-
-write.table(data_for_hospital, file = paste0(Sys.Date(),'_covid_simulation_summary.csv'), quote = F,row.names=F,sep=',')
+```{r, include=FALSE}
+# data_for_hospital <- data %>% 
+#   filter(state!="home") %>% 
+#   arrange(date) %>%
+#   mutate(state=ifelse(state=="inpatient_ward", "Legudeild", "Gjörgæsla")) %>%
+#   mutate(median=round(median), lower=round(lower), upper=round(upper))
+# 
+# setwd("../output_lsh")
+# 
+# write.table(data_for_hospital, file = paste0(Sys.Date(),'_covid_simulation_summary_hospital.csv'), quote = F,row.names=F,sep=',')
 ```
 
 

@@ -268,3 +268,9 @@ run_ferguson_simulation_new <- function(infected_distr, los, splitting_distribut
     return(bind_rows(home_dat,hospital_dat,icu_dat))
 }
 
+openHTML <- function(file_name){
+    browseURL(paste0('file://', file.path(getwd(), file_name)))
+}
+
+
+

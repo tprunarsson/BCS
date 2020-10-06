@@ -122,10 +122,10 @@ helpText('Birtist sem blá lína á grafi')
 hr()
 #Legutímar
 helpText("Legutímar í prior")
-radioButtons('los_val_skyrsla', 'Legutími', choices = c('covid.hi.is', 'LSH gögn', 'Fyrsta bylgja Covid-19'))
+radioButtons('los_val_skyrsla', 'Legutími', choices = c('covid.hi.is', 'LSH gögn', 'Fyrsta bylgja Covid-19'), selected = 'LSH gögn')
 
 hr()
-radioButtons('spa_choose', 'Spá', choices = c('covid.hi.is', 'Eigin spá', 'Úr skrá'))
+radioButtons('spa_choose', 'Spá', choices = c('covid.hi.is', 'Eigin spá', 'Úr skrá'), selected = 'Úr skrá')
 observeEvent(input$bua_til_manual, {
   updateRadioButtons(session, "spa_choose", selected = 'Eigin spá')
 })
@@ -144,9 +144,11 @@ dateInput('filter_history', 'Sýna söguleg  gögn frá:', value = Sys.Date()-40
 numericInput('number_predicted_days', "Fjöldi spádaga", value = 14, min=1, max=80, step=1)
 
 ###### auka #####
-actionButton("saekja_skyrslu_data", "Sækja spá")
+hr()
+#actionButton("saekja_skyrslu_data", "Sækja spá")
+actionButton("saekja_skyrslu", "Sækja skýrslu")
+actionButton("saekja_skyrslu_data_hospital", "Sækja spítalaspá")
 ```
-
 
 
 skyrsla-header {data-height=30px}
@@ -218,8 +220,25 @@ dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
 })
 
 ##### Sækja spá #####
-observeEvent(input$saekja_skyrslu_data, {
-  write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("~/Downloads/", input$dagsetning_skyrslu, ".csv"), quote = F,row.names=F,sep=',')
+
+# observeEvent(input$saekja_skyrslu_data, {
+#   write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("../report/", input$dagsetning_skyrslu, "_report_data.csv"), quote = F,row.names=F,sep=',')
+# })
+
+observeEvent(input$saekja_skyrslu, {
+  write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("../report/", Sys.Date(), "_report_data.csv"), quote = F,row.names=F,sep=',')
+  
+  rmarkdown::render("../report/report_new.Rmd", "html_document")
+  openHTML(paste0("../report/report_new.html"))
+})
+
+observeEvent(input$saekja_skyrslu_data_hospital, {
+  write.table(select(output_best_unfiltered() %>% 
+    filter(state!="home") %>% 
+    arrange(date) %>%
+    mutate(state=ifelse(state=="inpatient_ward", "Legudeild", "Gjörgæsla")) %>%
+    mutate(median=round(median), lower=round(lower), upper=round(upper)), -count_historical, -best_alpha), 
+    file = paste0("../output_lsh/", input$dagsetning_skyrslu, "_covid_simulation_summary_hospital.csv"), quote = F,row.names=F,sep=',')
 })
 ```
 
