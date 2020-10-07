@@ -1829,10 +1829,20 @@ smit_folk_manual <- reactive({
   out_manual
 })
 
+infections_per_date_manual <- reactive({
+  covid_diagnosis %>% 
+    group_by(date_diagnosis_pcr) %>% 
+    rename(date=date_diagnosis_pcr) %>%
+    summarize(count=n()) %>%
+    filter(date>input$manual_start_date) %>%
+    mutate(total=cumsum(count)) 
+})
+
 # plot new cases
 renderPlotly({
 p <- ggplot(smit_folk_manual()) +
     geom_col(aes(x=date, y=new_cases), fill="#3b6978") +
+    geom_point(data=infections_per_date_manual(), aes(x=date, y=count)) +
     theme_minimal() +
     labs(y="Ný smit", x=NULL)
 ggplotly(p)
@@ -1844,6 +1854,7 @@ ggplotly(p)
 renderPlotly({
 p <- ggplot(smit_folk_manual()) +
     geom_col(aes(x=date, y=total_cases), fill= "#204051") +
+    geom_point(data=infections_per_date_manual(), aes(x=date, y=total)) +
     theme_minimal() +
     labs(y="Heildarsmit", x=NULL)
 ggplotly(p)
