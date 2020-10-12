@@ -272,5 +272,60 @@ openHTML <- function(file_name){
     browseURL(paste0('file://', file.path(getwd(), file_name)))
 }
 
+# Plot functions
+plot_ferguson_prediction_state <- function(state_f, prediction_dat, color_state){
+    if(nrow(prediction_dat[prediction_dat$state==state_f, ]) < 1) {
+        ggplot() +
+            geom_text(aes(x=10, y = 10, label = 'Spá vantar')) +
+            lims(x=c(0,30), y=c(0,100)) +
+            theme_minimal()
+        stop()
+    }
+    prediction_dat <- gather(prediction_dat, key, value, median, upper) %>%
+        mutate(key = key %>% recode(median = "Líkleg spá",
+                                    upper = "Svartsýn spá"))
+    ggplot(filter(prediction_dat, state==state_f), aes(x=date, y=value)) + 
+        geom_line(aes(lty=key, alpha=key), col = color_state) + 
+        scale_linetype_manual(values=c("solid", "dashed")) +
+        labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
+        scale_alpha_manual(values = c(1, 0.7)) +
+        theme_minimal()
+}
 
+plot_age_distribution <- function(age_distribution){
+    age_distribution <- age_distribution %>% 
+        mutate(splitting_variable=str_replace(splitting_variable, "age_", "")) %>% 
+        mutate(prop=100*round(prop, 3)) %>%
+        rename(Aldur=splitting_variable, Prósenta=prop)
+    
+    ggplot(data=age_distribution, aes(x=Aldur, y=Prósenta)) + geom_col(col="#84a9ac", fill="#84a9ac") + 
+        labs(x=NULL, y="Prósenta") + 
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)) +
+        scale_y_continuous(labels = function(x) paste0(x, "%"))
+}
 
+plot_skyrsla <- function(state_f, prediction_dat, historical_dat, color_state){
+    if(nrow(prediction_dat[prediction_dat$state==state_f, ]) < 1) {
+        ggplot() +
+            geom_text(aes(x=10, y = 10, label = 'Spá vantar')) +
+            lims(x=c(0,30), y=c(0,100)) +
+            theme_minimal()
+        stop()
+    }
+    prediction_dat <- gather(prediction_dat, key, value, median, upper, lower) %>%
+        mutate(key = key %>% recode(median = "Líkleg spá",
+                                    upper = "Svartsýn spá",
+                                    lower = "Bjartsýn spá")) %>%
+        mutate(value=round(value))
+    prediction_dat$key <- factor(prediction_dat$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+    ggplot(filter(prediction_dat, state==state_f), aes(x=date, y=value)) + 
+        geom_line(aes(lty=key, alpha=key), col = color_state) + 
+        scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+        labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
+        scale_alpha_manual(values = c(0.7, 1, 0.7)) +
+        theme_minimal() + 
+        #labs(subtitle = prediction_dat$best_alpha[1]) + 
+        geom_point(data=filter(historical_dat, state==state_f), aes(y=count, label="Söguleg gögn")) + 
+        theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+}

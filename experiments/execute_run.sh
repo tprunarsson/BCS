@@ -54,7 +54,7 @@ use_forecast=${use_forecast:-"$use_forecast_default"}
 #Rscript covid19_lsh_data_processing.R -d "$date_data" -r "$run_id" -c "$forecast" -p "$date_prediction"
 
 #num_sim_days=$(Rscript -e 'args <- commandArgs(trailingOnly = TRUE);print(as.numeric(as.Date(args[2])-as.Date(args[1])))' "$date_start" "$date_end" | awk '{print $2}')
-num_sim_days=25
+num_sim_days=18
 
 cd ../src
 make clean

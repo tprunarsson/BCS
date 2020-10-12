@@ -48,63 +48,6 @@ source('dashboard_functions.R')
 # aldurshopar <- unique(bcs_data$data_length_of_stay$age_group_simple) #list('0-50', '51+')
 # states <- unique(bcs_data$data_length_of_stay$state)
 color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
-
-# Plot functions
-plot_ferguson_prediction_state <- function(state_f, prediction_dat, color_state){
-    if(nrow(prediction_dat[prediction_dat$state==state_f, ]) < 1) {
-        ggplot() +
-            geom_text(aes(x=10, y = 10, label = 'Spá vantar')) +
-            lims(x=c(0,30), y=c(0,100)) +
-            theme_minimal()
-        stop()
-    }
-    prediction_dat <- gather(prediction_dat, key, value, median, upper) %>%
-        mutate(key = key %>% recode(median = "Líkleg spá",
-                                    upper = "Svartsýn spá"))
-    ggplot(filter(prediction_dat, state==state_f), aes(x=date, y=value)) + 
-        geom_line(aes(lty=key, alpha=key), col = color_state) + 
-        scale_linetype_manual(values=c("solid", "dashed")) +
-        labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
-        scale_alpha_manual(values = c(1, 0.7)) +
-        theme_minimal()
-}
-
-plot_age_distribution <- function(age_distribution){
-age_distribution <- age_distribution %>% 
-  mutate(splitting_variable=str_replace(splitting_variable, "age_", "")) %>% 
-  mutate(prop=100*round(prop, 3)) %>%
-  rename(Aldur=splitting_variable, Prósenta=prop)
-  
-  ggplot(data=age_distribution, aes(x=Aldur, y=Prósenta)) + geom_col(col="#84a9ac", fill="#84a9ac") + 
-    labs(x=NULL, y="Prósenta") + 
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)) +
-    scale_y_continuous(labels = function(x) paste0(x, "%"))
-}
-
-plot_skyrsla <- function(state_f, prediction_dat, historical_dat, color_state){
-  if(nrow(prediction_dat[prediction_dat$state==state_f, ]) < 1) {
-        ggplot() +
-            geom_text(aes(x=10, y = 10, label = 'Spá vantar')) +
-            lims(x=c(0,30), y=c(0,100)) +
-            theme_minimal()
-        stop()
-    }
-    prediction_dat <- gather(prediction_dat, key, value, median, upper, lower) %>%
-        mutate(key = key %>% recode(median = "Líkleg spá",
-                                    upper = "Svartsýn spá",
-                                    lower = "Bjartsýn spá"))
-    prediction_dat$key <- factor(prediction_dat$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
-    ggplot(filter(prediction_dat, state==state_f), aes(x=date, y=value)) + 
-        geom_line(aes(lty=key, alpha=key), col = color_state) + 
-        scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
-        labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
-        scale_alpha_manual(values = c(0.7, 1, 0.7)) +
-        theme_minimal() + 
-        #labs(subtitle = prediction_dat$best_alpha[1]) + 
-        geom_point(data=filter(historical_dat, state==state_f), aes(y=count, label="Söguleg gögn")) + 
-        theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
-}
 ```
 
 Skýrslur {id=skyrslur data-icon="fa-notes-medical"}
@@ -1749,7 +1692,7 @@ conditionalPanel(
   sliderInput("manual_beta_complex", 'Lögun (β)',
             min = 0.01, max = 1, step = 0.001, value = 0.2),
   sliderInput("manual_nu_complex", 'Skekkja (ν)',
-            min = 0.001, max = 10, step = 0.001, value = 1)
+            min = 0.001, max = 30, step = 0.001, value = 1)
 )
 
 hr()
@@ -1835,7 +1778,8 @@ infections_per_date_manual <- reactive({
     rename(date=date_diagnosis_pcr) %>%
     summarize(count=n()) %>%
     filter(date>input$manual_start_date) %>%
-    mutate(total=cumsum(count)) 
+    mutate(total=cumsum(count)) %>%
+    filter(date<input$manual_start_date + input$manual_dagar)
 })
 
 # plot new cases

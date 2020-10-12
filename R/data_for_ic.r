@@ -103,21 +103,21 @@ data_home <- ferguson %>% filter(state=="home", date>=date_data-1) %>%
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))%>%
-  filter(date<ymd("2020-10-13"))
+  filter(date<ymd("2020-10-18"))
 data_home$key <- factor(data_home$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 data_iw <- ferguson %>% filter(state=="inpatient_ward", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))%>%
-  filter(date<ymd("2020-10-13"))
+  filter(date<ymd("2020-10-18"))
 data_iw$key <- factor(data_iw$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 data_icu <- ferguson %>% filter(state=="intensive_care_unit", date>=date_data-1) %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá")) %>%
-  filter(date<ymd("2020-10-13"))
+  filter(date<ymd("2020-10-18"))
 data_icu$key <- factor(data_icu$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
 
 historical_data_filtered <- historical_data %>% filter(date<date_data, date>ymd("2020-09-13"))
