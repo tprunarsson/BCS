@@ -12,15 +12,15 @@ suppressPackageStartupMessages({
 options(dplyr.summarise.inform = FALSE) #Óþolandi skilaboð
 
 cat("Processing data...\n")
-source('test_covid19_lsh_data_processing.R')
-source('create_input_for_simulation.R')
-source('help_functions.R')
+source('lsh_data_processing/test_covid19_lsh_data_processing.R')
+source('lsh_data_processing/create_input_for_simulation.R')
+source('lsh_data_processing/help_functions.R')
 
 date_data_tmp <- as.Date('2020-10-02','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
 date_prediction_tmp <- as.Date('2020-09-29','%Y-%m-%d')
 date_observed_start_tmp <- date_data_tmp-1
 #path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
-path_to_lsh_data_tmp <- '../lsh_data/'
+path_to_lsh_data_tmp <- 'lsh_data/'
 write_tables_tmp <- TRUE
 run_id_tmp <- 17
 forecast_tmp <- 'from_file'
@@ -109,18 +109,18 @@ if (length(opt)>1){
 date_last_known_state <- date_data-1
 
 #Assuming working directory is lsh_data_processing in github repo
-path_tables <- '../input/'
-path_sensitive_tables <- '../lsh_data/'
-path_dashboard_tables <- '../dashboard/input/'
-path_outpatient_clinic <- '../outpatient_clinic_history/'
+path_tables <- 'input/'
+path_sensitive_tables <- 'lsh_data/'
+path_dashboard_tables <- 'dashboard/input/'
+path_outpatient_clinic <- 'outpatient_clinic_history/'
 
 #file_name_lsh_data <- paste0(date_data,'_lsh_covid_data.xlsx')
 file_name_lsh_data <- 'lsh_covid_data.xlsx'
-file_path_coding <- 'lsh_coding_new.xlsx'
+file_path_coding <- 'lsh_data_processing/lsh_coding_new.xlsx'
 #file_path_coding <- 'lsh_coding.xlsx'
-file_path_priors <- 'priors.xlsx'
+file_path_priors <- 'lsh_data_processing/priors.xlsx'
 file_path_data <- paste0(path_to_lsh_data,file_name_lsh_data)
-file_path_experiment_template <- 'experiment_template.xlsx'
+file_path_experiment_template <- 'lsh_data_processing/experiment_template.xlsx'
 
 ################## ----- Read LSH data and coding data ----- ########################################
 

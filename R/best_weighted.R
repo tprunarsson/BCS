@@ -28,8 +28,8 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   
   # Keyra bash
   # Ath. í run_evaluation.R, hafa write_table neðst
-  run_data_processing <- paste("Rscript covid19_lsh_data_processing.R -d", date_data, "-r", run_id, "-c", prediction_type, "-p", date_prediction)
-  setwd("../lsh_data_processing")
+  run_data_processing <- paste("Rscript lsh_data_processing/covid19_lsh_data_processing.R -d", date_data, "-r", run_id, "-c", prediction_type, "-p", date_prediction)
+ # setwd("../lsh_data_processing")
   system(run_data_processing)
   
   #Það sem bash skráin að ofan skrifaði út (í lsh_data_processing)
@@ -42,12 +42,12 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   last_day <- max(infected_distr$date)-1
   
   run_execute_run <- paste("./execute_run.sh -d", date_data, "-s", week_ago, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", today, "-f")
-  setwd("../experiments")
+#  setwd("../experiments")
   system(run_execute_run)
-  setwd("../dashboard")
+#  setwd("../dashboard")
   
   # Lesum inn simulation_summary og fáum bætt módel
-  path_simulation_summary_output <- paste0("../output/", date_data, "_", week_ago, "_", run_id, "_simulation_summary.csv")
+  path_simulation_summary_output <- paste0("output/", date_data, "_", week_ago, "_", run_id, "_simulation_summary.csv")
   improved_model <- read.csv(path_simulation_summary_output)
   
   state_translation <- data.frame("state_english"=c("home", "inpatient_ward", "intensive_care_unit"), "state_icelandic"=c("Heimaeinangrun", "Legudeild", "Gjörgæsla"))
@@ -180,12 +180,12 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   best_alpha <- outcome_table[which.min(outcome_table$MSE_scaled_sum),]$alpha
   
   run_execute_run_today <- paste("./execute_run.sh -d", date_data, "-s", today, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", last_day, "-f")
-  setwd("../experiments")
+ # setwd("../experiments")
   system(run_execute_run_today)
-  setwd("../dashboard")
+ # setwd("../dashboard")
   
   # Lesum inn simulation_summary og fáum bætt módel
-  path_simulation_summary_output_today <- paste0("../output/", date_data, "_", today, "_", run_id, "_simulation_summary.csv")
+  path_simulation_summary_output_today <- paste0("output/", date_data, "_", today, "_", run_id, "_simulation_summary.csv")
   improved_model_today <- read.csv(path_simulation_summary_output_today)
   
   improved_model_today <- improved_model_today %>%

@@ -282,7 +282,7 @@ get_infections_predicted_per_date <- function(source, date_prediction, alpha, be
       return(new_cases_manual)
     }
     if(source=='from_file'){ #Hér er date_prediction skilið sem dagur sem spá var búin til
-      path_from_file <- "../predictions/"
+      path_from_file <- "predictions/"
       posterior_predictive_distr <- read_csv(paste0(path_from_file, 'Iceland_Posterior_',date_prediction,'.csv'),col_types=cols())
       mat_CDF_expanded <- expand_grid(date=unique(posterior_predictive_distr$date),new_cases=0:max(posterior_predictive_distr$new_cases))
       mat_CDF <- group_by(posterior_predictive_distr,date,new_cases) %>%

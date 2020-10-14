@@ -27,13 +27,11 @@ suppressPackageStartupMessages({
   library(shinyWidgets)
   library(data.table)
 })
-setwd("../lsh_data_processing")
-source("covid19_lsh_data_processing.R")
-source("help_functions.R")
-setwd("../R")
-source("best_weighted.R")
-setwd("../dashboard")
-source('dashboard_functions.R')
+source("lsh_data_processing/covid19_lsh_data_processing.R")
+source("lsh_data_processing/help_functions.R")
+source("R/best_weighted.R")
+source('dashboard/dashboard_functions.R')
+
 
 #Load csv data
 # env_wdir <- Sys.getenv("ENV_WORKING_DIRECTORY")
@@ -165,14 +163,14 @@ dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
 ##### Sækja spá #####
 
 # observeEvent(input$saekja_skyrslu_data, {
-#   write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("../report/", input$dagsetning_skyrslu, "_report_data.csv"), quote = F,row.names=F,sep=',')
+#   write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("report/", input$dagsetning_skyrslu, "_report_data.csv"), quote = F,row.names=F,sep=',')
 # })
 
 observeEvent(input$saekja_skyrslu, {
-  write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("../report/", Sys.Date(), "_report_data.csv"), quote = F,row.names=F,sep=',')
+  write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("report/", Sys.Date(), "_report_data.csv"), quote = F,row.names=F,sep=',')
   
-  rmarkdown::render("../report/report_new.Rmd", "html_document")
-  openHTML(paste0("../report/report_new.html"))
+  rmarkdown::render("report/report_new.Rmd", "html_document")
+  openHTML(paste0("report/report_new.html"))
 })
 
 observeEvent(input$saekja_skyrslu_data_hospital, {
@@ -181,7 +179,7 @@ observeEvent(input$saekja_skyrslu_data_hospital, {
     arrange(date) %>%
     mutate(state=ifelse(state=="inpatient_ward", "Legudeild", "Gjörgæsla")) %>%
     mutate(median=round(median), lower=round(lower), upper=round(upper)), -count_historical, -best_alpha), 
-    file = paste0("../output_lsh/", input$dagsetning_skyrslu, "_covid_simulation_summary_hospital.csv"), quote = F,row.names=F,sep=',')
+    file = paste0("output_lsh/", input$dagsetning_skyrslu, "_covid_simulation_summary_hospital.csv"), quote = F,row.names=F,sep=',')
 })
 ```
 
@@ -1734,7 +1732,7 @@ actionButton("bua_til_manual", "Búa til spá")
 observeEvent(input$bua_til_manual, {
   showNotification("Spá vistuð", id = 'manual_spa_ready', type = 'message', duration = 3)
   stikar_manual <- data.frame("alpha"=input$manual_alpha, "beta"=manual_beta(), "S"=input$manual_S, "nu"=manual_nu(), "day_n"=input$manual_dagar)
-  write.table(stikar_manual, file = paste0('../input/stikar_manual.csv'), quote = F,row.names=F,sep=',')
+  write.table(stikar_manual, file = paste0('input/stikar_manual.csv'), quote = F,row.names=F,sep=',')
 })
 ```
 
