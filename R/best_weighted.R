@@ -26,6 +26,8 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
     week_ago <- min(historical_data$date)
   }
   
+  sim_days <- as.numeric(max(infections_predicted_per_date$date)-today)
+  
   # Keyra bash
   # Ath. í run_evaluation.R, hafa write_table neðst
   run_data_processing <- paste("Rscript lsh_data_processing/covid19_lsh_data_processing.R -d", date_data, "-r", run_id, "-c", prediction_type, "-p", date_prediction)
@@ -38,10 +40,7 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
     group_by(date) %>%
     mutate(prob=count/sum(count))
   
-  num_sim_days <- as.character(as.numeric(max(infected_distr$date)-today))
-  last_day <- max(infected_distr$date)-1
-  
-  run_execute_run <- paste("./execute_run.sh -d", date_data, "-s", week_ago, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", today, "-f")
+  run_execute_run <- paste("./execute_run.sh -d", date_data, "-n 7", "-s", week_ago, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", today, "-f")
 #  setwd("../experiments")
   system(run_execute_run)
 #  setwd("../dashboard")
@@ -132,20 +131,20 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   
   ferguson_model <- run_ferguson_simulation_set_age(infected_distr, los_setting) 
   
-  ferguson_model <- ferguson_model %>%
+  ferguson_model_old <- ferguson_model %>%
     filter(date %in% seq(min(improved_model$date), max(improved_model$date), 1)) #Passa að hafa sömu dagsetningar
   
-  improved_model <- improved_model %>%
-    filter(date %in% seq(min(ferguson_model$date), max(ferguson_model$date), 1))
+  improved_model_old <- improved_model %>%
+    filter(date %in% seq(min(ferguson_model_old$date), max(ferguson_model_old$date), 1))
   
   # Making a grid for alpha
   alphas <- seq(0, 1, 0.01)
   outcome_table <- data.frame("alpha"=0, "MSE_home"=0,"MSE_inpatient"=0, "MSE_icu"=0, "MSE"=0)
-  combined_model <- data.frame("date"=rep(seq(min(improved_model$date), max(improved_model$date), 1), 3), 
-                               "state"=c(rep("home", nrow(ferguson_model)/3), rep("inpatient_ward", nrow(ferguson_model)/3), rep("intensive_care_unit", nrow(ferguson_model)/3)), 
-                               "median"=rep(NA, nrow(ferguson_model)), 
-                               "lower"=rep(NA, nrow(ferguson_model)), 
-                               "upper"=rep(NA, nrow(ferguson_model)))
+  combined_model <- data.frame("date"=rep(seq(min(improved_model_old$date), max(improved_model_old$date), 1), 3), 
+                               "state"=c(rep("home", nrow(ferguson_model_old)/3), rep("inpatient_ward", nrow(ferguson_model_old)/3), rep("intensive_care_unit", nrow(ferguson_model_old)/3)), 
+                               "median"=rep(NA, nrow(ferguson_model_old)), 
+                               "lower"=rep(NA, nrow(ferguson_model_old)), 
+                               "upper"=rep(NA, nrow(ferguson_model_old)))
   
   # Af því today er í raun ekki dagurinn í dag (alltaf)
   historical_data_filtered <- historical_data %>% filter(date<ymd(today))
@@ -155,9 +154,9 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   
   # Sameining á spám með mismunandi vægi
   for(alpha in alphas){
-    combined_model <- combined_model %>% mutate(median=alpha*ferguson_model$median + (1-alpha)*improved_model$median)
-    combined_model <- combined_model %>% mutate(lower=alpha*ferguson_model$lower + (1-alpha)*improved_model$lower)
-    combined_model <- combined_model %>% mutate(upper=alpha*ferguson_model$upper + (1-alpha)*improved_model$upper)
+    combined_model <- combined_model %>% mutate(median=alpha*ferguson_model_old$median + (1-alpha)*improved_model_old$median)
+    combined_model <- combined_model %>% mutate(lower=alpha*ferguson_model_old$lower + (1-alpha)*improved_model_old$lower)
+    combined_model <- combined_model %>% mutate(upper=alpha*ferguson_model_old$upper + (1-alpha)*improved_model_old$upper)
     combined_model_filtered <- combined_model %>% filter(!is.na(count_historical))
     combined_model_home <- filter(combined_model_filtered, state=="home")
     combined_model_inpatient <- filter(combined_model_filtered, state=="inpatient_ward")
@@ -179,7 +178,7 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   #Búum svo til nýja spá, 2 vikur fram í tímann frá deginum í dag með þessu alpha
   best_alpha <- outcome_table[which.min(outcome_table$MSE_scaled_sum),]$alpha
   
-  run_execute_run_today <- paste("./execute_run.sh -d", date_data, "-s", today, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", last_day, "-f")
+  run_execute_run_today <- paste("./execute_run.sh -d", date_data, "-n", sim_days, "-s", today, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-f")
  # setwd("../experiments")
   system(run_execute_run_today)
  # setwd("../dashboard")

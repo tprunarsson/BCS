@@ -84,11 +84,6 @@ observeEvent(input$birta_skyrslu, {
 dateInput('filter_history', 'Sýna söguleg  gögn frá:', value = Sys.Date()-40, min = min(historical_data$date), max=max(historical_data$date))
 numericInput('number_predicted_days', "Fjöldi spádaga", value = 14, min=1, max=80, step=1)
 
-###### auka #####
-hr()
-#actionButton("saekja_skyrslu_data", "Sækja spá")
-actionButton("saekja_skyrslu", "Sækja skýrslu")
-actionButton("saekja_skyrslu_data_hospital", "Sækja spítalaspá")
 ```
 
 
@@ -133,7 +128,7 @@ date_prediction <- reactive({
   }
   else if(input$spa_choose=='Úr skrá'){
     #BREYTA með nýrri spá
-    ymd("2020-09-29") 
+    ymd("2020-10-16") 
   }
   else
     stop("Unexpected dataset")
@@ -158,28 +153,6 @@ historical_data_filtered <- reactive({
 
 dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
   data.frame("dagsetning"=input$dagsetning_skyrslu, "framtid"=as.numeric(input$number_predicted_days))
-})
-
-##### Sækja spá #####
-
-# observeEvent(input$saekja_skyrslu_data, {
-#   write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("report/", input$dagsetning_skyrslu, "_report_data.csv"), quote = F,row.names=F,sep=',')
-# })
-
-observeEvent(input$saekja_skyrslu, {
-  write.table(select(output_best_unfiltered(), -count_historical, -best_alpha), file = paste0("report/", Sys.Date(), "_report_data.csv"), quote = F,row.names=F,sep=',')
-  
-  rmarkdown::render("report/report_new.Rmd", "html_document")
-  openHTML(paste0("report/report_new.html"))
-})
-
-observeEvent(input$saekja_skyrslu_data_hospital, {
-  write.table(select(output_best_unfiltered() %>% 
-    filter(state!="home") %>% 
-    arrange(date) %>%
-    mutate(state=ifelse(state=="inpatient_ward", "Legudeild", "Gjörgæsla")) %>%
-    mutate(median=round(median), lower=round(lower), upper=round(upper)), -count_historical, -best_alpha), 
-    file = paste0("output_lsh/", input$dagsetning_skyrslu, "_covid_simulation_summary_hospital.csv"), quote = F,row.names=F,sep=',')
 })
 ```
 
@@ -794,7 +767,7 @@ Stillingar {.sidebar}
 
 ```{r}
 dateRangeInput('dagsetning_flow', 'Tímabil:', 
-               start = ymd("2020-03-10"), end=Sys.Date()+1, min = min(historical_data$date), max = Sys.Date() + 30)
+               start = Sys.Date()-14, end=Sys.Date()+1, min = min(historical_data$date), max = Sys.Date() + 30)
 
 checkboxInput('show_recovered_death', "Sýna lokastöður", value = FALSE)
 
@@ -806,8 +779,6 @@ observeEvent(input$help_sankey, {
   showNotification("Sankey flæðiritið sýnir flæði sjúklinga á milli stöðva í kerfinu. Hægt er að sjá hversu margir fara í gegnum stöðvarnar með því að fara með músina á viðeigandi stað. Breidd hlekkjanna er í samræmi við flæðið.", id = "msg_help_sankey", type = 'message', duration=NULL)
 })
 
-##### Auka #####
-actionButton("saekja_fleadi_data", "Sækja gögn")
 ```
 
 flæði-header {data-height=30px}
@@ -879,13 +850,6 @@ transitions_complex <- reactive({
   }
   df
 })
-
-##### Sækja spá #####
-observeEvent(input$saekja_fleadi_data, {
-  write.table(transitions_simple(), file = "~/Downloads/transitions_simple.csv", quote = F,row.names=F,sep=',')
-  write.table(transitions_complex(), file = "~/Downloads/transitions_complex.csv", quote = F,row.names=F,sep=',')
-})
-##########
 
 transitions <- reactive({
   if(input$show_recovered_death==FALSE){
@@ -1212,28 +1176,6 @@ los_dist_logistic <- reactive({
 actionButton("logistic_keyra", "Keyra")
 ```
 
-```{r download button logistic}
-# Create placeholder for the downloadButton
-uiOutput("downloadUI_logistic")
-
-# Create the actual downloadButton
-output$downloadUI_logistic <- renderUI({
-  tagList(
-    downloadButton("downBtn_logistic", "Sækja ný smit"),
-  )
-})
-
-# Add download handling
-output$downBtn_logistic <- downloadHandler(
-  filename = function() {
-    paste0(Sys.Date(), "_1_scenario_infected.csv")
-  },
-  content = function(file) {
-    write.csv(smit_folk_logis(), 
-              file, row.names = FALSE)
-  }
-)
-```
 
 Sviðsmyndir logistic
 ------------------------------
@@ -1336,332 +1278,7 @@ ggplotly(p, tooltip = list('linetype', 'date', 'value')) %>%
 })
 ```
 
-Sviðsmyndir SIR {id=svidsmyndir data-icon="fa-chart-bar"}
-===============================================
-
-Stillingar {.sidebar}
----------------------------------------------------
-```{r stillingar scenario}
-renderText("Smella þarf á \"Keyra\" eftir að stilling er valin")
-# Fyrir plottun
-# Aldursdreifing
-hr()
-radioButtons('sir_aldur_val', 'Aldursdreifing', choices = c('Faraldurs', 'Þjóðar', 'Skv. stillingu:'))
-conditionalPanel(
-  "input.sir_aldur_val == 'Skv. stillingu:'",
-  sliderInput("sir_aldur_dreif1",
-              HTML('Alpha'),
-              min = 0, max = 10, step=0.1, value = c(5)),
-  sliderInput("sir_aldur_dreif2",
-              HTML('Beta'),
-              min = 0, max = 10, step=0.1, value = c(5))
-)
-hr()
-# Aðrar stillingar
-dateInput('sir_start_date', 'Dagsetning fyrsta smits',
-          value = Sys.Date() + 1, min = '2020-05-01', max = Sys.Date() + 30)
-numericInput("sir_utsettir", 'Fjöldi smita',
-            min = 10, max = 1000, value = 100, step = 10)
-sliderInput("sir_r_eff", 'Virkur smitstuðull (R)',
-            min = 0.1, max = 3, step = 0.1, value = 0.7)
-sliderInput("sir_dagar", 'Fjöldi daga til að teikna',
-            min = 5, max = 75, step = 5, value = 30)
-#Legutími
-hr()
-radioButtons('los_val', 'Legutími', choices = c('covid.hi.is', 'LSH gögn', 'Skv. stillingu:'))
-conditionalPanel(
-  "input.los_val == 'Skv. stillingu:'",
-  sliderInput("los_vd",
-              HTML('Veikindadagar'),
-              min = 12, max = 22, step=1, value = c(17), ticks = F),
-  sliderInput("los_ld",
-              HTML('Dagar á legudeild'),
-              min = 4, max = 16, step=1, value = c(8), ticks = F),
-  sliderInput("los_gd",
-              HTML('Dagar á gjörgæslu'),
-              min = 3, max = 15, step=1, value = c(6), ticks = F)
-)
-
-renderText({
-    paste0('Veikindadagar: ', los_dist()$vd, ' , ')
-})
-renderText({
-    paste0('Dagar á legudeild: ', los_dist()$ld, ' , ')
-})
-renderText({
-    paste0('Dagar á gjörgæslu: ', los_dist()$gd, ' , ')
-})
-renderText({
-    paste0('Dagar heima fyrir legudeild: ', los_dist()$pre_lega, ' , ')
-})
-renderText({
-    paste0('Dagar á legudeild fyrir gjörgæslu: ', los_dist()$pre_icu)
-})
-
-#Dagar á legudeild þurfa að vera færri en veikindadagar
-observeEvent(input$los_vd,{
-    updateSliderInput(session, "los_ld", max = input$los_vd-1)
-})
-#Dagar á gjörgæslu þurfa að vera færri en dagar á legudeild
-observeEvent(input$los_ld,{
-    updateSliderInput(session, "los_gd", max = input$los_ld-1)
-})
-#####
-```
-
-```{r aldursdreifing og LOS}
-#### Age distributions
-aldur_faraldur <- get_patient_transitions_at_date('base',date_observed = date_data) %>%
-    distinct(patient_id) %>%
-    inner_join(individs_splitting_variables,by='patient_id') %>%
-    rename(splitting_variable=!!'age_official') %>%
-    group_by(splitting_variable) %>%
-    summarise(prop=n()) %>%
-    ungroup() %>%
-    mutate(prop=prop/sum(prop))
-
-aldur_hagstofa <- read_delim("dashboard/aldur_hagstofa.csv", ";", escape_double = FALSE, 
-                             locale = locale(encoding = "ISO-8859-2"), trim_ws = TRUE, col_types = cols())
-
-aldur_hagstofa <- aldur_hagstofa %>% mutate(Aldur=parse_number(Aldur))
-
-aldur_hagstofa$Aldur <- seq(0, max(aldur_hagstofa$Aldur))
-
-aldur_hagstofa$splitting_variable <- cut(aldur_hagstofa$Aldur, breaks = c(seq(0, 80, by = 10), Inf), labels = aldur_faraldur$splitting_variable, right = FALSE)
-
-aldur_hagstofa <- aldur_hagstofa %>% group_by(splitting_variable) %>%
-                    rename("Number"="2020") %>%
-                    summarise(Number=sum(Number)) %>%
-                    mutate(prop=Number/sum(Number))
-
-aldur_stilling <- reactive({
-  N <- 100000
-  x <- rbeta(N, input$sir_aldur_dreif1, input$sir_aldur_dreif2)*100
-  dreifing <- data.frame(aldur=round(x))
-  dreifing <- dreifing %>% mutate(splitting_variable=cut(dreifing$aldur, breaks = c(seq(0, 80, by = 10), Inf), 
-                                             labels = aldur_faraldur$splitting_variable, right = FALSE))
-
-  dreifing <- dreifing %>% group_by(splitting_variable) %>%
-                    aggregate(aldur ~ splitting_variable, data = ., length) %>%
-                    mutate(prop=aldur/sum(aldur)) %>%
-                    select(-aldur)
-  
-  aldur_stilling <- left_join(select(aldur_faraldur, splitting_variable), dreifing) %>%
-    mutate(prop=if_else(is.na(prop), 0, prop))
-  
-  aldur_stilling
-})
-#####
-
-#### LOS ####
-los_covid_hi_is <- data.frame("vd"=21, "ld"=14, "gd"=10, "pre_lega"=7, "pre_icu"=3)
-
-los_lsh <- data.frame("vd"=14, "ld"=11, "gd"=9, "pre_lega"=3, "pre_icu"=1)
-
-los_stilling <- reactive({
-  data.frame("vd"=input$los_vd, "ld"=input$los_ld, "gd"=input$los_gd, "pre_lega"=input$los_vd-input$los_ld, "pre_icu"=input$los_ld-input$los_gd)
-})
-#####
-```
-
-```{r aldur og LOS reactive}
-age_dist <- reactive({
-  if (input$sir_aldur_val == 'Þjóðar')
-    aldur_hagstofa
-  else if (input$sir_aldur_val == 'Faraldurs')
-   aldur_faraldur
-  else if (input$sir_aldur_val == 'Skv. stillingu:')
-    aldur_stilling()
-  else
-    stop("Unexpected dataset")
-})
-
-los_dist <- reactive({
-    if (input$los_val == 'covid.hi.is')
-    los_covid_hi_is 
-  else if (input$los_val == 'LSH gögn')
-   los_lsh
-  else if (input$los_val == 'Skv. stillingu:')
-    los_stilling()
-  else
-    stop("Unexpected dataset")
-})
-
-actionButton("sir_keyra", "Keyra")
-```
-
-```{r download button SIR}
-# Create placeholder for the downloadButton
-uiOutput("downloadUI")
-
-# Create the actual downloadButton
-output$downloadUI <- renderUI({
-  tagList(
-    downloadButton("downBtn1", "Sækja ný smit"),
-  )
-})
-
-# Add download handling
-output$downBtn1 <- downloadHandler(
-  filename = function() {
-    paste0(Sys.Date(), "_1_scenario_infected.csv")
-  },
-  content = function(file) {
-    write.csv(round(out() * input$sir_utsettir) %>%
-                mutate(I_diff = c(1, diff(I)),
-                       R_diff = c(0, diff(R)),
-                       date_diagnosis = input$sir_start_date + row_number() - 1,
-                       count = I_diff + R_diff,
-                       count = pmax(count, 0)) %>% 
-                select(date_diagnosis, count), 
-              file, row.names = FALSE)
-  }
-)
-```
-
-Sviðsmyndir SIR
-------------------------------
-### Aldursdreifing
-```{r age plot}
-renderPlotly({plot_age_distribution(age_dist())})
-```
-
-### Ný smit
-```{r ný smit data & ný smit plot}
-## Create an SIR function
-sir <- function(time, state, parameters) {
-  
-  with(as.list(c(state, parameters)), {
-    
-    dS <- -beta * S * I
-    dI <-  beta * S * I - gamma * I
-    dR <-                 gamma * I
-    
-    return(list(c(dS, dI, dR)))
-  })
-}
-
-### Set parameters
-out <- reactive({
-  r_eff <- reactiveVal(input$sir_r_eff, 1)
-  n_sus <- reactiveVal(input$sir_utsettir, 100)
-  n_sus2 <- 200
-  # n_dagar_smit <- reactiveVal(input$sir_smitdagar, 14)
-  n_dagar_smit <-  17
-  # n_dagar_smit <- reactiveVal({
-  #   if (input$sir_aldur_val == 'Þjóðar')
-  #     aldur_hagstofa$vd
-  #   else if (input$sir_aldur_val == 'Faraldurs')
-  #     aldur_faraldur$vd
-  #   else if (input$sir_aldur_val == 'Skv. Stillingu:')
-  #     aldur_stilling()$vd
-  # })
-  n_dagar <- reactiveVal(input$sir_dagar, 30)
-  dags_upphaf <- reactiveVal(input$sir_start_date, Sys.Date() + 1)
-  ## Proportion in each compartment: Susceptible 0.999999, Infected 0.000001, Recovered 0
-  init       <- c(S = 1-1/n_sus(), I = 1/n_sus(), R = 0.0)
-  ## beta: infection parameter; gamma: recovery parameter
-  # parameters <- c(beta = r_eff(), gamma = 1/n_dagar_smit())
-  parameters <- c(beta = r_eff(), gamma = 1/n_dagar_smit)
-  ## Time frame
-  times      <- seq(0, n_dagar(), by = 1)
-  
-  ## Solve using ode (General Solver for Ordinary Differential Equations)
-  out <- ode(y = init, times = times, func = sir, parms = parameters)
-  # change to data frame
-  out <- as.data.frame(out)
-  ## Delete time variable
-  out$time <- NULL
-  out
-})
-
-smit_folk <- reactive({
-smit_folk <- round(out() * input$sir_utsettir) %>%
-             mutate(I_diff = c(1, diff(I)),
-                    R_diff = c(0, diff(R)),
-                    nysmit = I_diff + R_diff,
-                    nysmit = pmax(nysmit, 0),
-                    dags = input$sir_start_date + row_number() - 1)
-})
-
-renderPlotly({
-p <- ggplot(smit_folk()) +
-    geom_col(aes(x=dags, y=nysmit), fill="#3b6978") +
-    theme_minimal() + 
-    labs(y="Ný smit", x=NULL)
-ggplotly(p)
-})
-```
-
-### SIR kúrfur
-```{r SIR kúrfur}
-input_values <- reactive({
-  data.frame("sir_utsettir"=input$sir_utsettir, 
-             "sir_start_date"=input$sir_start_date, 
-             "sir_dagar"=input$sir_dagar)
-})
-
-renderPlot({
-  matplot(x = 0:input_values()$sir_dagar, y = out() * input_values()$sir_utsettir, type = "l",
-          xlab = "Dagar", ylab = "Fjöldi einstaklinga", main = "Fjöldi smita - SIR Model",
-          lwd = 1, lty = c(1,1,2), bty = "l", col = c('Grey', 'Red', 'Grey'))
-  legend(input_values()$sir_dagar, max(out() * input_values()$sir_utsettir), 
-         c("Útsettir", "Smitaðir", "Batnað"), yjust = 1, xjust = 1,
-         lty = c(1,1,2), col = c('Grey', 'Red', 'Grey'), bg = 'White', box.col = 'White')
-})
-```
-
-
-sviðsmyndir-hermunarútkoma
--------------------------------
-```{r data scenario}
-tot_dat <- eventReactive(input$sir_keyra, {
-    smit_folk <- round(out() * input$sir_utsettir) %>%
-    mutate(I_diff = c(1, diff(I)),
-         R_diff = c(0, diff(R)),
-         nysmit = I_diff + R_diff,
-         nysmit = pmax(nysmit, 0),
-         dags = input$sir_start_date + row_number() - 1)
-sum(smit_folk$nysmit)
-infected_distr <- smit_folk %>%
-                  group_by(dags) %>%
-                  mutate(prob=1) %>%
-                  rename(date=dags, new_cases=nysmit)
-
-dates <- seq(min(infected_distr$date), max(infected_distr$date),by=1)
-
-ferguson_data <- run_ferguson_simulation_new(infected_distr, los_dist(), age_dist())
-ferguson_data %>% 
-          mutate(state=ifelse(state=="hospital", "inpatient_ward", state))
-})
-```
-
-### Heimaeinangrun
-```{r plot scenario heima}
-renderPlotly({
-p <- plot_ferguson_prediction_state("home", tot_dat(), color_palette[1])
-ggplotly(p, tooltip = list('linetype', 'date', 'value'))
-})
-```
-
-### Legudeild
-```{r plot scenario lega}
-renderPlotly({
-p <- plot_ferguson_prediction_state("inpatient_ward", tot_dat(), color_palette[2])
-ggplotly(p, tooltip = list('linetype', 'date', 'value'))
-})
-
-```
-
-### Gjörgæsla
-```{r plot scenario icu}
-renderPlotly({
-p <- plot_ferguson_prediction_state("intensive_care_unit", tot_dat(), color_palette[3])
-ggplotly(p, tooltip = list('linetype', 'date', 'value'))
-})
-```
-
-Eigin spá {id=manual_spa .hidden}
+Eigin spá {id=manual_spa}
 ==========================
 
 Stillingar {.sidebar}

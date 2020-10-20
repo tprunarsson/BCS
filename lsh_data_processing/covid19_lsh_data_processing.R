@@ -17,7 +17,7 @@ source('lsh_data_processing/create_input_for_simulation.R')
 source('lsh_data_processing/help_functions.R')
 
 date_data_tmp <- as.Date('2020-10-02','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
-date_prediction_tmp <- as.Date('2020-09-29','%Y-%m-%d')
+date_prediction_tmp <- as.Date('2020-10-16','%Y-%m-%d') #BREYTA með nýrri spá (þarf að vísu ekki endilega því þessu er breytt í gagnaborðinu líka)
 date_observed_start_tmp <- date_data_tmp-1
 #path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 path_to_lsh_data_tmp <- 'lsh_data/'
@@ -630,6 +630,25 @@ if(forecast=='from_file'){
 if(forecast=='manual'){
   stikar_manual <- read.csv(paste0(path_tables, "stikar_manual.csv"))
   infections_predicted_per_date <- get_infections_predicted_per_date(source='manual', date_prediction, stikar_manual$alpha, stikar_manual$beta, stikar_manual$S, stikar_manual$nu, stikar_manual$day_n)
+}
+
+##### Auka til þess að lengja spá aftur í tímann með sögulegum gögnum ######
+if(min(infections_predicted_per_date$date)>date_data-7){
+  date_data_end<-date_data
+  day1 <- infections_predicted_per_date %>% filter(date==min(date))
+  n <- nrow(day1)
+  firstday <- min(infections_predicted_per_date$date)-20
+  day_n <- date_data_end-firstday
+  new_cases_manual <- data.frame("date"=rep(seq.Date(from=firstday, length.out = day_n, by=1), each=n),
+                               "new_cases"=rep(0:(n-1),times=day_n))
+  infections_per_date<-covid_diagnosis %>% group_by(date_diagnosis_pcr) %>% summarize(n=n())
+  new_cases_manual<-left_join(new_cases_manual,infections_per_date,by=c(date="date_diagnosis_pcr"))
+
+  new_cases_manual<-new_cases_manual %>% mutate(count=if_else(n==new_cases, 8000, 0)) %>% select(date,new_cases,count)
+  new_cases_manual<-new_cases_manual %>% mutate(count = replace_na(count, 0))
+  new_cases_predicted <- infections_predicted_per_date %>% filter(date>(date_data_end-1))
+  infections_predicted_per_date <- rbind(new_cases_manual,new_cases_predicted) %>% 
+    group_by(date)
 }
 ################# ----- proportion of patients going to outpatient clinic ------ #################
 prop_outpatient_clinic <- get_prop_outpatient_clinic(historical_data)
