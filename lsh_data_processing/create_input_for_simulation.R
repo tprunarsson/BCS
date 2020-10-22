@@ -244,7 +244,8 @@ get_ferguson_length_of_stay <- function(s,splitting_variable_name,splitting_vari
 ################# ----- Extract CDF from posterior predictive distribution from the stats group model of number infected
 get_infections_predicted_per_date <- function(source, date_prediction, alpha, beta, S, nu, day_n){
     if(source=='hi'){ #Hér er date_prediction skilið sem dagur sem spá var búin til
-        hi_posterior_predictive_distr <- read_csv(paste0('https://raw.githubusercontent.com/bgautijonsson/covid19/master/Output/Iceland_Posterior/Iceland_Posterior_',date_prediction,'.csv'),col_types=cols())
+        date_prediction <- find_most_recent_prediction_date()
+        hi_posterior_predictive_distr <- read_csv(paste0('https://raw.githubusercontent.com/sor16/epiEstimIceland/master/Results/Data/Iceland_posterior_', date_prediction,'.csv'),col_types=cols())
         hi_mat_CDF_expanded <- expand_grid(date=unique(hi_posterior_predictive_distr$date),new_cases=0:max(hi_posterior_predictive_distr$new_cases))
         hi_mat_CDF <- group_by(hi_posterior_predictive_distr,date,new_cases) %>%
                         summarise(count=n()) %>%

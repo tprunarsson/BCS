@@ -26,6 +26,7 @@ suppressPackageStartupMessages({
   library(shinyjs)
   library(shinyWidgets)
   library(data.table)
+  library(httr)
 })
 source("lsh_data_processing/covid19_lsh_data_processing.R")
 source("lsh_data_processing/help_functions.R")
@@ -66,7 +67,8 @@ helpText("Legutímar í prior")
 radioButtons('los_val_skyrsla', 'Legutími', choices = c('covid.hi.is', 'LSH gögn', 'Fyrsta bylgja Covid-19'), selected = 'LSH gögn')
 
 hr()
-radioButtons('spa_choose', 'Spá', choices = c('covid.hi.is', 'Eigin spá', 'Úr skrá'), selected = 'Úr skrá')
+#radioButtons('spa_choose', 'Spá', choices = c('covid.hi.is', 'Eigin spá', 'Úr skrá'), selected = 'Úr skrá')
+radioButtons('spa_choose', 'Spá', choices = c('covid.hi.is', 'Eigin spá'), selected = 'covid.hi.is')
 observeEvent(input$bua_til_manual, {
   updateRadioButtons(session, "spa_choose", selected = 'Eigin spá')
 })
@@ -121,13 +123,22 @@ prediction_type <- reactive({
 
 date_prediction <- reactive({
   if(input$spa_choose=='covid.hi.is'){
-    ymd("2020-04-20")
+    validate(
+       need(input$dagsetning_skyrslu>=find_most_recent_prediction_date(), "Engin spá er til á þessum stað fyrir þessa dagsetningu")
+     )
+     find_most_recent_prediction_date()
   }
   else if(input$spa_choose=='Eigin spá'){
+    validate(
+      need(input$dagsetning_skyrslu>=input$manual_start_date, "Engin spá er til á þessum stað fyrir þessa dagsetningu")
+    )
     input$manual_start_date
   }
   else if(input$spa_choose=='Úr skrá'){
     #BREYTA með nýrri spá
+    validate(
+      need(input$dagsetning_skyrslu>=ymd("2020-10-16"), "Engin spá er til á þessum stað fyrir þessa dagsetningu")
+    )
     ymd("2020-10-16") 
   }
   else
@@ -154,6 +165,11 @@ historical_data_filtered <- reactive({
 dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
   data.frame("dagsetning"=input$dagsetning_skyrslu, "framtid"=as.numeric(input$number_predicted_days))
 })
+```
+birta date_prediction {data-height=25px}
+--------------------------------------
+```{r}
+renderText(paste("Spá um fjölda greindra smita nær frá", as.Date(date_prediction())))
 ```
 
 birta alpha {data-height=25px}

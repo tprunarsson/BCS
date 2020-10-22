@@ -7,6 +7,7 @@ suppressPackageStartupMessages({
   library(tidyr)
   library(readr)
   library(lubridate)
+  library(httr)
 })
 
 options(dplyr.summarise.inform = FALSE) #Óþolandi skilaboð
@@ -17,13 +18,13 @@ source('lsh_data_processing/create_input_for_simulation.R')
 source('lsh_data_processing/help_functions.R')
 
 date_data_tmp <- as.Date('2020-10-02','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
-date_prediction_tmp <- as.Date('2020-10-16','%Y-%m-%d') #BREYTA með nýrri spá (þarf að vísu ekki endilega því þessu er breytt í gagnaborðinu líka)
+date_prediction_tmp <- as.Date('2020-10-21','%Y-%m-%d') #BREYTA með nýrri spá (þarf að vísu ekki endilega því þessu er breytt í gagnaborðinu líka)
 date_observed_start_tmp <- date_data_tmp-1
 #path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 path_to_lsh_data_tmp <- 'lsh_data/'
 write_tables_tmp <- TRUE
 run_id_tmp <- 17
-forecast_tmp <- 'from_file'
+forecast_tmp <- 'hi'
 
 #Supported unit category types: all,simple
 unit_category_type <- 'simple'
@@ -92,12 +93,12 @@ if(is.null(opt[['forecast']])){
 }else{
   forecast <- opt[['forecast']]
 }
-if(!(forecast=='from_file')){
-  if(date_prediction>ymd("2020-04-20")){
-    forecast <- 'manual'
-    warning(paste0('No forecast available for this date. ', forecast,' will be used'))
-  }
-}
+# if(!(forecast=='from_file')){
+#   if(date_prediction>ymd("2020-04-20")){
+#     forecast <- 'manual'
+#     warning(paste0('No forecast available for this date. ', forecast,' will be used'))
+#   }
+# }
 
 if (length(opt)>1){
   write_tables <- TRUE

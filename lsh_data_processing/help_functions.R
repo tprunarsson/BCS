@@ -436,6 +436,19 @@ get_cdf <- function(dat,num_groups){
     rename(cdf=!!names(dat)[num_groups+2])
 }
 
+find_most_recent_prediction_date <- function(){
+  req <- GET("https://api.github.com/repos/sor16/epiEstimIceland/git/trees/master?recursive=1")
+  stop_for_status(req)
+  filelist <- unlist(lapply(content(req)$tree, "[", "path"), use.names = F)
+  files <- grep("Results/Data/Iceland_", filelist, value = TRUE, fixed = TRUE)
+  dates <- ymd(gsub(".*(\\d{4}-\\d{2}-\\d{2}).*", "\\1", files))
+  if(length(dates)<1){
+    stop("No prediction data found, check the repository")
+  }
+  cat("Using prediction from", as.character(max(dates)), "\n")
+  return(max(dates))
+}
+
 
 
 #analysis

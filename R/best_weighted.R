@@ -26,8 +26,6 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
     week_ago <- min(historical_data$date)
   }
   
-  sim_days <- as.numeric(max(infections_predicted_per_date$date)-today)
-  
   # Keyra bash
   # Ath. í run_evaluation.R, hafa write_table neðst
   run_data_processing <- paste("Rscript lsh_data_processing/covid19_lsh_data_processing.R -d", date_data, "-r", run_id, "-c", prediction_type, "-p", date_prediction)
@@ -39,6 +37,8 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
     mutate(date=ymd(date)) %>%
     group_by(date) %>%
     mutate(prob=count/sum(count))
+  
+  sim_days <- as.numeric(max(infected_distr$date)-today)
   
   run_execute_run <- paste("./execute_run.sh -d", date_data, "-n 7", "-s", week_ago, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", today, "-f")
 #  setwd("../experiments")

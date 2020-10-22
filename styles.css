@@ -19,3 +19,7 @@
   float: left !important;
   margin: 2px !important;
 }
+
+.shiny-output-error-validation {
+        color: red;
+}
