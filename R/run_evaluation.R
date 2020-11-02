@@ -140,13 +140,6 @@ if(tracking){
     }
 }
 
-performance_dat <- group_by(simulation_summary,experiment_id,experiment_name,state) %>%
-                        summarise(mse=mean((median-historical_value)^2),
-                                  days_from_peak=date[which.max(median)]-date[which.max(historical_value)],
-                                  peak_diff=max(median)-max(historical_value)) %>%
-                        ungroup() %>%
-                        select(experiment_id,experiment_name,state,mse,days_from_peak,peak_diff)
-
 #2. byglja
 if(wave==2){
     historical_data <- historical_data %>% filter(date>ymd("2020-07-23")) 
