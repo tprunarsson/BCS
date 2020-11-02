@@ -120,7 +120,7 @@ get_transition_summary <- function(model,date_observed,recovered_imputed_date_ob
 
 
 ################# ----- Statistical inference of length of stay distributions ---- #############
-get_length_of_stay_predicted <- function(model,date_observed,s,splitting_variable_name,max_splitting_mapping,distr='lognormal',max_num_days=35,fitted,prior_info){
+get_length_of_stay_predicted <- function(model,date_observed,s,splitting_variable_name,max_splitting_mapping,distr='lognormal',max_num_days=59,fitted,prior_info){
     splitting_variable_mapping <- get_splitting_variable_mapping(splitting_variable_name,max_splitting_mapping)
     splitting_variable_values <- unique(splitting_variable_mapping$splitting_variable)
     if(model=='ferguson'){
@@ -387,7 +387,7 @@ get_tables_for_experiment <- function(id,dates_observed){
             get_transition_summary(model,date_observed,select(filter(recovered_imputed,date==date_observed),-date),states[i],transition_splitting_variable_names[i],max_splitting_mapping,transition_time_splitting_variable_names[i],prior_info)
         }) %>% bind_rows() %>% arrange(splitting_variable,state,time_splitting_variable,state_next)# %>% get_cdf(.,num_groups = 2)
         length_of_stay_list[[date_observed]] <-lapply(1:length(states),function(i){
-            get_length_of_stay_predicted(model,date_observed,states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 42,fitted=fitted_vec[i],prior_info)
+            get_length_of_stay_predicted(model,date_observed,states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 59,fitted=fitted_vec[i],prior_info)
         }) %>% bind_rows() %>% arrange(state,splitting_variable)# %>% get_cdf(.,num_groups = 2)
     }
     first_state <- bind_rows(first_state_list,.id='date') %>% mutate(date=dates_observed[as.numeric(date)])
