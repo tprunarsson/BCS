@@ -1,0 +1,11 @@
+experiment_id,date,median,lower,upper,historical_value,historical_quantile,experiment_name,state
+4,2020-11-02,62,61,66,NA,NA,Bætt líkan,Legudeild
+4,2020-11-02,2,2,3,NA,NA,Bætt líkan,Gjörgæsla
+4,2020-11-03,59,52,67,NA,NA,Bætt líkan,Legudeild
+4,2020-11-03,3,1,6,NA,NA,Bætt líkan,Gjörgæsla
+4,2020-11-04,56,48,68,NA,NA,Bætt líkan,Legudeild
+4,2020-11-04,3,1,7,NA,NA,Bætt líkan,Gjörgæsla
+4,2020-11-05,56,47,70,NA,NA,Bætt líkan,Legudeild
+4,2020-11-05,4,1,9,NA,NA,Bætt líkan,Gjörgæsla
+4,2020-11-06,55,45,73,NA,NA,Bætt líkan,Legudeild
+4,2020-11-06,5,1,10,NA,NA,Bætt líkan,Gjörgæsla
