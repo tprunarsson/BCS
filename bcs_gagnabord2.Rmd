@@ -1,5 +1,5 @@
 ---
-title: "Gagnaborð"
+title: "Covid-19"
 author: ''
 runtime: shiny
 output:
@@ -33,69 +33,67 @@ source("lsh_data_processing/help_functions.R")
 source("R/best_weighted.R")
 source('dashboard/dashboard_functions.R')
 
-
-#Load csv data
-# env_wdir <- Sys.getenv("ENV_WORKING_DIRECTORY")
-# data_path <- ifelse(env_wdir == "", 'input', file.path(env_wdir, 'input'))
-# bcs_data <- readRDS(file.path(data_path, 'bcs_data.rds'))
-# bcs_data$data_length_of_stay <- bcs_data$data_length_of_stay %>% recode_states()
-
-# Set constants
-# start_date <- min(bcs_data$data_length_of_stay$date) # as.Date('2020-04-02')
-# end_date <- Sys.Date()
-# gagnagerdir <- unique(bcs_data$data_length_of_stay$censored)
-# aldurshopar <- unique(bcs_data$data_length_of_stay$age_group_simple) #list('0-50', '51+')
-# states <- unique(bcs_data$data_length_of_stay$state)
 color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
 ```
 
-Skýrslur {id=skyrslur data-icon="fa-notes-medical"}
+Spá {id=skyrslur data-icon="fa-notes-medical"}
 =======================================================================
 
 Stillingar {.sidebar}
 -------------------------------------------------------------
 
 ```{r stillingar skýrslu}
-helpText('Veljið dagsetningu til að birta skýrslu fyrir')
-#Calendar dagsetningar:
 dateInput('dagsetning_skyrslu', 'Dagsetning:',
           value = Sys.Date(), min = min(historical_data$date), max = date_data)
-helpText('Birtist sem blá lína á grafi')
 hr()
-#Legutímar
-helpText("Legutímar í prior")
-radioButtons('los_val_skyrsla', 'Legutími', choices = c('covid.hi.is', 'LSH gögn', 'Fyrsta bylgja Covid-19'), selected = 'LSH gögn')
+
+checkboxInput('prior_choose', 'Nota upplýsingar úr fyrri bylgjum', value=FALSE)
+
+conditionalPanel(
+  "input.prior_choose == true",
+  radioButtons('los_val_skyrsla', '', choices = c('covid.hi.is', 'LSH gögn', 'Fyrsta bylgja Covid-19'), selected = 'LSH gögn')
+)
 
 hr()
-#radioButtons('spa_choose', 'Spá', choices = c('covid.hi.is', 'Eigin spá', 'Úr skrá'), selected = 'Úr skrá')
-radioButtons('spa_choose', 'Spá', choices = c('covid.hi.is', 'Eigin spá'), selected = 'covid.hi.is')
+
+checkboxInput('spa_choose', 'Nota eigin spá', value=FALSE)
 observeEvent(input$bua_til_manual, {
-  updateRadioButtons(session, "spa_choose", selected = 'Eigin spá')
+  updateCheckboxInput(session, "spa_choose", value = TRUE)
 })
 ```
-[Búa til eigin spá](#manual_spa)
+
 ```{r}
 hr()
-helpText('Það tekur um 2 mínútur að birta skýrsluna')
-actionButton("birta_skyrslu", "Birta skýrslu")
+actionButton("birta_skyrslu", "Birta spá")
 observeEvent(input$birta_skyrslu, {
-  showNotification("Keyrir hermun...", id = 'msg_keyra_hermun1', type = 'message', duration = NULL)
+  showNotification("Keyrir hermun... \n Það tekur um 2 mínútur að birta spána", id = 'msg_keyra_hermun1', type = 'message', duration = NULL)
 })
 
-# checkboxInput('show_history', "Sýna öll söguleg gögn", value = FALSE)
-dateInput('filter_history', 'Sýna söguleg  gögn frá:', value = Sys.Date()-40, min = min(historical_data$date), max=max(historical_data$date))
-numericInput('number_predicted_days', "Fjöldi spádaga", value = 14, min=1, max=80, step=1)
+checkboxInput('show_legend_skyrslur', 'Sýna merkingar', value=FALSE)
 
+dateInput('filter_history', 'Sýna söguleg gögn frá:', value = date_data-3, min = min(historical_data$date), max=max(historical_data$date))
+
+dagsetning_skyrslu_reactive1 <- reactive({
+  data.frame("dagsetning"=input$dagsetning_skyrslu)
+})
+
+observeEvent(input$dagsetning_skyrslu, {
+  updateDateInput(
+  session,
+  "filter_history",
+  value = dagsetning_skyrslu_reactive1()$dagsetning-4,
+  max = dagsetning_skyrslu_reactive1()$dagsetning-2
+)
+})
+
+numericInput('number_predicted_days', "Fjöldi spádaga", value = 14, min=1, max=80, step=1)
 ```
 
 
 skyrsla-header {data-height=30px}
 -----------------------------------------------------------
 
-#### Spá um fjölda smitaðra einstaklinga í hverri stöðu á hverjum degi
-
 ```{r keyrsla skýrslu}
-# renderText("Svörtu punktarnir eru söguleg gögn, bláa línan er dagurinn í dag og hinar línurnar eru spá fyrir valinn fjölda daga.")
 los_setting_skyrsla <- reactive({
   if (input$los_val_skyrsla == 'covid.hi.is')
     data.frame("vd"=21, "ld"=14, "gd"=10, "pre_lega"=7, "pre_icu"=3)
@@ -108,55 +106,52 @@ los_setting_skyrsla <- reactive({
 })
 
 prediction_type <- reactive({
-  if(input$spa_choose=='covid.hi.is'){
+  if(input$spa_choose==FALSE){
     'hi'
   }
-  else if(input$spa_choose=='Eigin spá'){
+  else if(input$spa_choose==TRUE){
     'manual'
-  }
-  else if(input$spa_choose=='Úr skrá'){
-    'from_file'
   }
   else
     stop("Unexpected dataset")
 })
 
+most_recent_prediction_date <- find_most_recent_prediction_date()
+
 date_prediction <- reactive({
-  if(input$spa_choose=='covid.hi.is'){
+  if(input$spa_choose==FALSE){
     validate(
-       need(input$dagsetning_skyrslu>=find_most_recent_prediction_date(), "Engin spá er til á þessum stað fyrir þessa dagsetningu")
-     )
-     find_most_recent_prediction_date()
+      need(input$dagsetning_skyrslu>=most_recent_prediction_date, "Engin spá er til á þessum stað fyrir þessa dagsetningu")
+    )
+    most_recent_prediction_date
   }
-  else if(input$spa_choose=='Eigin spá'){
+  else if(input$spa_choose==TRUE){
     validate(
       need(input$dagsetning_skyrslu>=input$manual_start_date, "Engin spá er til á þessum stað fyrir þessa dagsetningu")
     )
     input$manual_start_date
   }
-  else if(input$spa_choose=='Úr skrá'){
-    #BREYTA með nýrri spá
-    validate(
-      need(input$dagsetning_skyrslu>=ymd("2020-10-16"), "Engin spá er til á þessum stað fyrir þessa dagsetningu")
-    )
-    ymd("2020-10-16") 
-  }
   else
     stop("Unexpected dataset")
 })
 
-output_best_unfiltered <- eventReactive(input$birta_skyrslu, {
+output_best_list <- eventReactive(input$birta_skyrslu, {
   best_weighted_function(date_data, input$dagsetning_skyrslu, los_setting_skyrsla(), prediction_type(), date_prediction())
+})
+
+output_best_unfiltered <- reactive({
+  if(input$prior_choose==FALSE)
+    output_best_list()$improved_model
+  else if(input$prior_choose==TRUE)
+    output_best_list()$combined_model
+  else
+    stop("Unexpected dataset")
 })
 
 output_best <- reactive({
   output_best_unfiltered() %>%
     filter(date<(input$dagsetning_skyrslu+as.numeric(input$number_predicted_days)))
 })
-
-# historical_data_filtered <- eventReactive(input$birta_skyrslu, {
-#   historical_data %>% filter(date<input$dagsetning_skyrslu, date>input$filter_history) 
-# })
 
 historical_data_filtered <- reactive({
   historical_data %>% filter(date<input$dagsetning_skyrslu, date>input$filter_history)
@@ -165,17 +160,19 @@ historical_data_filtered <- reactive({
 dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
   data.frame("dagsetning"=input$dagsetning_skyrslu, "framtid"=as.numeric(input$number_predicted_days))
 })
+
 ```
 birta date_prediction {data-height=25px}
 --------------------------------------
 ```{r}
-renderText(paste("Spá um fjölda greindra smita nær frá", as.Date(date_prediction())))
+renderText(paste("Spá um fjölda greindra smita er frá ", as.Date(date_prediction())))
 ```
 
 birta alpha {data-height=25px}
 --------------------------------------
+
 ```{r}
-renderText(paste("alpha =", output_best()$best_alpha[1]))
+renderText(paste(output_best()$best_alpha[1]*100, "% af spánni byggir á upplýsingum úr fyrri bylgjum og ", (1-output_best()$best_alpha[1])*100, "% á upplýsingum úr þessari bylgju"))
 ```
 
 
@@ -189,12 +186,14 @@ renderPlotly({
   p <- plot_skyrsla("home", output_best(), historical_data_filtered(), color_palette[1])
   p <- p + geom_vline(xintercept = as.numeric(dagsetning_skyrslu_reactive()$dagsetning), 
                       linetype="dotted", color="dodgerblue")
-  # if(input$show_history==TRUE){
-  #   p <- p + geom_point(data=filter(historical_data, state=="home"), aes(y=count, label="Söguleg gögn"), alpha=0.4)
-  # }
   removeNotification(id = 'msg_keyra_hermun1')
-  ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) #%>%
-  #layout(legend = list(orientation = "h", x = 0, y =1))
+  if(input$show_legend_skyrslur==TRUE){
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) 
+  }
+  else{
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) %>%
+      layout(showlegend = FALSE)
+  }
 })
 ```
 
@@ -204,11 +203,13 @@ renderPlotly({
 renderPlotly({
   p <- plot_skyrsla("inpatient_ward", output_best(), historical_data_filtered(), color_palette[2])
   p <- p + geom_vline(xintercept = as.numeric(dagsetning_skyrslu_reactive()$dagsetning), linetype="dotted", color="dodgerblue")
-  # if(input$show_history==TRUE){
-  #   p <- p + geom_point(data=filter(historical_data, state=="inpatient_ward"), aes(y=count, label="Söguleg gögn"), alpha=0.4)
-  # }
-  ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) #%>%
-  #layout(legend = list(orientation = "h", x = 0, y =1))
+  if(input$show_legend_skyrslur==TRUE){
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) 
+  }
+  else{
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) %>%
+      layout(showlegend = FALSE)
+  }
 })
 ```
 
@@ -218,25 +219,24 @@ renderPlotly({
 renderPlotly({
   p <- plot_skyrsla("intensive_care_unit", output_best(), historical_data_filtered(), color_palette[3])
   p <- p + geom_vline(xintercept = as.numeric(dagsetning_skyrslu_reactive()$dagsetning), linetype="dotted", color="dodgerblue")
-  # if(input$show_history==TRUE){
-  #   p <- p + geom_point(data=filter(historical_data, state=="intensive_care_unit"), aes(y=count, label="Söguleg gögn"), alpha=0.4)
-  # }
-  ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) #%>%
-  #layout(legend = list(orientation = "h", x = 0, y =1))
+  if(input$show_legend_skyrslur==TRUE){
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) 
+  }
+  else{
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) %>%
+      layout(showlegend = FALSE)
+  }
 })
 ```
 
 
-Stöðuupplýsingar {data-icon="fa-user-md"}
+Staða {data-icon="fa-user-md"}
 =======================================================================
 
 Stillingar {.sidebar}
 ---------------------------------------------------
 
 ```{r stillingar visual}
-#Slider dagsetningar:
-# sliderInput('dagsetning', 'Dagsetning:', min = min(historical_data$date), max = max(historical_data$date),
-#             value = end_date, step = 1, timeFormat = "%d %b")
 
 #Calender dagsetningar
 dateInput('dagsetning', 'Dagsetning:',
@@ -245,7 +245,7 @@ dateInput('dagsetning', 'Dagsetning:',
 # selectInput til að ákveða hvað á að sýna
 selectInput('choose_visual_gauge', "Veldu upplýsingar til að sjá á mæli", choices = c("Hlutfall sjúklinga sem hafa verið með einkenni í færri en sex daga", "Hlutfall sjúklinga eldri en 50 ára", "Hlutfall sjúklinga með undirliggjandi sjúkdóma"), multiple = FALSE)
 
-selectInput('choose_visual_graph', "Veldu upplýsingar til að sjá á grafi", choices = c("Dreifing á tíma frá upphafi einkenna", "Aldursdreifing", "Dreifing á fjölda undirliggjandi sjúkdóma"), multiple = FALSE)
+selectInput('choose_visual_graph', "Veldu upplýsingar til að sjá á grafi", choices = c("Tími frá upphafi einkenna", "Aldur", "Fjöldi undirliggjandi sjúkdóma"), multiple = FALSE)
 ```
 
 texti með titli {data-height=100}
@@ -364,25 +364,25 @@ tölfræðilegt output graph
 ```{r output in plot}
 graphInputHome <- reactive({
    switch(input$choose_visual_graph,
-          "Dreifing á tíma frá upphafi einkenna" = plot_symptoms_start_home(),
-          "Aldursdreifing" = plot_age_home(),
-          "Dreifing á fjölda undirliggjandi sjúkdóma" = plot_num_comorbidity_home()
+          "Tími frá upphafi einkenna" = plot_symptoms_start_home(),
+          "Aldur" = plot_age_home(),
+          "Fjöldi undirliggjandi sjúkdóma" = plot_num_comorbidity_home()
           )
   })
 
 graphInputinpatient_ward <- reactive({
    switch(input$choose_visual_graph,
-          "Dreifing á tíma frá upphafi einkenna" = plot_symptoms_start_iw(),
-          "Aldursdreifing" = plot_age_iw(),
-          "Dreifing á fjölda undirliggjandi sjúkdóma" = plot_num_comorbidity_iw()
+          "Tími frá upphafi einkenna" = plot_symptoms_start_iw(),
+          "Aldur" = plot_age_iw(),
+          "Fjöldi undirliggjandi sjúkdóma" = plot_num_comorbidity_iw()
           )
   })
 
 graphInputIcu <- reactive({
    switch(input$choose_visual_graph,
-          "Dreifing á tíma frá upphafi einkenna" = plot_symptoms_start_icu(),
-          "Aldursdreifing" = plot_age_icu(),
-          "Dreifing á fjölda undirliggjandi sjúkdóma" = plot_num_comorbidity_icu()
+          "Tími frá upphafi einkenna" = plot_symptoms_start_icu(),
+          "Aldur" = plot_age_icu(),
+          "Fjöldi undirliggjandi sjúkdóma" = plot_num_comorbidity_icu()
           )
   })
 
@@ -775,7 +775,7 @@ plot_num_comorbidity_icu <- reactive({
 })
 ```
 
-Flæði sjúklinga í faraldri {data-icon="fa-ambulance"}
+Flæði {data-icon="fa-ambulance"}
 =============================================
 
 Stillingar {.sidebar}
@@ -794,7 +794,6 @@ actionBttn(inputId = "help_sankey", style="jelly", icon = icon("question"))
 observeEvent(input$help_sankey, {
   showNotification("Sankey flæðiritið sýnir flæði sjúklinga á milli stöðva í kerfinu. Hægt er að sjá hversu margir fara í gegnum stöðvarnar með því að fara með músina á viðeigandi stað. Breidd hlekkjanna er í samræmi við flæðið.", id = "msg_help_sankey", type = 'message', duration=NULL)
 })
-
 ```
 
 flæði-header {data-height=30px}
@@ -999,8 +998,6 @@ hr()
 pop_iceland <- 364134
 numericInput("logistic_S", 'Fjöldi smita (S)',
             min = 10, max = pop_iceland, step = 1, value = 100)
-
-#radioButtons('val_stikar_logistic', 'Stikar:', choices = c('Einfaldir', 'Flóknir'), selected = 'Einfaldir')
 checkboxInput('val_stikar_logistic', 'Nota nákvæmari stika', value=FALSE)
 
 hr()
@@ -1192,7 +1189,6 @@ los_dist_logistic <- reactive({
 actionButton("logistic_keyra", "Keyra")
 ```
 
-
 Sviðsmyndir logistic
 ------------------------------
 ### Aldursdreifing
@@ -1294,7 +1290,7 @@ ggplotly(p, tooltip = list('linetype', 'date', 'value')) %>%
 })
 ```
 
-Eigin spá {id=manual_spa}
+Eigin spá {id=manual_spa data-icon="fa-virus"}
 ==========================
 
 Stillingar {.sidebar}
@@ -1435,6 +1431,3 @@ p <- ggplot(smit_folk_manual()) +
 ggplotly(p)
 })
 ```
-
-
-

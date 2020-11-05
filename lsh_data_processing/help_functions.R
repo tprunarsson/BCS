@@ -355,6 +355,121 @@ get_prop_outpatient_clinic <- function(current_state_per_date_summary,window_siz
   return(prop_outpatient_clinic_per_window)
 }
 
+get_outpatient_prediction <- function(date_prediction_out){
+  outpatient_BB_extended2 <- outpatient_BB_extended %>% group_by(patient_id) %>%
+    tidyr::complete(date = seq.Date(min(date), max(date), by="day")) %>%
+    arrange(date, .by_group=TRUE) %>%
+    tidyr::fill(colnames(.)) %>%
+    filter((date<=date_outcome & date>=date_diagnosis-7) | is.na(date_outcome) | is.na(date_diagnosis)) %>%
+    mutate(day_num=seq(1:n())) %>%
+    mutate(day_num_simple=cut(day_num, breaks = c(1, 4, 7, 10, 14, 20, 30, 60), right = FALSE))
+  
+  historical_data_outpatient <- outpatient_BB_extended2 %>% group_by(date, clinical_assessment, outpatient) %>%
+    summarize(n=n()) %>% pivot_wider(names_from = c("clinical_assessment", "outpatient"), values_from = n) %>% 
+    mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>%
+    mutate("green"=green_FALSE+green_TRUE, "red"=red_FALSE+red_TRUE, "outpatient"=green_TRUE+red_TRUE) %>%
+    select(date, green, red, outpatient) %>%
+    gather(key="key", value="count", -date)
+  
+  active_cases <- outpatient_BB_extended2 %>% 
+    filter(outcome=="in_hospital_system" | is.na(outcome)) %>%
+    filter(date>date_prediction_out-59) %>%
+    arrange(day_num, decreasing = TRUE) %>%
+    group_by(patient_id) %>%
+    slice(n()) %>% ungroup() %>% select(priority, day_num, day_num_simple)
+  
+  active_cases_per_splitting <- outpatient_BB_extended2 %>% 
+    filter(outcome=="in_hospital_system" | is.na(outcome)) %>%
+    filter(date>date_prediction_out-59) %>%
+    select(-date, -day_num, -day_num_simple) %>%
+    arrange(rowSums(is.na(.))) %>%
+    distinct(patient_id, .keep_all = TRUE) %>%
+    group_by(priority) %>%
+    summarise(n=n()) %>% ungroup()
+  
+  prop_frame <- outpatient_BB_extended2 %>% 
+    group_by(clinical_assessment, day_num_simple, priority, outpatient) %>% 
+    summarize(n=n()) %>%
+    ungroup() %>% group_by(day_num_simple, priority) %>% mutate(prop=n/sum(n)) %>%
+    unite(., combined_assessment, c(clinical_assessment, outpatient), remove=FALSE) %>% ungroup()
+  
+  splitting_distribution <- get_patient_transitions_at_date('base', date_observed = date_prediction_out) %>% 
+    distinct(patient_id) %>%
+    inner_join(individs_splitting_variables,by='patient_id') %>%
+    rename(splitting_variable=!!"priority_all") %>%
+    group_by(splitting_variable) %>%
+    summarise(prop=n()) %>%
+    ungroup() %>%
+    mutate(prop=prop/sum(prop))
+
+  infected_distr <- infections_predicted_per_date %>%
+    group_by(date) %>%
+    mutate(prob=count/sum(count)) %>% ungroup()
+  
+  dates <- seq.Date(from=date_prediction_out, to=max(infected_distr$date), by="day")
+  predictions <- data.frame(num_day=0, green_FALSE=0, green_TRUE=0, red_FALSE=0, red_TRUE=0)
+  cat("\n calculating...")
+  for(i in 1:100){
+    total_cases <- active_cases
+    cat("|")
+    for(j in 1:length(dates)){
+      new_cases <- sample(infected_distr$new_cases[infected_distr$date==dates[j]],
+                          size = 1,
+                          prob=infected_distr$prob[infected_distr$date==dates[j]],
+                          replace = T)
+      splitting_new_cases <- sapply(new_cases,function(x){
+        splitting_samples <- sample(1:nrow(splitting_distribution),size=x,replace=T,prob=splitting_distribution$prop)
+        splitting_samples_summary <- rep(0,nrow(splitting_distribution))
+        for(s in splitting_samples){
+          splitting_samples_summary[s] <- splitting_samples_summary[s]+1 
+        }
+        return(splitting_samples_summary)
+      }) %>% t()
+      new_cases_splitted <- data.frame("priority"=c(rep("high", splitting_new_cases[1,1]), rep("low", splitting_new_cases[1,2]), rep("medium", splitting_new_cases[1,1])), "day_num"=1, "day_num_simple"="[1,4)")
+      cols <- c(green_FALSE = 0, green_TRUE = 0, red_FALSE = 0, red_TRUE = 0)
+      total_cases <- total_cases %>% 
+        select(priority, day_num, day_num_simple) %>%
+        mutate(day_num=day_num+j) %>%
+        mutate(day_num_simple=cut(day_num, breaks = c(1, 4, 7, 10, 14, 20, 30, 60), right = FALSE)) %>%
+        filter(day_num<60) %>%
+        rbind(., new_cases_splitted) %>%
+        mutate("id"=row_number()) %>%
+        left_join(., select(prop_frame, combined_assessment, priority, day_num_simple, prop), by = c("priority", "day_num_simple")) %>%
+        group_by(id) %>%
+        mutate(prop=if_else(is.na(prop),0.0000001,prop)) %>%
+        slice_sample(., n=1, weight_by=prop) %>%
+        ungroup() 
+      
+     pred_total_cases <- total_cases %>%
+        group_by(combined_assessment) %>%
+        summarise(n=n()) %>% 
+        spread(., key=combined_assessment, value=n) %>%
+        add_column(!!!cols[!names(cols) %in% names(.)]) %>% ungroup()
+        
+      predictions[nrow(predictions)+1,] <-  c("num_day"=j, "green_FALSE"=pred_total_cases$green_FALSE, "green_TRUE"=pred_total_cases$green_TRUE, "red_FALSE"=pred_total_cases$red_FALSE, "red_TRUE"=pred_total_cases$red_TRUE)
+    }
+  }
+  #predictions <- data.frame(date=dates, num_green_lower=0, num_green_median=0, num_green_upper=0, num_red_lower=0, num_red_median=0, num_red_upper=0, num_outpatient_visits_lower=0, num_outpatient_visits_median=0, num_outpatient_visits_upper=0)
+  predictions <- predictions[-1,]
+  outpatient_dat <- predictions %>% 
+    mutate(date=min(dates)+num_day-1) %>%
+    group_by(date) %>%
+    summarise("green_lower"=quantile(green_FALSE+green_TRUE, probs=0.25),
+              "green_median"=quantile(green_FALSE+green_TRUE, probs=0.5),
+              "green_upper"=quantile(green_FALSE+green_TRUE, probs=0.75),
+              "red_lower"=quantile(red_FALSE+red_TRUE, probs=0.25),
+              "red_median"=quantile(red_FALSE+red_TRUE, probs=0.5),
+              "red_upper"=quantile(red_FALSE+red_TRUE, probs=0.75),
+              "outpatient_lower"=quantile(green_TRUE+red_TRUE, probs=0.25),
+              "outpatient_median"=quantile(green_TRUE+red_TRUE, probs=0.5),
+              "outpatient_upper"=quantile(green_TRUE+red_TRUE, probs=0.75)) %>%
+    pivot_longer(., cols = -date, names_to = "key", values_to = "value") %>%
+    separate(., key, c("key", "quantile")) %>% ungroup() #%>%
+    #spread(., quantile, value)
+  data_list <- list("historical_data_outpatient"=historical_data_outpatient, "prediction_outpatient"=outpatient_dat)
+  return(data_list)
+}
+
 get_historical_turnover <- function(){
   transition_turnover <- select(patient_transitions,patient_id,date,state,state_tomorrow) %>%
     filter(state!=state_tomorrow) %>%
@@ -445,7 +560,7 @@ find_most_recent_prediction_date <- function(){
   if(length(dates)<1){
     stop("No prediction data found, check the repository")
   }
-  cat("Using prediction from", as.character(max(dates)), "\n")
+  #cat("Using prediction from", as.character(max(dates)), "\n")
   return(max(dates))
 }
 

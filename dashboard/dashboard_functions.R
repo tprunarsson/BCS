@@ -329,3 +329,21 @@ plot_skyrsla <- function(state_f, prediction_dat, historical_dat, color_state){
         geom_point(data=filter(historical_dat, state==state_f), aes(y=count, label="Söguleg gögn")) + 
         theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
 }
+
+plot_outpatient <- function(prediction_dat, state, color_state, historical_dat, date_history_filter){
+    dat <- prediction_dat %>% filter(key==state) %>% 
+        mutate(quantile = quantile %>% recode(median = "Líkleg spá",
+                                    upper = "Svartsýn spá",
+                                    lower = "Bjartsýn spá")) %>%
+        mutate(value=round(value))
+    dat$quantile <- factor(dat$quantile, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+    historical_dat <- historical_dat %>% filter(date>date_history_filter)
+    ggplot(dat, aes(x=date, y=value)) + 
+        geom_line(aes(lty=quantile, alpha=quantile), col = color_state) + 
+        scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+        labs(x = '', y = 'Fjöldi', linetype = '', alpha = '') +
+        scale_alpha_manual(values = c(0.7, 1, 0.7)) +
+        theme_minimal() + 
+        geom_point(data=filter(historical_dat, key==state), aes(y=count, label="Söguleg gögn")) + 
+        theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+}

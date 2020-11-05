@@ -17,3 +17,4 @@ tidyverse
 data.table
 optparse
 readxl
+tibble

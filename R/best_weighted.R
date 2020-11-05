@@ -207,63 +207,17 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
                                      "lower"=rep(NA, nrow(ferguson_model_today)), 
                                      "upper"=rep(NA, nrow(ferguson_model_today)))
   
-  combined_model_today <- left_join(combined_model_today, historical_data_filtered, by=c('date','state')) %>%
-    rename("count_historical"=count)
-  
   combined_model_today <- combined_model_today %>% mutate(median=best_alpha*ferguson_model_today$median + (1-best_alpha)*improved_model_today$median)
   combined_model_today <- combined_model_today %>% mutate(lower=best_alpha*ferguson_model_today$lower + (1-best_alpha)*improved_model_today$lower)
   combined_model_today <- combined_model_today %>% mutate(upper=best_alpha*ferguson_model_today$upper + (1-best_alpha)*improved_model_today$upper)
   
   combined_model_today <- combined_model_today %>% mutate("best_alpha"=best_alpha)
+  improved_model_today <- improved_model_today %>% mutate("best_alpha"=0)
+  ferguson_model_today <- ferguson_model_today %>% mutate("best_alpha"=1)
   
-  #Athuga hvort hægt sé að skila lista af hlutum (í staðinn fyrir að setja best_alpha inn í data_frame)
   models <- list("ferguson_model" = ferguson_model_today,
                  "improved_model" = improved_model_today,
                  "combined_model" = combined_model_today)
   
-  ##### Auka sem ég er að gera fyrir skýrslu - mynd með og án alpha
-  
-  # improved_model_today2 <- improved_model_today %>% select(date, state, median, lower, upper) %>%
-  #   mutate(., state=if_else(state=="inpatient_ward", "Legudeild", state)) %>%
-  #   mutate(., state=if_else(state=="home", "Heimaeinangrun", state)) %>%
-  #   mutate(., state=if_else(state=="intensive_care_unit", "Gjörgæsla", state)) %>%
-  #   transform(., state=factor(state, levels = c("Heimaeinangrun", "Legudeild", "Gjörgæsla")))
-  # 
-  # combined_model_today2 <- combined_model_today %>% select(date, state, median, lower, upper) %>%
-  #   mutate(., state=if_else(state=="inpatient_ward", "Legudeild", state)) %>%
-  #   mutate(., state=if_else(state=="home", "Heimaeinangrun", state)) %>%
-  #   mutate(., state=if_else(state=="intensive_care_unit", "Gjörgæsla", state)) %>%
-  #   transform(., state=factor(state, levels = c("Heimaeinangrun", "Legudeild", "Gjörgæsla")))
-  # 
-  # combined_dat <- rbind(data.frame(alpha = "alpha = 0", improved_model_today2), 
-  #                       data.frame(alpha = "alpha = 0.16", combined_model_today2))
-  # 
-  # historical_data_filtered2 <- historical_data_filtered %>%
-  #   mutate(., state=if_else(state=="inpatient_ward", "Legudeild", state)) %>%
-  #   mutate(., state=if_else(state=="home", "Heimaeinangrun", state)) %>%
-  #   mutate(., state=if_else(state=="intensive_care_unit", "Gjörgæsla", state)) %>%
-  #   transform(., state=factor(state, levels = c("Heimaeinangrun", "Legudeild", "Gjörgæsla")))
-  # 
-  # historical_data_filtered3 <- historical_data %>%
-  #   filter(date<ymd("2020-05-05")) %>%
-  #   mutate(., state=if_else(state=="inpatient_ward", "Legudeild", state)) %>%
-  #   mutate(., state=if_else(state=="home", "Heimaeinangrun", state)) %>%
-  #   mutate(., state=if_else(state=="intensive_care_unit", "Gjörgæsla", state)) %>%
-  #   transform(., state=factor(state, levels = c("Heimaeinangrun", "Legudeild", "Gjörgæsla")))
-  # 
-  # p_alpha_med_an <- ggplot(combined_dat) + 
-  #   geom_point(data=historical_data_filtered2, aes(date,count)) + 
-  #   geom_point(data=historical_data_filtered3, aes(date,count), alpha=0.4) +
-  #   geom_line(aes(date, median, color=alpha)) + 
-  #   geom_line(aes(date, lower, color=alpha), linetype='dashed', alpha=0.5) +
-  #   geom_line(aes(date, upper, color=alpha), linetype='dashed', alpha=0.5) +
-  #   facet_wrap(~state, scales='free') + 
-  #   ggtitle("Spá 13. mars 2020 með og án sameiningu líkana") + 
-  #   labs(x="Dagsetning", y="Fjöldi") + 
-  #   theme(legend.position = "bottom", legend.title = element_blank())
-  # 
-  # setwd("~/Downloads")
-  # ggsave("p_alpha_med_an.png", p_alpha_med_an, device='png', width=16, height=10)
-  
-  return(combined_model_today)
+  return(models)
 }
