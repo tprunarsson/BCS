@@ -49,11 +49,6 @@ hr()
 
 checkboxInput('prior_choose', 'Nota upplýsingar úr fyrri bylgjum', value=FALSE)
 
-conditionalPanel(
-  "input.prior_choose == true",
-  radioButtons('los_val_skyrsla', '', choices = c('covid.hi.is', 'LSH gögn', 'Fyrsta bylgja Covid-19'), selected = 'LSH gögn')
-)
-
 hr()
 
 checkboxInput('spa_choose', 'Nota eigin spá um smit', value=FALSE)
@@ -93,14 +88,7 @@ numericInput('number_predicted_days', "Fjöldi spádaga", value = 14, min=1, max
 
 ```{r keyrsla skýrslu}
 los_setting_skyrsla <- reactive({
-  if (input$los_val_skyrsla == 'covid.hi.is')
-    data.frame("vd"=21, "ld"=14, "gd"=10, "pre_lega"=7, "pre_icu"=3)
-  else if (input$los_val_skyrsla == 'LSH gögn')
    data.frame("vd"=14, "ld"=11, "gd"=9, "pre_lega"=3, "pre_icu"=1)
-  else if (input$los_val_skyrsla == 'Fyrsta bylgja Covid-19')
-    data.frame("vd"=17, "ld"=8, "gd"=6, "pre_lega"=9, "pre_icu"=1)
-  else
-    stop("Unexpected dataset")
 })
 
 prediction_type <- reactive({
