@@ -56,7 +56,7 @@ conditionalPanel(
 
 hr()
 
-checkboxInput('spa_choose', 'Nota eigin spá', value=FALSE)
+checkboxInput('spa_choose', 'Nota eigin spá um smit', value=FALSE)
 observeEvent(input$bua_til_manual, {
   updateCheckboxInput(session, "spa_choose", value = TRUE)
 })
@@ -90,8 +90,6 @@ numericInput('number_predicted_days', "Fjöldi spádaga", value = 14, min=1, max
 ```
 
 
-skyrsla-header {data-height=30px}
------------------------------------------------------------
 
 ```{r keyrsla skýrslu}
 los_setting_skyrsla <- reactive({
@@ -160,7 +158,6 @@ historical_data_filtered <- reactive({
 dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
   data.frame("dagsetning"=input$dagsetning_skyrslu, "framtid"=as.numeric(input$number_predicted_days))
 })
-
 ```
 birta date_prediction {data-height=25px}
 --------------------------------------
@@ -188,7 +185,7 @@ renderPlotly({
                       linetype="dotted", color="dodgerblue")
   removeNotification(id = 'msg_keyra_hermun1')
   if(input$show_legend_skyrslur==TRUE){
-    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) 
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label'))
   }
   else{
     ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) %>%
@@ -204,7 +201,7 @@ renderPlotly({
   p <- plot_skyrsla("inpatient_ward", output_best(), historical_data_filtered(), color_palette[2])
   p <- p + geom_vline(xintercept = as.numeric(dagsetning_skyrslu_reactive()$dagsetning), linetype="dotted", color="dodgerblue")
   if(input$show_legend_skyrslur==TRUE){
-    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) 
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label'))
   }
   else{
     ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) %>%
@@ -220,7 +217,7 @@ renderPlotly({
   p <- plot_skyrsla("intensive_care_unit", output_best(), historical_data_filtered(), color_palette[3])
   p <- p + geom_vline(xintercept = as.numeric(dagsetning_skyrslu_reactive()$dagsetning), linetype="dotted", color="dodgerblue")
   if(input$show_legend_skyrslur==TRUE){
-    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) 
+    ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label'))
   }
   else{
     ggplotly(p, tooltip = list('linetype', 'date', 'value', 'label')) %>%
@@ -237,10 +234,8 @@ Stillingar {.sidebar}
 ---------------------------------------------------
 
 ```{r stillingar visual}
-
-#Calender dagsetningar
 dateInput('dagsetning', 'Dagsetning:',
-          value = Sys.Date() - 1, min = min(historical_data$date), max = Sys.Date() + 30)
+          value = Sys.Date() - 1, min = min(historical_data$date), max = date_data-1)
 
 # selectInput til að ákveða hvað á að sýna
 selectInput('choose_visual_gauge', "Veldu upplýsingar til að sjá á mæli", choices = c("Hlutfall sjúklinga sem hafa verið með einkenni í færri en sex daga", "Hlutfall sjúklinga eldri en 50 ára", "Hlutfall sjúklinga með undirliggjandi sjúkdóma"), multiple = FALSE)
@@ -306,13 +301,13 @@ renderValueBox({
 })
 ```
 
-tölfræðilegt output gauge text {data-height=100}
+tölfræðilegt output gauge text {data-height=100px}
 -------------------------------
 
 #### `r renderText(paste(input$choose_visual_gauge))`
 
 
-tölfræðilegt output gauge {data-height=250}
+tölfræðilegt output gauge {data-height=220px}
 -------------------------------
 
 ```{r output in gauge}
@@ -353,7 +348,75 @@ renderGauge({
 })
 ```
 
-tölfræðilegt output graph text {data-height=100}
+row na gauge {data-height=55px}
+-------------------------------
+
+```{r}
+count_na_gauge <- reactive({
+   switch(input$choose_visual_gauge,
+          "Hlutfall sjúklinga sem hafa verið með einkenni í færri en sex daga" = count_na_symptoms(),
+          "Hlutfall sjúklinga eldri en 50 ára" = count_na_age(),
+          "Hlutfall sjúklinga með undirliggjandi sjúkdóma" = count_na_comorbidities()
+          )
+})
+
+count_na_gauge_home <- reactive({
+  dat <- count_na_gauge() %>% filter(state=="home")
+  nrow(dat)
+})
+
+count_na_gauge_iw <- reactive({
+  dat <- count_na_gauge() %>% filter(state=="inpatient_ward")
+  nrow(dat)
+})
+
+count_na_gauge_icu <- reactive({
+  dat <- count_na_gauge() %>% filter(state=="intensive_care_unit")
+  nrow(dat)
+})
+
+renderPlot({
+  if(count_na_gauge_home()==1){
+    text=paste0("Gildi vantar frá ", count_na_gauge_home(), " einstaklingi")
+  }
+  else{
+    text=paste0("Gildi vantar frá ", count_na_gauge_home(), " einstaklingum")
+  }
+  par(mar = c(0,0,0,0))
+    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
+    text(x = 0.8, y = 0.97, text, 
+     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+})
+
+renderPlot({
+  if(count_na_gauge_iw()==1){
+    text=paste0("Gildi vantar frá ", count_na_gauge_iw(), " einstaklingi")
+  }
+  else{
+    text=paste0("Gildi vantar frá ", count_na_gauge_iw(), " einstaklingum")
+  }
+  par(mar = c(0,0,0,0))
+    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
+    text(x = 0.8, y = 0.97, text, 
+     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+})
+
+renderPlot({
+  if(count_na_gauge_icu()==1){
+    text=paste0("Gildi vantar frá ", count_na_gauge_icu(), " einstaklingi")
+  }
+  else{
+    text=paste0("Gildi vantar frá ", count_na_gauge_icu(), " einstaklingum")
+  }
+  par(mar = c(0,0,0,0))
+    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
+    text(x = 0.8, y = 0.97, text, 
+     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+})
+```
+
+
+tölfræðilegt output graph text {data-height=100px}
 -------------------------------
 
 #### `r renderText(paste(input$choose_visual_graph))`
@@ -399,6 +462,74 @@ renderPlotly({
 })
 ```
 
+row_na_graph {data-height=35px}
+--------------
+
+```{r}
+count_na_graph <- reactive({
+   switch(input$choose_visual_graph,
+          "Tími frá upphafi einkenna" = count_na_symptoms(),
+          "Aldur" = count_na_age(),
+          "Fjöldi undirliggjandi sjúkdóma" = count_na_comorbidities()
+          )
+})
+
+count_na_graph_home <- reactive({
+  dat <- count_na_graph() %>% filter(state=="home")
+  nrow(dat)
+})
+
+count_na_graph_iw <- reactive({
+  dat <- count_na_graph() %>% filter(state=="inpatient_ward")
+  nrow(dat)
+})
+
+count_na_graph_icu <- reactive({
+  dat <- count_na_graph() %>% filter(state=="intensive_care_unit")
+  nrow(dat)
+})
+
+renderPlot({
+  if(count_na_graph_home()==1){
+    text=paste0("Gildi vantar frá ", count_na_graph_home(), " einstaklingi")
+  }
+  else{
+    text=paste0("Gildi vantar frá ", count_na_graph_home(), " einstaklingum")
+  }
+  par(mar = c(0,0,0,0))
+    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
+    text(x = 0.8, y = 0.5, text, 
+     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+})
+
+renderPlot({
+  if(count_na_graph_iw()==1){
+    text=paste0("Gildi vantar frá ", count_na_graph_iw(), " einstaklingi")
+  }
+  else{
+    text=paste0("Gildi vantar frá ", count_na_graph_iw(), " einstaklingum")
+  }
+  par(mar = c(0,0,0,0))
+    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
+    text(x = 0.8, y = 0.5, text, 
+     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+})
+
+renderPlot({
+  if(count_na_graph_icu()==1){
+    text=paste0("Gildi vantar frá ", count_na_graph_icu(), " einstaklingi")
+  }
+  else{
+    text=paste0("Gildi vantar frá ", count_na_graph_icu(), " einstaklingum")
+  }
+  par(mar = c(0,0,0,0))
+    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
+    text(x = 0.8, y = 0.5, text, 
+     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+})
+
+```
+
 <!--tolfrædi sjuklinga aldur - gauge data -->
 
 ```{r data visual hlutfall}
@@ -409,6 +540,11 @@ patients_data <- reactive({
                         group_by(splitting_variable) %>%
                         filter(date == input$dagsetning) %>%
                         ungroup()
+})
+
+count_na_age <- reactive({
+  patients_data() %>% 
+    filter(is.na(age))
 })
 
 ratio_age_home <- reactive({
@@ -439,8 +575,6 @@ ratio_age_icu <- reactive({
 <!--tolfrædi sjuklinga aldur - gauge -->
 
 ```{r gauge heima}
-### Heimaeinangrun {data-height=300}
-
 hlutfall_sjuklinga_51_gauge_home <- reactive({
   if("age_51+" %in% ratio_age_home()$splitting_variable){
   if("age_0-50" %in% ratio_age_home()$splitting_variable){
@@ -456,7 +590,6 @@ hlutfall_sjuklinga_51_gauge_home <- reactive({
 ```
 
 ```{r gauge lega}
-### Legudeild {data-height=300}
 hlutfall_sjuklinga_51_gauge_iw <- reactive({
   if("age_51+" %in% ratio_age_iw()$splitting_variable){
   if("age_0-50" %in% ratio_age_iw()$splitting_variable){
@@ -472,8 +605,6 @@ hlutfall_sjuklinga_51_gauge_iw <- reactive({
 ```
 
 ```{r gauge icu}
-### Gjörgæsla {data-height=300}
-
 hlutfall_sjuklinga_51_gauge_icu <- reactive({
   if("age_51+" %in% ratio_age_icu()$splitting_variable){
   if("age_0-50" %in% ratio_age_icu()$splitting_variable){
@@ -490,7 +621,7 @@ hlutfall_sjuklinga_51_gauge_icu <- reactive({
 
 <!--tölfræði sjuklinga einkenni og dagar data-->
 ```{r data visual 6}
-symptoms <- reactive({
+symptoms_unfiltered <- reactive({
                     get_patient_transitions_at_date('base', date_observed = date_data) %>%
                        inner_join(individs_extended, by = 'patient_id') %>%
                        group_by(patient_id) %>%
@@ -499,9 +630,18 @@ symptoms <- reactive({
                        mutate(less_than_six_days_with_symptoms = 
                                 if_else(date - date_first_symptoms <= 6, "Yes", "No")) %>%
                        mutate(days_since_symptoms = as.numeric(date-date_first_symptoms)) %>%
-                       mutate(days_since_symptoms = if_else(days_since_symptoms<0, 0, days_since_symptoms)) %>%
+                       mutate(days_since_symptoms = if_else(days_since_symptoms<0, 0, days_since_symptoms))
+})
+
+symptoms <- reactive({
+                    symptoms_unfiltered() %>%
                        filter(!is.na(days_since_symptoms)) %>%
                        filter(!is.na(less_than_six_days_with_symptoms))
+})
+
+count_na_symptoms <- reactive({
+                    symptoms_unfiltered() %>%
+                       filter(is.na(date_first_symptoms))
 })
 
 symptoms_home <- reactive({
@@ -532,7 +672,6 @@ symptoms_icu <- reactive({
 
 
 ```{r gauge heima 6}
-### Heimaeinangrun {data-height=300}
 hlutfall_sjuklinga_6_gauge_home <- reactive({
   if("Yes" %in% symptoms_home()$less_than_six_days_with_symptoms){
   if("No" %in% symptoms_home()$less_than_six_days_with_symptoms){
@@ -548,7 +687,6 @@ hlutfall_sjuklinga_6_gauge_home <- reactive({
 ```
 
 ```{r gauge lega 6}
-### Legudeild {data-height=300}
 hlutfall_sjuklinga_6_gauge_iw <- reactive({
   if("Yes" %in% symptoms_iw()$less_than_six_days_with_symptoms){
   if("No" %in% symptoms_iw()$less_than_six_days_with_symptoms){
@@ -564,7 +702,6 @@ hlutfall_sjuklinga_6_gauge_iw <- reactive({
 ```
 
 ```{r gauge icu 6}
-### Gjörgæsla {data-height=300}
 hlutfall_sjuklinga_6_gauge_icu <- reactive({
   if("Yes" %in% symptoms_icu()$less_than_six_days_with_symptoms){
   if("No" %in% symptoms_icu()$less_than_six_days_with_symptoms){
@@ -582,7 +719,6 @@ hlutfall_sjuklinga_6_gauge_icu <- reactive({
 <!-- Dreifing á dögum frá upphafi einkenna -->
 
 ```{r}
-### Heimaeinangrun
 plot_symptoms_start_home <- reactive({
   ggplot(data=filter(symptoms(), state=="home"), aes(days_since_symptoms)) + 
     geom_bar(color=color_palette[1], fill=color_palette[1], alpha=0.5) + 
@@ -594,7 +730,6 @@ plot_symptoms_start_home <- reactive({
 ```
 
 ```{r}
-### Legudeild
 plot_symptoms_start_iw <- reactive({
   ggplot(data=filter(symptoms(), state=="inpatient_ward"), aes(days_since_symptoms)) + 
     geom_bar(color=color_palette[2], fill=color_palette[2], alpha=0.5) + 
@@ -606,7 +741,6 @@ plot_symptoms_start_iw <- reactive({
 ```
 
 ```{r}
-### Gjörgæsla
 plot_symptoms_start_icu <- reactive({
   ggplot(data=filter(symptoms(), state=="intensive_care_unit"), aes(days_since_symptoms)) + 
     geom_bar(color=color_palette[3], fill=color_palette[3], alpha=0.5) + 
@@ -620,7 +754,6 @@ plot_symptoms_start_icu <- reactive({
 <!-- Dreifing á aldri -->
 
 ```{r}
-### Heimaeinangrun
 plot_age_home <- reactive({
   ggplot(data=filter(patients_data(), state=="home"), aes(age_official)) + 
     geom_bar(color=color_palette[1], fill=color_palette[1], alpha=0.5) + 
@@ -631,7 +764,6 @@ plot_age_home <- reactive({
 ```
 
 ```{r}
-### Legudeild
 plot_age_iw <- reactive({
   ggplot(data=filter(patients_data(), state=="inpatient_ward"), aes(age)) + 
     geom_bar(color=color_palette[2], fill=color_palette[2], alpha=0.5) + 
@@ -642,7 +774,6 @@ plot_age_iw <- reactive({
 ```
 
 ```{r}
-### Gjörgæsla
 plot_age_icu <- reactive({
   ggplot(data=filter(patients_data(), state=="intensive_care_unit"), aes(age)) + 
     geom_bar(color=color_palette[3], fill=color_palette[3], alpha=0.5) + 
@@ -655,13 +786,22 @@ plot_age_icu <- reactive({
 <!--tölfræði sjuklinga undirliggjandi sjukdomar data-->
 
 ```{r}
-comorbidities_number <- reactive({
+comorbidities_number_unfiltered <- reactive({
                           get_patient_transitions_at_date('base', date_observed = date_data) %>%
                           inner_join(individs_extended, by = 'patient_id') %>%
                           filter(date == input$dagsetning) %>%
-                          select(patient_id, state, num_comorbidity) %>%
+                          select(patient_id, state, num_comorbidity)
+})
+
+comorbidities_number <- reactive({
+                          comorbidities_number_unfiltered() %>%
                           mutate(comorbidities = if_else(num_comorbidity == 0 | is.na(num_comorbidity), "No", "Yes")) %>%
                           filter(!is.na(num_comorbidity))
+})
+
+count_na_comorbidities <- reactive({
+                          comorbidities_number_unfiltered() %>%
+                            filter(is.na(num_comorbidity))
 })
 
 comorbidities_number_home <- reactive({
@@ -692,7 +832,6 @@ comorbidities_number_icu <- reactive({
 <!--tölfræði sjuklinga undirliggjandi sjukdomar gauge-->
 
 ```{r gauge heima comorbidity}
-### Heimaeinangrun {data-height=300}
 hlutfall_sjuklinga_num_comorbidity_home <- reactive({
   if("Yes" %in% comorbidities_number_home()$comorbidities){
   if("No" %in% comorbidities_number_home()$comorbidities){
@@ -708,7 +847,6 @@ hlutfall_sjuklinga_num_comorbidity_home <- reactive({
 ```
 
 ```{r gauge lega comorbidity}
-### Legudeild {data-height=300}
 hlutfall_sjuklinga_num_comorbidity_iw <- reactive({
   if("Yes" %in% comorbidities_number_iw()$comorbidities){
   if("No" %in% comorbidities_number_iw()$comorbidities){
@@ -724,7 +862,6 @@ hlutfall_sjuklinga_num_comorbidity_iw <- reactive({
 ```
 
 ```{r gauge icu comorbidity}
-### Gjörgæsla {data-height=300}
 hlutfall_sjuklinga_num_comorbidity_icu <- reactive({
   if("Yes" %in% comorbidities_number_icu()$comorbidities){
   if("No" %in% comorbidities_number_icu()$comorbidities){
@@ -742,8 +879,6 @@ hlutfall_sjuklinga_num_comorbidity_icu <- reactive({
 <!--Dreifing á fjölda undirliggjandi sjukdoma -->
 
 ```{r}
-#ATH kannski betra að hafa dreifingu sem segir : 3 eru með háþrýsting, 4 með sykursýki osfrv.
-### Heimaeinangrun
 plot_num_comorbidity_home <- reactive({
     ggplot(data=filter(comorbidities_number(), state=="home"), aes(num_comorbidity)) + 
     geom_bar(color=color_palette[1], fill=color_palette[1], alpha=0.5) + 
@@ -754,7 +889,6 @@ plot_num_comorbidity_home <- reactive({
 ```
 
 ```{r}
-### Legudeild
 plot_num_comorbidity_iw <- reactive({
     ggplot(data=filter(comorbidities_number(), state=="inpatient_ward"), aes(num_comorbidity)) + 
     geom_bar(color=color_palette[2], fill=color_palette[2], alpha=0.5) + 
@@ -765,7 +899,6 @@ plot_num_comorbidity_iw <- reactive({
 ```
 
 ```{r}
-### Gjörgæsla
 plot_num_comorbidity_icu <- reactive({
     ggplot(data=filter(comorbidities_number(), state=="intensive_care_unit"), aes(num_comorbidity)) + 
     geom_bar(color=color_palette[3], fill=color_palette[3], alpha=0.5) + 
@@ -1290,7 +1423,7 @@ ggplotly(p, tooltip = list('linetype', 'date', 'value')) %>%
 })
 ```
 
-Eigin spá {id=manual_spa data-icon="fa-virus"}
+Eigin spá um smit {id=manual_spa data-icon="fa-virus"}
 ==========================
 
 Stillingar {.sidebar}
@@ -1302,7 +1435,6 @@ hr()
 numericInput("manual_S", 'Fjöldi smita (S)',
             min = 10, max = pop_iceland, step = 1, value = 100)
 checkboxInput('val_stikar', 'Nota nákvæmari stika', value = FALSE)
-#radioButtons('val_stikar', 'Stikar:', choices = c('Einfaldir', 'Flóknir'), selected = 'Einfaldir')
 hr()
 
 sliderInput("manual_alpha", 'Hliðrun (α)',
@@ -1431,3 +1563,4 @@ p <- ggplot(smit_folk_manual()) +
 ggplotly(p)
 })
 ```
+
