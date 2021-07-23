@@ -1102,9 +1102,12 @@ hr()
 dateInput('logistic_start_date', 'Dagsetning fyrsta smits',
           value = Sys.Date() + 1, min = '2020-05-01', max = Sys.Date() + 120)
 hr()
+numericInput("hospital_prob_input", 'Líkur á innlögn',
+            min = 0, max = 1, step = 0.001, value = 0.005)
+hr()
 
-#Aldursdreifing
-radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('Covid-19', 'Covid-19 án fyrstu bylgju', 'Þjóðar', 'Skv. stillingu:'))
+#Aldursdreifing (4. bylgja frá 23. júlí)
+radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('4. bylgja', 'Covid-19', 'Covid-19 án fyrstu bylgju', 'Þjóðar', 'Skv. stillingu:'))
 conditionalPanel(
   "input.logistic_aldur_val == 'Skv. stillingu:'",
   sliderInput("logistic_aldur_dreif1",
@@ -1238,6 +1241,9 @@ aldur_faraldur2_logistic <- get_patient_transitions_at_date('base', date_observe
     ungroup() %>%
     mutate(prop=prop/sum(prop))
 
+aldur_faraldur4_logistic <- aldur_faraldur_logistic %>%
+  mutate(prop=c(12, 20, 170, 78, 24, 30, 23, 13, 1)/371)
+
 aldur_hagstofa_logistic <- read_delim("dashboard/aldur_hagstofa.csv", ";", escape_double = FALSE,
                              locale = locale(encoding = "ISO-8859-2"), trim_ws = TRUE, col_types = cols())
 
@@ -1290,6 +1296,8 @@ age_dist_logistic <- reactive({
    aldur_faraldur_logistic
   else if (input$logistic_aldur_val == 'Covid-19 án fyrstu bylgju')
    aldur_faraldur2_logistic
+  else if (input$logistic_aldur_val == '4. bylgja')
+   aldur_faraldur4_logistic
   else if (input$logistic_aldur_val == 'Skv. stillingu:')
     aldur_stilling_logistic()
   else
@@ -1378,7 +1386,7 @@ infected_distr_logistic <- smit_folk_logis() %>%
                   #group_by(date) %>%
                   mutate("prob"=1)
 
-ferguson_data_logistic <- run_ferguson_simulation_new(infected_distr_logistic, los_dist_logistic(), age_dist_logistic())
+ferguson_data_logistic <- run_ferguson_simulation_new(infected_distr_logistic, los_dist_logistic(), age_dist_logistic(), input$hospital_prob_input)
 ferguson_data_logistic %>%
           mutate(state=ifelse(state=="hospital", "inpatient_ward", state))
 })
