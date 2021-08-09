@@ -208,7 +208,7 @@ run_ferguson_simulation <- function(splitting_variable_name,infected_distr,trans
 
 #Nýtt Ferguson simulation með best LOS
 
-run_ferguson_simulation_new <- function(infected_distr, los, splitting_distribution, hospital_prob=NULL){
+run_ferguson_simulation_new <- function(infected_distr, los, splitting_distribution, hospital_prob=NULL, icu_prob=NULL){
     transition_prob <- patient_transitions_state_blocks %>%
         inner_join(select(individs_splitting_variables,patient_id,matches(paste0('^','age_official','$'))),by='patient_id') %>%
         rename(splitting_variable=!!'age_official') %>%
@@ -222,6 +222,10 @@ run_ferguson_simulation_new <- function(infected_distr, los, splitting_distribut
     if(!is.null(hospital_prob)){
         transition_prob <- transition_prob %>%
             mutate(p_hospital=if_else(p_hospital>hospital_prob, hospital_prob, p_hospital))
+    }
+    if(!is.null(icu_prob)){
+        transition_prob <- transition_prob %>%
+            mutate(p_icu=if_else(p_icu>icu_prob, icu_prob, p_icu))
     }
 
     dates <- seq(min(infected_distr$date), max(infected_distr$date),by=1)

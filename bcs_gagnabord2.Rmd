@@ -1103,11 +1103,18 @@ dateInput('logistic_start_date', 'Dagsetning fyrsta smits',
           value = Sys.Date() + 1, min = '2020-05-01', max = Sys.Date() + 120)
 hr()
 numericInput("hospital_prob_input", 'Líkur á innlögn',
-            min = 0, max = 1, step = 0.001, value = 0.005)
+            min = 0, max = 1, step = 0.001, value = 0.016)
+numericInput("icu_prob_input", 'Líkur á gjörgæsluinnlögn',
+            min = 0, max = 1, step = 0.001, value = 0.02)
 hr()
 
 #Aldursdreifing (4. bylgja frá 23. júlí)
-radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('4. bylgja', 'Covid-19', 'Covid-19 án fyrstu bylgju', 'Þjóðar', 'Skv. stillingu:'))
+radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('Frá dagsetningu:', 'Covid-19', 'Þjóðar', 'Skv. stillingu:'))
+conditionalPanel(
+  "input.logistic_aldur_val == 'Frá dagsetningu:'",
+  dateInput('age_dist_start_date', 'Dagsetning aldursdreifingar',
+          value = '2021-07-01', min = '2020-02-28', max = Sys.Date() - 30)
+)
 conditionalPanel(
   "input.logistic_aldur_val == 'Skv. stillingu:'",
   sliderInput("logistic_aldur_dreif1",
@@ -1118,6 +1125,18 @@ conditionalPanel(
               min = 0, max = 10, step=0.1, value = c(5))
 )
 hr()
+checkboxInput('eigin_spa_svidsmyndir', 'Nota spá úr "Eigin spá um smit"', value=FALSE)
+observeEvent(input$eigin_spa_svidsmyndir, {
+  if(input$eigin_spa_svidsmyndir==TRUE){
+    updateCheckboxInput(session, "val_stikar_logistic", value = TRUE)
+        updateDateInput(session, "logistic_start_date", value = input$manual_start_date)
+        updateNumericInput(session, "logistic_S", value = input$manual_S)
+        updateSliderInput(session, "logistic_alpha", value = input$manual_alpha)
+        updateSliderInput(session, "logistic_beta_complex", value = input$manual_beta_complex)
+        updateSliderInput(session, "logistic_nu_complex", value = input$manual_nu_complex)
+        updateSliderInput(session, "logistic_dagar", value = input$manual_dagar)
+  }
+})
 #Stikar
 pop_iceland <- 364134
 numericInput("logistic_S", 'Fjöldi smita (S)',
@@ -1230,19 +1249,21 @@ aldur_faraldur_logistic <- get_patient_transitions_at_date('base', date_observed
     ungroup() %>%
     mutate(prop=prop/sum(prop))
 
-aldur_faraldur2_logistic <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
+aldur_faraldur2_logistic <- reactive({
+  get_patient_transitions_at_date('base', date_observed = date_data) %>%
     distinct(patient_id) %>%
     inner_join(individs_splitting_variables,by='patient_id') %>%
     inner_join(select(individs_extended, patient_id, date_diagnosis), by='patient_id') %>%
-    filter(date_diagnosis>ymd("2020-07-22")) %>%
+    filter(date_diagnosis>input$age_dist_start_date) %>%
     rename(splitting_variable=!!'age_official') %>%
     group_by(splitting_variable) %>%
     summarise(prop=n()) %>%
     ungroup() %>%
     mutate(prop=prop/sum(prop))
+})
 
-aldur_faraldur4_logistic <- aldur_faraldur_logistic %>%
-  mutate(prop=c(12, 20, 170, 78, 24, 30, 23, 13, 1)/371)
+# aldur_faraldur4_logistic <- aldur_faraldur_logistic %>%
+#   mutate(prop=c(12, 20, 170, 78, 24, 30, 23, 13, 1)/371)
 
 aldur_hagstofa_logistic <- read_delim("dashboard/aldur_hagstofa.csv", ";", escape_double = FALSE,
                              locale = locale(encoding = "ISO-8859-2"), trim_ws = TRUE, col_types = cols())
@@ -1294,10 +1315,8 @@ age_dist_logistic <- reactive({
     aldur_hagstofa_logistic
   else if (input$logistic_aldur_val == 'Covid-19')
    aldur_faraldur_logistic
-  else if (input$logistic_aldur_val == 'Covid-19 án fyrstu bylgju')
-   aldur_faraldur2_logistic
-  else if (input$logistic_aldur_val == '4. bylgja')
-   aldur_faraldur4_logistic
+  else if (input$logistic_aldur_val == 'Frá dagsetningu:')
+   aldur_faraldur2_logistic()
   else if (input$logistic_aldur_val == 'Skv. stillingu:')
     aldur_stilling_logistic()
   else
@@ -1386,7 +1405,7 @@ infected_distr_logistic <- smit_folk_logis() %>%
                   #group_by(date) %>%
                   mutate("prob"=1)
 
-ferguson_data_logistic <- run_ferguson_simulation_new(infected_distr_logistic, los_dist_logistic(), age_dist_logistic(), input$hospital_prob_input)
+ferguson_data_logistic <- run_ferguson_simulation_new(infected_distr_logistic, los_dist_logistic(), age_dist_logistic(), input$hospital_prob_input, input$icu_prob_input)
 ferguson_data_logistic %>%
           mutate(state=ifelse(state=="hospital", "inpatient_ward", state))
 })
