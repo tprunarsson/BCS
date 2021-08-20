@@ -39,8 +39,12 @@ get_current_state_per_date <- function(model,date_observed,max_splitting_dat){
 }
 
 ################# ----- First state of individuals diagnosed with COVID-19 infection ---- #############
-get_first_state <- function(model,date_observed,max_splitting_dat){
-    transitions <- get_patient_transitions_at_date(model,date_observed)
+get_first_state <- function(model,date_observed,max_splitting_dat,filter_date_first_state){
+    transitions <- get_patient_transitions_at_date(model,date_observed) %>% 
+      group_by(patient_id) 
+    if(!is.na(filter_date_first_state)){
+      transitions <- transitions %>% filter(date>=filter_date_first_state)
+    }
     active_states <- factor(get_states_in_order(model,active=T))
     max_splitting_values <- filter(max_splitting_dat,!duplicated(max_splitting_values)) %>%
                             arrange(max_splitting_order) %>%
@@ -65,14 +69,18 @@ get_first_state <- function(model,date_observed,max_splitting_dat){
 }
 
 ################# ----- Transition counts between states ---- #############
-get_transition_summary <- function(model,date_observed,recovered_imputed_date_observed,s,splitting_variable_name,max_splitting_mapping,time_splitting_variable_name,prior_info){
+get_transition_summary <- function(model,date_observed,recovered_imputed_date_observed,s,splitting_variable_name,max_splitting_mapping,time_splitting_variable_name,prior_info,filter_date_transition){
     splitting_variable_mapping <- get_splitting_variable_mapping(splitting_variable_name,max_splitting_mapping)
     splitting_variable_values <- unique(splitting_variable_mapping$splitting_variable)
     if(model=='ferguson'){
         return(get_ferguson_transition_summary(s,splitting_variable_name,splitting_variable_mapping,time_splitting_variable_name,prior_info))
     }
     transitions <- get_patient_transitions_at_date(model,date_observed) %>%
-                    select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow)
+                    select(patient_id,date,state,severity,state_tomorrow,severity_tomorrow) 
+    if(!is.na(filter_date_transition)){
+      id <- transitions %>% filter(date<=filter_date_transition)
+      transitions <- transitions %>% filter(!(patient_id %in% id$patient_id))
+    }
     transitions_state_blocks <- get_patient_transitions_state_blocks(transitions,model) %>%
                                 filter(.,!censored,grepl(s,state)) %>%
                                 select(.,patient_id,state_block_nr,state,state_next,state_duration) %>%
@@ -120,13 +128,17 @@ get_transition_summary <- function(model,date_observed,recovered_imputed_date_ob
 
 
 ################# ----- Statistical inference of length of stay distributions ---- #############
-get_length_of_stay_predicted <- function(model,date_observed,s,splitting_variable_name,max_splitting_mapping,distr='lognormal',max_num_days=59,fitted,prior_info){
+get_length_of_stay_predicted <- function(model,date_observed,s,splitting_variable_name,max_splitting_mapping,distr='lognormal',max_num_days=59,fitted,prior_info,filter_date_los){
     splitting_variable_mapping <- get_splitting_variable_mapping(splitting_variable_name,max_splitting_mapping)
     splitting_variable_values <- unique(splitting_variable_mapping$splitting_variable)
     if(model=='ferguson'){
         return(get_ferguson_length_of_stay(s,splitting_variable_name,splitting_variable_mapping,prior_info))
     }
     transitions <- get_patient_transitions_at_date(model,date_observed)
+    if(!is.na(filter_date_los)) {
+      id <- transitions %>% filter(date<=filter_date_los)
+      transitions <- transitions %>% filter(!(patient_id %in% id$patient_id))
+    }
     transitions_state_blocks <- get_patient_transitions_state_blocks(transitions,model)
     all_active_states <- get_states_in_order(model,active=T)
     if(splitting_variable_name %in% names(individs_splitting_variables)){
@@ -351,7 +363,7 @@ get_run_info <- function(current_run_id){
 
 
 ############### ------- get tables specific for experiment ------------------
-get_tables_for_experiment <- function(id,dates_observed){
+get_tables_for_experiment <- function(id,dates_observed,filter_date_transition,filter_date_first_state,filter_date_los){
     experiment_info <- filter(run_info,experiment_id==id)
     model <- experiment_info$model
     prior_info <- experiment_info$prior_info
@@ -382,12 +394,12 @@ get_tables_for_experiment <- function(id,dates_observed){
     transition_summary_list <- list()
     length_of_stay_list <- list()
     for(date_observed in dates_observed){ 
-        first_state_list[[date_observed]] <- get_first_state(model,date_observed,max_splitting_dat)# %>% get_cdf(.,num_groups = 1)
+        first_state_list[[date_observed]] <- get_first_state(model,date_observed,max_splitting_dat,filter_date_first_state)# %>% get_cdf(.,num_groups = 1)
         transition_summary_list[[date_observed]] <-lapply(1:length(states),function(i){
-            get_transition_summary(model,date_observed,select(filter(recovered_imputed,date==date_observed),-date),states[i],transition_splitting_variable_names[i],max_splitting_mapping,transition_time_splitting_variable_names[i],prior_info)
+            get_transition_summary(model,date_observed,select(filter(recovered_imputed,date==date_observed),-date),states[i],transition_splitting_variable_names[i],max_splitting_mapping,transition_time_splitting_variable_names[i],prior_info,filter_date_transition)
         }) %>% bind_rows() %>% arrange(splitting_variable,state,time_splitting_variable,state_next)# %>% get_cdf(.,num_groups = 2)
         length_of_stay_list[[date_observed]] <-lapply(1:length(states),function(i){
-            get_length_of_stay_predicted(model,date_observed,states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 59,fitted=fitted_vec[i],prior_info)
+            get_length_of_stay_predicted(model,date_observed,states[i],length_of_stay_splitting_variable_names[i],max_splitting_mapping,distr='lognormal',max_num_days = 59,fitted=fitted_vec[i],prior_info,filter_date_los)
         }) %>% bind_rows() %>% arrange(state,splitting_variable)# %>% get_cdf(.,num_groups = 2)
     }
     first_state <- bind_rows(first_state_list,.id='date') %>% mutate(date=dates_observed[as.numeric(date)])

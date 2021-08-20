@@ -208,16 +208,32 @@ run_ferguson_simulation <- function(splitting_variable_name,infected_distr,trans
 
 #Nýtt Ferguson simulation með best LOS
 
-run_ferguson_simulation_new <- function(infected_distr, los, splitting_distribution, hospital_prob=NULL, icu_prob=NULL){
-    transition_prob <- patient_transitions_state_blocks %>%
-        inner_join(select(individs_splitting_variables,patient_id,matches(paste0('^','age_official','$'))),by='patient_id') %>%
-        rename(splitting_variable=!!'age_official') %>%
-        group_by(patient_id,splitting_variable) %>%
-        summarise(hospital=any(state!='home'),icu=any(state=='intensive_care_unit'),death=any(if_else(is.na(state_next),FALSE,state_next=='death'))) %>%
-        group_by(splitting_variable) %>%
-        summarise(p_hospital=sum(hospital)/n(),p_icu=sum(icu)/sum(hospital),p_death=sum(death)/n()) %>%
-        ungroup() %>%
-        mutate(p_icu=if_else(is.na(p_icu),0,as.numeric(p_icu)))
+run_ferguson_simulation_new <- function(infected_distr, los, splitting_distribution, hospital_prob=NULL, icu_prob=NULL, vax){
+    if(vax){
+        transition_prob <- patient_transitions_state_blocks %>%
+            inner_join(select(individs_splitting_variables,patient_id,vacc_at_diagnosis,matches(paste0('^','age_official','$'))),by='patient_id') %>%
+            rename(splitting_variable=!!'age_official') %>%
+            group_by(patient_id,splitting_variable, vacc_at_diagnosis) %>%
+            summarise(hospital=any(state!='home'),icu=any(state=='intensive_care_unit'),death=any(if_else(is.na(state_next),FALSE,state_next=='death'))) %>%
+            group_by(splitting_variable, vacc_at_diagnosis) %>%
+            summarise(p_hospital=sum(hospital)/n(),p_icu=sum(icu)/sum(hospital),p_death=sum(death)/n()) %>%
+            ungroup() %>%
+            unite(splitting_variable, splitting_variable, vacc_at_diagnosis, sep="_", remove = TRUE) %>%
+            full_join(select(splitting_distribution, splitting_variable)) %>%
+            mutate(p_icu=if_else(is.na(p_icu),0,as.numeric(p_icu)), p_hospital=if_else(is.na(p_hospital),0,as.numeric(p_hospital)), p_death=if_else(is.na(p_death),0,as.numeric(p_death))) %>%
+            arrange(splitting_variable)
+    }
+    else{
+        transition_prob <- patient_transitions_state_blocks %>%
+            inner_join(select(individs_splitting_variables,patient_id,matches(paste0('^','age_official','$'))),by='patient_id') %>%
+            rename(splitting_variable=!!'age_official') %>%
+            group_by(patient_id,splitting_variable) %>%
+            summarise(hospital=any(state!='home'),icu=any(state=='intensive_care_unit'),death=any(if_else(is.na(state_next),FALSE,state_next=='death'))) %>%
+            group_by(splitting_variable) %>%
+            summarise(p_hospital=sum(hospital)/n(),p_icu=sum(icu)/sum(hospital),p_death=sum(death)/n()) %>%
+            ungroup() %>%
+            mutate(p_icu=if_else(is.na(p_icu),0,as.numeric(p_icu)), p_hospital=if_else(is.na(p_hospital),0,as.numeric(p_hospital)), p_death=if_else(is.na(p_death),0,as.numeric(p_death)))
+    }
     
     if(!is.null(hospital_prob)){
         transition_prob <- transition_prob %>%
@@ -301,17 +317,36 @@ plot_ferguson_prediction_state <- function(state_f, prediction_dat, color_state)
         theme_minimal()
 }
 
-plot_age_distribution <- function(age_distribution){
-    age_distribution <- age_distribution %>% 
-        mutate(splitting_variable=str_replace(splitting_variable, "age_", "")) %>% 
-        mutate(prop=100*round(prop, 3)) %>%
-        rename(Aldur=splitting_variable, Prósenta=prop)
-    
-    ggplot(data=age_distribution, aes(x=Aldur, y=Prósenta)) + geom_col(col="#84a9ac", fill="#84a9ac") + 
-        labs(x=NULL, y="Prósenta") + 
-        theme_minimal() +
-        theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)) +
-        scale_y_continuous(labels = function(x) paste0(x, "%"))
+plot_age_distribution <- function(age_distribution, vax){
+    if(vax){
+        age_distribution <- age_distribution %>% 
+            mutate(splitting_variable=str_replace(splitting_variable, "age_", "")) %>% 
+            mutate(prop=100*round(prop, 3)) %>%
+            rename(Aldur=splitting_variable, Prósenta=prop, Bólusetningarstaða=vacc_at_diagnosis) %>%
+            mutate(Bólusetningarstaða=if_else(Bólusetningarstaða, "Bólusett", "Óbólusett"))
+        p <- ggplot(data=age_distribution, aes(x=Aldur, y=Prósenta, fill=Bólusetningarstaða, color=Bólusetningarstaða)) + 
+            geom_col() + 
+            scale_color_manual(values = c("#99c3c7", "#84a9ac")) + 
+            scale_fill_manual(values = c("#99c3c7", "#84a9ac")) + 
+            labs(x=NULL, y="Prósenta", fill=NULL, color=NULL) + 
+            theme_minimal() +
+            theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)) +
+            theme(legend.position = "none") +
+            scale_y_continuous(labels = function(x) paste0(x, "%"))
+    }
+    else{
+        age_distribution <- age_distribution %>% 
+            mutate(splitting_variable=str_replace(splitting_variable, "age_", "")) %>% 
+            mutate(prop=100*round(prop, 3)) %>%
+            rename(Aldur=splitting_variable, Prósenta=prop)
+        p <- ggplot(data=age_distribution, aes(x=Aldur, y=Prósenta)) + 
+            geom_col(color="#84a9ac", fill="#84a9ac") + 
+            labs(x=NULL, y="Prósenta") + 
+            theme_minimal() +
+            theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)) +
+            scale_y_continuous(labels = function(x) paste0(x, "%"))
+    }
+    return(p)
 }
 
 plot_skyrsla <- function(state_f, prediction_dat, historical_dat, color_state){
@@ -356,3 +391,32 @@ plot_outpatient <- function(prediction_dat, state, color_state, historical_dat, 
         geom_point(data=filter(historical_dat, key==state), aes(y=count, label="Söguleg gögn")) + 
         theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
 }
+
+create_dt <- function(data){
+    DT::datatable(data,
+                  extensions = 'Buttons',
+                  options = list(dom = 'Blfrtip',
+                                 buttons = c('csv', 'excel'),
+                                 scrollX = TRUE,
+                                 lengthMenu = list(c(-1,10,25,50),
+                                                   c("All",10,25,50))))
+}
+
+getExtension <- function(file){ 
+    ex <- strsplit(basename(file), split="\\.")[[1]]
+    return(ex[-1])
+} 
+
+#Hermun fyrir börn (states: home, recovered).
+#Sampla hversu mörg börn veikjast daglega
+#Sampla length of stay
+# run_children_simulation <- function(){
+#     
+# }
+
+
+
+
+
+
+

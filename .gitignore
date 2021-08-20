@@ -9,3 +9,15 @@ input/
 output/
 output_lsh/
 covid2/
+outpatient_clinic_history/
+.DS_Store
+BCS.Rproj
+dashboard/.DS_Store
+lsh_data_processing/Rplots.pdf
+src/.DS_Store
+src/covid.o
+src/fileio.o
+src/rndlib.o
+src/simlib.o
+src/utils.o
+output_stats_group/

@@ -18,3 +18,4 @@ data.table
 optparse
 readxl
 tibble
+DT

@@ -1,25 +1,132 @@
-.navbar-inverse {
-  background-color: #2B4995;
-}
-.iris-bar, .iris-single {
-  background: #2B4995;
-}
-.btn-default {
-  color: #ddd;
-  background-color: #2B4995 !important;
-  border-radius: 15px;
-  margin: 20px 0 0 0;
-  padding: 3px 3px 3px 3px;
-  width: 60%;
-  margin-left: 20%;
-  margin-right: 20%
-}
-#groupInputs > div {
-  width: 45% !important;
-  float: left !important;
-  margin: 2px !important;
+.body {
+  background-color: white;
 }
 
 .shiny-output-error-validation {
         color: red;
+}
+
+.section.sidebar {
+  background-color: #e0e6ef;
+}
+
+.navbar {
+  background-color: #0067b8;
+  border-color:blue;
+}
+
+
+/* DROPDOWN */
+
+.dropdown-menu > li > a:hover,
+.dropdown-menu > li > a:focus {
+  text-decoration: none;
+  color: black;
+  background-color: #ddd;
+}
+.dropdown-menu > .active > a,
+.dropdown-menu > .active > a:hover,
+.dropdown-menu > .active > a:focus {
+  color: black;
+  text-decoration: none;
+  outline: 0;
+  background-color: #ddd;
+}
+
+/* BUTTON DEFAULT */
+
+.btn-default.btn {
+color: black;
+background-color: white;
+border: 1px black solid;
+}
+.btn-default.btn:hover {
+color: black;
+background-color: #d3dadb;
+}
+.btn-default.active {
+color: black;
+background-color: #b0bdbf;
+border-color: #b0bdbf;
+}
+
+/* NAVBAR */
+
+.navbar-inverse {
+  background-color: #2B4995;
+  border-color: white;
+}
+.navbar-inverse .navbar-brand {
+  color: white;
+}
+
+.navbar-inverse .navbar-text {
+  color: white;
+}
+.navbar-inverse .navbar-nav > li > a {
+  color: white;
+}
+.navbar-inverse .navbar-nav > li > a:hover,
+.navbar-inverse .navbar-nav > li > a:focus {
+  color: white;
+  background-color: #0067b8;
+}
+.navbar-inverse .navbar-nav > .active > a,
+.navbar-inverse .navbar-nav > .active > a:hover,
+.navbar-inverse .navbar-nav > .active > a:focus {
+  color: #555;
+  background-color: #e7e7e7;
+}
+.navbar-inverse .navbar-nav > .disabled > a,
+.navbar-inverse .navbar-nav > .disabled > a:hover,
+.navbar-inverse .navbar-nav > .disabled > a:focus {
+  color: #ccc;
+  background-color: transparent;
+}
+.navbar-inverse .navbar-toggle {
+  border-color: #ddd;
+}
+.navbar-inverse .navbar-toggle:hover,
+.navbar-inverse .navbar-toggle:focus {
+  background-color: #0067b8;
+}
+.navbar-inverse .navbar-toggle .icon-bar {
+  background-color:#0067b8;
+}
+.navbar-inverse .navbar-collapse,
+.navbar-inverse .navbar-form {
+  border-color: #e7e7e7;
+}
+.navbar-inverse .navbar-nav > .open > a,
+.navbar-inverse .navbar-nav > .open > a:hover,
+.navbar-inverse .navbar-nav > .open > a:focus {
+  color: #555;
+  background-color: #0067b8;
+}
+
+
+.nav-tabs-custom > .nav-tabs > li.active {
+  border-top-color: #0067b8; /*litlu fliparnir */
+}
+
+/* FLEIRA */
+
+.handler-primary {
+  background: #858585;
+}
+
+.checkbox-bs-primary input[type="checkbox"]:checked + label::before,
+.checkbox-bs-primary input[type="radio"]:checked + label::before {
+    background-color: #858585;
+    border-color: #858585;
+}
+.checkbox-primary input[type="checkbox"]:checked + label::before,
+.checkbox-primary input[type="radio"]:checked + label::before {
+    background-color: #858585;
+    border-color: #858585;
+}
+
+.bootstrap-switch .bootstrap-switch-handle-off.bootstrap-switch-primary,
+.bootstrap-switch .bootstrap-switch-handle-on.bootstrap-switch-primary {
+  background: #858585;
 }

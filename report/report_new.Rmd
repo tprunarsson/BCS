@@ -1,89 +1,146 @@
 ---
 title: "<center> <h1> Spá fyrir flæði Covid-19 sjúklinga í umsjón Landspítala </h1></center>"
 date: "<center> <h4> `r format(Sys.Date(), '%d-%m-%Y')` </h4></center>"
-output: html_document
+output: pdf_document
 ---
 
 ```{r, include=FALSE}
 library(tidyverse)
+library(lubridate)
 date_skyrsla <- Sys.Date()
-data <- read.csv(paste0(date_skyrsla, '_report_data.csv'))
-data$date <- as.Date(data$date, "%Y-%m-%d")
+data <- read.csv(paste0("../output/", date_skyrsla, "_", date_skyrsla, "_19_simulation_summary.csv")) %>%
+  select(date, state, median, lower, upper) %>%
+  mutate(date=as.Date(date)) %>%
+  filter(date<=date_skyrsla+14)
+historical_data <- read.csv(paste0("../input/", date_skyrsla, '_historical_data.csv')) %>%
+  mutate(state=state %>% recode(home = "Heimaeinangrun", inpatient_ward = "Legudeild", intensive_care_unit = "Gjörgæsla")) %>%
+  mutate(date=as.Date(date)) %>%
+  filter(date>=date_skyrsla-40)
+infections_predicted <- read.csv(paste0("../input/", date_skyrsla, '_infections_predicted.csv')) %>%
+  mutate(date=as.Date(date)) %>%
+  group_by(date) %>%
+  filter(count==max(count)) %>%
+  select(-count) %>%
+  ungroup() %>%
+  mutate(total_cases=cumsum(new_cases))
+historical_infections <- read.csv("~/Downloads/Sheet 1.csv") %>%
+  mutate(date=as.Date(X, '%d.%m.%y')) %>%
+  filter(date>=min(infections_predicted$date)) %>%
+  rowwise() %>%
+  mutate(count=sum(Einkennasýni, Sóttkvíar..og.handahófsskimanir, Skimanir.á.vegum.ÍE, na.rm = TRUE)) %>%
+  select(date, count) %>%
+  ungroup() %>%
+  mutate(cumulative=cumsum(count))
+  
 color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
 ```
 
 ```{r, include=FALSE}
-data_home <- data %>% filter(state=="home") %>% 
+data_home <- data %>% filter(state=="Heimaeinangrun") %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_home$key <- factor(data_home$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+historical_home <- historical_data %>% filter(state=="Heimaeinangrun")
 
-data_iw <- data %>% filter(state=="inpatient_ward") %>% 
+data_iw <- data %>% filter(state=="Legudeild") %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_iw$key <- factor(data_iw$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+historical_iw <- historical_data %>% filter(state=="Legudeild")
 
-data_icu <- data %>% filter(state=="intensive_care_unit") %>% 
+data_icu <- data %>% filter(state=="Gjörgæsla") %>% 
   gather(key="key", value="value", median, lower, upper) %>% 
   mutate(value=round(value, 0)) %>%
   mutate(key = key %>% recode(median = "Líkleg spá", upper = "Svartsýn spá", lower = "Bjartsýn spá"))
 data_icu$key <- factor(data_icu$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+historical_icu <- historical_data %>% filter(state=="Gjörgæsla")
 ```
 
 $~$
 
-Þetta spálíkan spáir fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu þrjár vikur fram í tímann. Spálíkanið nýtir tvenns konar gögn, annars vegar spá um fjölda nýrra smita sem fæst af síðunni [covid.hi.is](https://www.covid.hi.is) og hins vegar söguleg gögn um Covid sjúklinga frá Landspítalanum.
+Notað er spálíkan til að spá fyrir um fjölda einstaklinga í heimaeinangrun, á legudeildum og gjörgæslu tvær vikur fram í tímann. <br />
 
-Spá um fjölda greindra smita er frá 29-09-2020 .<br />
-Söguleg gögn frá Landspítala ná til miðnættis `r format(Sys.Date()-1, '%d-%m-%Y')`.<br />
+Líkanið nýtir söguleg gögn um Covid sjúklinga frá Landspítalanum sem ná til miðnættis `r format(Sys.Date()-1, '%d-%m-%Y')`.<br />
+
+Einnig nýtir líkanið gefnar forsendur um daglegan fjölda greindra smita sem má sjá hér að neðan. Þessar forsendur eru frá `r format(ymd("2021-08-14"), '%d-%m-%Y')`.
+Hafa ber í huga að líkanið spáir ekki fyrir um fjölda smita.
 
 $~$
 
-### Heimaeinangrun
 
-```{r, echo=FALSE, fig.align='center'}
+### Forsendur
+```{r, echo=FALSE, fig.show="hold", out.width="50%", fig.height = 7.5}
+infections_predicted %>% ggplot() +
+    geom_col(aes(x=date, y=new_cases), fill="#3b6978", alpha=0.7) +
+    geom_point(data=historical_infections, aes(x=date, y=count)) +
+    theme_minimal() +
+    labs(y="Ný smit", x=NULL, title="Ný smit")
+
+infections_predicted %>% ggplot() +
+    geom_col(aes(x=date, y=total_cases), fill="#204051", alpha=0.7) +
+    geom_point(data=historical_infections, aes(x=date, y=cumulative)) +
+    theme_minimal() +
+    labs(y="Ný smit", x=NULL, title="Heildarfjöldi smita")
+```
+
+
+### Spá - Heimaeinangrun
+
+```{r, echo=FALSE, fig.align='center', fig.height = 3.5, fig.width = 10}
 data_home %>% ggplot(aes(x=date, y=value)) + 
         geom_line(aes(lty=key, alpha=key), col = color_palette[1], size=1) + 
+        geom_point(data=historical_home, aes(x=date, y=count)) +
         scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
-        labs(x = '', y = 'Fjöldi', linetype = '', title="Heimaeinangrun", alpha='') +
+        labs(x = '', y = 'Fjöldi', linetype = '', alpha='') +
         scale_alpha_manual(values = c(0.8, 1, 0.8)) +
         theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
-        geom_text(aes(label = round(value, 1)),
+        theme_minimal() +
+        geom_text(data=data_home %>%
+                    filter(as.numeric(Sys.Date()-date) %% 5==0, key=="Líkleg spá"),
+                  aes(label = round(value, 1)),
             vjust=-1.8,
             show.legend = FALSE, size=2.3) + 
-        scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") 
+        scale_x_date(date_breaks = "7 days", date_labels =  "%d.%m") 
 ```
 
-### Legudeild
+### Spá - Legudeild
 
-```{r, echo=FALSE, fig.align='center'}
+```{r, echo=FALSE, fig.align='center', fig.height = 3.5, fig.width = 10}
 data_iw %>% ggplot(aes(x=date, y=value)) + 
         geom_line(aes(lty=key, alpha=key), col = color_palette[2], size=1) + 
+        geom_point(data=historical_iw, aes(x=date, y=count)) +
         scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
-        labs(x = '', y = 'Fjöldi', linetype = '', title="Legudeild", alpha='') +
+        labs(x = '', y = 'Fjöldi', linetype = '', alpha='') +
         scale_alpha_manual(values = c(0.8, 1, 0.8)) +
         theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
-        geom_text(aes(label = round(value, 1)),
+        theme_minimal() +
+        geom_text(data=data_iw %>%
+                    filter(as.numeric(Sys.Date()-date) %% 4==0),
+                  aes(label = round(value, 1)),
             vjust=-1.8,
             show.legend = FALSE, size=2.3) + 
-        scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") 
+        scale_x_date(date_breaks = "7 days", date_labels =  "%d.%m") 
 ```
 
-### Gjörgæsla
+### Spá - Gjörgæsla
 
-```{r, echo=FALSE, fig.align='center'}
+```{r, echo=FALSE, fig.align='center', fig.height = 3.5, fig.width = 10}
 data_icu %>% ggplot(aes(x=date, y=value)) + 
         geom_line(aes(lty=key, alpha=key), col = color_palette[3], size=1) + 
+        geom_point(data=historical_icu, aes(x=date, y=count)) +
         scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
-        labs(x = '', y = 'Fjöldi', linetype = '', title="Gjörgæsla", alpha='') +
+        labs(x = '', y = 'Fjöldi', linetype = '', alpha='') +
         scale_alpha_manual(values = c(0.8, 1, 0.8)) +
         theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0), panel.grid.major=element_line(colour = "grey90")) +
-        geom_text(aes(label = round(value, 1)),
+        theme_minimal() +
+        geom_text(data=data_icu %>%
+                    filter(as.numeric(Sys.Date()-date) %% 4==0),
+                  aes(label = round(value, 1)),
             vjust=-1.8,
             show.legend = FALSE, size=2.3) + 
-        scale_x_date(date_breaks = "1 day", date_labels =  "%d.%m") 
+        scale_x_date(date_breaks = "7 days", date_labels =  "%d.%m") 
 ```
 
 

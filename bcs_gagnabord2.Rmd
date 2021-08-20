@@ -5,6 +5,7 @@ runtime: shiny
 output:
   flexdashboard::flex_dashboard:
     orientation: rows
+    vertical_layout: scroll
     css: styles.css
 ---
 
@@ -27,6 +28,7 @@ suppressPackageStartupMessages({
   library(shinyWidgets)
   library(data.table)
   library(httr)
+  library(DT)
 })
 source("lsh_data_processing/covid19_lsh_data_processing.R")
 source("lsh_data_processing/help_functions.R")
@@ -215,6 +217,310 @@ renderPlotly({
 ```
 
 
+Færslulíkur & Legutímar {data-icon="fa-calculator"}
+=======================================================================
+
+Stillingar {.sidebar}
+---------------------------------------------------
+```{r}
+dateRangeInput('dagsetning_forsendur', 'Tímabil:',
+               start = min(individs_extended$date_diagnosis, na.rm = TRUE), end=max(historical_data$date),
+               min = min(individs_extended$date_diagnosis, na.rm = TRUE), max = Sys.Date()-1)
+
+selectInput("age_forsendur", "Aldursskipting:",
+                c("0-50 ára, 51+ ára" = "age_simple",
+                  "0-50 ára, 51-74 ára, 75+ ára" = "age_three",
+                  "0-9, 10-19,...,70-79, 80+ ára" = "age_official",
+                  "Engin skipting" = "all"))
+
+checkboxInput("vaccine_forsendur", "Skipta eftir bólusetningu", value=TRUE)
+
+selectInput("tourist", "Ferðamenn:",
+            c("Bólusettir" = "vaccine",
+              "Óbólusettir" = "no_vaccine",
+              "Sleppa ferðamönnum" = "no_tourist"))
+
+individs_extended_forsendur <- reactive({
+  if (input$tourist=="no_tourist"){
+    individs_extended %>% filter(real_ssn==1)
+  } else if (input$tourist=="vaccine"){
+    individs_extended %>% 
+      mutate(vacc_at_diagnosis=if_else(real_ssn==0&is.na(date_fully_vaccinated),
+                                       TRUE,vacc_at_diagnosis))
+  }else {
+    individs_extended
+  }
+})
+
+legutimar_forsendur <- reactive({
+  ids_in_now <- patient_transitions_state_blocks_base %>% 
+    filter(censored) %>% select(patient_id)
+  legutimar_forsendur <- patient_transitions_state_blocks_base %>%
+    left_join(select(individs_extended, 
+                     patient_id, vacc_at_diagnosis, age, date_fully_vaccinated, real_ssn)) %>%
+    filter(state=="inpatient_ward" | state=="intensive_care_unit") %>%
+    filter(!(patient_id %in% ids_in_now$patient_id)) %>%
+    mutate(length_of_stay_tmp=as.numeric(date_end-date_start)) %>%
+    filter(length_of_stay_tmp<=59)
+  if (input$tourist=="no_tourist"){
+    legutimar_forsendur <- legutimar_forsendur %>%
+      filter(real_ssn==1)
+  } else if (input$tourist=="vaccine"){
+    legutimar_forsendur <- legutimar_forsendur %>%
+      mutate(vacc_at_diagnosis=if_else(real_ssn==0&is.na(date_fully_vaccinated),
+                                       TRUE,vacc_at_diagnosis))
+  }
+  legutimar_forsendur <- legutimar_forsendur %>%
+    group_by(patient_id, state) %>%
+    mutate(length_of_stay=sum(length_of_stay_tmp)) %>%
+    ungroup() %>%
+    distinct(patient_id, state, vacc_at_diagnosis, age, length_of_stay, .keep_all = T) %>%
+    group_by(patient_id) %>%
+    mutate(length_of_stay_hospital=sum(length_of_stay)) %>%
+    ungroup() %>%
+    select(-patient_id, -censored, -real_ssn, -date_fully_vaccinated)
+})
+```
+
+
+Færslulíkur {data-height=50}
+------------------------------
+
+#### Færslulíkur
+
+myndir
+--------------------------------
+```{r}
+forsendur_info <- reactive({
+  hospital_dat <- individs_extended_forsendur() %>%
+    filter((date_outcome>input$dagsetning_forsendur[1] | is.na(date_outcome)) &
+             date_diagnosis < input$dagsetning_forsendur[2]) %>%
+    left_join(., select(age_groups, age, age_simple, age_three, age_official)) %>%
+    mutate(state_simple=if_else(state_worst=="home", "home", "hospital")) %>%
+    mutate(all="all")
+  if(input$vaccine_forsendur){
+    hospital_dat <- hospital_dat %>%
+      group_by_("state_simple", as.character(input$age_forsendur), "vacc_at_diagnosis") %>%
+      summarize(count=n()) %>%
+      ungroup() %>%
+      pivot_wider(names_from = state_simple, values_from = count) %>%
+      mutate(vacc_at_diagnosis=if_else(vacc_at_diagnosis, "Bólusett", "Óbólusett")) %>%
+      group_by_(as.character(input$age_forsendur), "vacc_at_diagnosis")
+  }
+  else{
+    hospital_dat <- hospital_dat %>%
+      group_by_("state_simple", as.character(input$age_forsendur)) %>%
+    summarize(count=n()) %>%
+    ungroup() %>%
+    pivot_wider(names_from = state_simple, values_from = count) %>%
+    group_by_(as.character(input$age_forsendur))
+  }
+  hospital_dat <- hospital_dat %>%
+    mutate(prob_hospital=hospital/(home+hospital)) %>%
+    select(-home, -hospital)
+ 
+  icu_dat <- individs_extended_forsendur() %>%
+    filter((date_outcome>input$dagsetning_forsendur[1] | is.na(date_outcome)) &
+             date_diagnosis < input$dagsetning_forsendur[2]) %>%
+    left_join(., select(age_groups, age, age_simple, age_three, age_official)) %>%
+    filter(state_worst!="home") %>%
+    mutate(all="all")
+  if(input$vaccine_forsendur){
+    icu_dat <- icu_dat %>%
+      group_by_("state_worst", as.character(input$age_forsendur), "vacc_at_diagnosis") %>%
+      summarize(count=n()) %>%
+      ungroup() %>%
+      pivot_wider(names_from = state_worst, values_from = count) %>%
+      mutate(vacc_at_diagnosis=if_else(vacc_at_diagnosis, "Bólusett", "Óbólusett")) %>%
+      group_by_(as.character(input$age_forsendur), "vacc_at_diagnosis")
+  }
+  else{
+    icu_dat <- icu_dat %>%
+      group_by_("state_worst", as.character(input$age_forsendur)) %>%
+    summarize(count=n()) %>%
+    ungroup() %>%
+    pivot_wider(names_from = state_worst, values_from = count) %>%
+    group_by_(as.character(input$age_forsendur))
+  }
+  icu_dat <- icu_dat  %>%
+    mutate(prob_icu=intensive_care_unit/(inpatient_ward+intensive_care_unit)) %>%
+    select(-inpatient_ward, -intensive_care_unit)
+   
+  dat_out <- full_join(hospital_dat, icu_dat) %>%
+    mutate(prob_hospital=round(prob_hospital, 4), prob_icu=round(prob_icu, 4))
+})
+```
+
+```{r}
+forsendur_plot_hospital <- reactive({
+  if(input$vaccine_forsendur){
+    p <- forsendur_info() %>% ggplot(aes_string(x=input$age_forsendur, y="prob_hospital", fill="vacc_at_diagnosis")) +
+    geom_col(position = "dodge", alpha=0.7, color="black") + scale_fill_manual(values = c("dodgerblue", "indianred3"))
+  }
+  else{
+    p <- forsendur_info() %>% ggplot(aes_string(x=input$age_forsendur, y="prob_hospital")) +
+    geom_col(position = "dodge", alpha=0.7, color="black")
+  }
+  p <- p + labs(x=NULL, y="Færslulíkur", fill=NULL) + ylim(0, 1)#+
+    #ggtitle("Líkur á spítalainnlögn gefið að sjúklingur sýkist af covid")
+})
+
+forsendur_plot_icu <- reactive({
+  if(input$vaccine_forsendur){
+    p <- forsendur_info() %>% ggplot(aes_string(x=input$age_forsendur, y="prob_icu", fill="vacc_at_diagnosis")) +
+    geom_col(position = "dodge", alpha=0.7, color="black") + scale_fill_manual(values = c("dodgerblue", "indianred3"))
+  }
+  else{
+    p <- forsendur_info() %>% ggplot(aes_string(x=input$age_forsendur, y="prob_icu")) +
+    geom_col(position = "dodge", alpha=0.7, color="black")
+  }
+  p <- p + labs(x=NULL, y="Færslulíkur", fill=NULL)  + ylim(0, 1)#+
+    #ggtitle("Líkur á gjörgæsluinnlögn gefið að sjúklingur fari á spítala")
+})
+```
+
+### Líkur á spítalainnlögn gefið að sjúklingur sýkist af covid
+
+```{r}
+renderPlotly({
+  ggplotly(forsendur_plot_hospital())
+})
+```
+
+### Líkur á gjörgæsluinnlögn gefið að sjúklingur fari á spítala
+
+```{r}
+renderPlotly({
+  ggplotly(forsendur_plot_icu())
+})
+```
+
+Legutímar {data-height=50}
+------------------------------
+
+#### Legutímar
+
+myndir
+--------------------------------
+```{r}
+forsendur_info_los <- reactive({
+  hospital_dat <- legutimar_forsendur() %>%
+    filter((date_end>input$dagsetning_forsendur[1]) &
+             date_start < input$dagsetning_forsendur[2]) %>%
+    left_join(., select(age_groups, age, age_simple, age_three, age_official)) %>%
+    select(-date_start, -date_end, -state_next) %>%
+    mutate(all="all") %>%
+    mutate(vacc_at_diagnosis=if_else(vacc_at_diagnosis, "Bólusett", "Óbólusett"))
+})
+
+los_info_tafla <- reactive({
+  if(input$vaccine_forsendur){
+    hospital_info <- forsendur_info_los() %>%
+      group_by_(as.character(input$age_forsendur), "vacc_at_diagnosis") %>%
+      summarise(mean_los_hospital=mean(length_of_stay_hospital))
+  }
+  else{
+    hospital_info <- forsendur_info_los() %>%
+      group_by_(as.character(input$age_forsendur)) %>%
+      summarise(mean_los_hospital=mean(length_of_stay_hospital))
+  }
+  if(input$vaccine_forsendur){
+    icu_info <- forsendur_info_los() %>%
+      filter(state=="intensive_care_unit") %>%
+      group_by_(as.character(input$age_forsendur), "vacc_at_diagnosis") %>%
+      summarise(mean_los_icu=mean(length_of_stay))
+  }
+  else{
+    icu_info <- forsendur_info_los() %>%
+      filter(state=="intensive_care_unit") %>%
+      group_by_(as.character(input$age_forsendur)) %>%
+      summarise(mean_los_icu=mean(length_of_stay))
+  }
+  dat_out <- full_join(hospital_info, icu_info) %>%
+    mutate(mean_los_hospital=round(mean_los_hospital, 1), mean_los_icu=round(mean_los_icu, 1))
+})
+```
+
+```{r}
+forsendur_plot_los_inpatient <- reactive({
+  if(input$vaccine_forsendur){
+    p <- forsendur_info_los() %>% #filter(state=="inpatient_ward") %>%
+      ggplot(aes(y=length_of_stay_hospital, fill=vacc_at_diagnosis)) +
+      geom_boxplot(alpha=0.3, color="black") + facet_grid(~get(input$age_forsendur)) + scale_fill_manual(values = c("dodgerblue", "indianred3"))
+  }
+  else{
+    p <- forsendur_info_los() %>% #filter(state=="inpatient_ward") %>%
+      ggplot(aes(y=length_of_stay_hospital)) +
+      geom_boxplot(color="black", fill="black", alpha=0.3) + facet_grid(~get(input$age_forsendur))
+  }
+  p <- p + labs(x=NULL, y="Legutími", fill=NULL) + ylim(0, NA) + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+  p
+})
+```
+
+```{r}
+forsendur_plot_los_icu <- reactive({
+  if(input$vaccine_forsendur){
+    p <- forsendur_info_los() %>% filter(state=="intensive_care_unit") %>% ggplot(aes(y=length_of_stay, fill=vacc_at_diagnosis)) +
+      geom_boxplot(alpha=0.3, color="black") + facet_grid(~get(input$age_forsendur)) + scale_fill_manual(values = c("dodgerblue", "indianred3"))
+  }
+  else{
+    p <- forsendur_info_los() %>% filter(state=="intensive_care_unit") %>% ggplot(aes(y=length_of_stay)) +
+      geom_boxplot(color="black", fill="black", alpha=0.3) + facet_grid(~get(input$age_forsendur))
+  }
+  p <- p + labs(x=NULL, y="Legutími", fill=NULL) + ylim(0, NA) + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+  p
+})
+```
+
+### Legutímar á spítala
+
+```{r}
+renderPlot({
+  forsendur_plot_los_inpatient()
+})
+```
+
+### Legutímar á gjörgæslu
+
+```{r}
+renderPlot({
+  forsendur_plot_los_icu()
+})
+```
+
+
+Tafla {data-height=50}
+------------------------------
+
+#### Tafla
+
+tafla
+--------------------------------
+### Tafla
+
+```{r}
+tafla_yfirlit <- reactive({
+  tafla <- forsendur_info() %>%
+              left_join(los_info_tafla())
+  if(length(colnames(tafla))==5){
+    colnames(tafla) <- c("Aldur", "Líkur á spítalainnlögn", "Líkur á gjörgæsluinnlögn",
+                         "Meðal legutími á spítala", "Meðal legutími á gjörgæslu")
+  }
+  else{
+    colnames(tafla) <- c("Aldur", "Bólusetningarstaða", "Líkur á spítalainnlögn", "Líkur á gjörgæsluinnlögn",
+                         "Meðal legutími á spítala", "Meðal legutími á gjörgæslu")
+  }
+  tafla
+})
+
+
+renderDataTable({
+  create_dt(tafla_yfirlit())
+})
+```
+
+
 Staða {data-icon="fa-user-md"}
 =======================================================================
 
@@ -231,14 +537,14 @@ selectInput('choose_visual_gauge', "Veldu upplýsingar til að sjá á mæli", c
 selectInput('choose_visual_graph', "Veldu upplýsingar til að sjá á grafi", choices = c("Tími frá upphafi einkenna", "Aldur", "Fjöldi undirliggjandi sjúkdóma"), multiple = FALSE)
 ```
 
-texti með titli {data-height=100}
+texti með titli {data-height=50}
 ------------------------------
-
+ 
 #### Upplýsingar um stöðu sjúklinga
-
-stöðuupplysingar í boxum 
+ 
+row
 --------------------------------
-
+ 
 ```{r data visual}
 num_individs <- reactive({
                   get_patient_transitions_at_date('base',date_observed = date_data) %>%
@@ -257,35 +563,106 @@ num_individs <- reactive({
                   ungroup()
 })
 ```
-
-
+ 
+ 
 ### Heimaeinangrun {.no-padding}
-
+ 
 ```{r stöðubox heima}
 renderValueBox({
   num_home <- colSums(num_individs()[,5],na.rm=FALSE)
   valueBox(num_home, icon = "fa-home")
 })
 ```
-
+ 
 ### Legudeild {.no-padding}
-
+ 
 ```{r stöðubox lega}
 renderValueBox({
   num_iw <- colSums(num_individs()[,6],na.rm=FALSE)
   valueBox(num_iw, icon = "fa-hospital-o")
 })
-
+ 
 ```
-
+ 
 ### Gjörgæsla {.no-padding}
-
+ 
 ```{r stöðubox icu}
 renderValueBox({
   num_icu <- colSums(num_individs()[,7],na.rm=FALSE)
   valueBox(num_icu,
          icon = "fa-heartbeat",
          color = if_else(num_icu > 5, "warning", "primary"))
+})
+```
+ 
+ 
+texti með titli2 {data-height=50}
+------------------------------
+ 
+#### Fjöldi bólusettra sjúklinga
+ 
+Bólusetning
+--------------------------------
+ 
+```{r data vacc visual}
+num_vacc_status <- reactive({
+  patient_transitions_state_blocks %>%
+  left_join(select(individs_extended, patient_id, vacc_at_diagnosis)) %>%
+  unique() %>%
+  select(-censored, -state_next, -patient_id) %>%
+  filter(state_block_nr_start<=input$dagsetning & state_block_nr_end>=input$dagsetning) %>%
+  #filter(state_block_nr_start<=Sys.Date()-2 & state_block_nr_end>=Sys.Date()-2) %>%
+  group_by(state, vacc_at_diagnosis) %>%
+  summarize(count=n()) %>%
+  ungroup() %>%
+  group_by(state) %>%
+  mutate(prop = count/sum(count))
+})
+ 
+num_vacc_home <- reactive({
+                  num_vacc_status() %>%
+                  filter(state == 'home' & vacc_at_diagnosis == 'TRUE')
+})
+ 
+num_vacc_iw <- reactive({
+                  num_vacc_status() %>%
+                  filter(state == 'inpatient_ward' & vacc_at_diagnosis == 'TRUE')
+})
+ 
+num_vacc_icu <- reactive({
+                  num_vacc_status() %>%
+                  filter(state == 'intensive_care_unit' & vacc_at_diagnosis == 'TRUE')
+})
+```
+ 
+ 
+### Bólusettir í heimaeinangrun {.no-padding}
+ 
+```{r vacc home}
+renderValueBox({
+  valueBox(num_vacc_home()$count,
+           icon = "fa-home",
+           color = '#93C572')
+})
+```
+ 
+### Bólusettir á legudeild {.no-padding}
+ 
+```{r vacc inpatient_ward}
+renderValueBox({
+  valueBox(num_vacc_iw()$count,
+           icon = "fa-hospital-o",
+           color = '#93C572')
+})
+```
+ 
+### Bólusettir á gjörgæslu {.no-padding}
+ 
+```{r vacc icu}
+renderValueBox({
+  valueBox(num_vacc_icu()$count,
+           icon = "fa-heartbeat",
+           color = '#93C572')
 })
 ```
 
@@ -931,7 +1308,7 @@ transitions_simple <- reactive({
       showNotification("Ólöglegar dagsetningar", id = 'error_invalid_dates', type = 'error', duration = 4)
       stop("Ólöglegar dagsetningar")
     }
-  df <- data.frame(patient_transitions_state_blocks2) %>%
+  df <- data.frame(patient_transitions_state_blocks_base) %>%
                   filter(date_start >= input$dagsetning_flow[1], date_start <= input$dagsetning_flow[2])
   
   if(nrow(df)<1){
@@ -955,7 +1332,7 @@ transitions_complex <- reactive({
       showNotification("Ólöglegar dagsetningar", id = 'error_invalid_dates', type = 'error', duration = 4)
       stop("Ólöglegar dagsetningar")
     }
-  df <- data.frame(patient_transitions_state_blocks2) %>%
+  df <- data.frame(patient_transitions_state_blocks_base) %>%
                   filter(date_start >= input$dagsetning_flow[1], date_start <= input$dagsetning_flow[2])
   
   if(nrow(df)<1){
@@ -1102,10 +1479,15 @@ hr()
 dateInput('logistic_start_date', 'Dagsetning fyrsta smits',
           value = Sys.Date() + 1, min = '2020-05-01', max = Sys.Date() + 120)
 hr()
-numericInput("hospital_prob_input", 'Líkur á innlögn',
-            min = 0, max = 1, step = 0.001, value = 0.016)
-numericInput("icu_prob_input", 'Líkur á gjörgæsluinnlögn',
-            min = 0, max = 1, step = 0.001, value = 0.02)
+checkboxInput('logistic_vax_input', 'Taka tillit til bólusetninga', value=TRUE)
+checkboxInput('logistic_prob_input', 'Handskrá líkur á spítalainnlögn', value=FALSE)
+conditionalPanel(
+  "input.logistic_prob_input == true",
+  numericInput("hospital_prob_input", 'Líkur á innlögn',
+            min = 0, max = 1, step = 0.001, value = 0.0375),
+  numericInput("icu_prob_input", 'Líkur á gjörgæsluinnlögn',
+            min = 0, max = 1, step = 0.001, value = 0.1653)
+)
 hr()
 
 #Aldursdreifing (4. bylgja frá 23. júlí)
@@ -1158,7 +1540,7 @@ conditionalPanel(
   sliderInput("logistic_beta_complex", 'Lögun (β)',
             min = 0.01, max = 1, step = 0.001, value = 0.2),
   sliderInput("logistic_nu_complex", 'Skekkja (ν)',
-            min = 0.001, max = 10, step = 0.001, value = 1)
+            min = 0.001, max = 50, step = 0.001, value = 1)
 )
 
 hr()
@@ -1240,61 +1622,139 @@ observeEvent(input$los_ld2,{
 
 ```{r aldursdreifing og LOS logistic}
 #### Age distributions
-aldur_faraldur_logistic <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
+vacc_prop_age_groups <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
+    distinct(patient_id) %>%
+    inner_join(individs_splitting_variables,by='patient_id') %>%
+    rename(splitting_variable=!!'age_official') %>%
+    group_by(splitting_variable, vacc_at_diagnosis) %>%
+    summarise(prop_vax=n()) %>%
+    ungroup() %>%
+    group_by(splitting_variable) %>%
+    mutate(prop_vax=prop_vax/sum(prop_vax))
+
+aldur_faraldur_logistic_pre <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
     distinct(patient_id) %>%
     inner_join(individs_splitting_variables,by='patient_id') %>%
     rename(splitting_variable=!!'age_official') %>%
     group_by(splitting_variable) %>%
-    summarise(prop=n()) %>%
-    ungroup() %>%
-    mutate(prop=prop/sum(prop))
+    summarise(count=n()) %>%
+    ungroup()
+
+aldur_faraldur_logistic <- reactive({
+  if(input$logistic_vax_input){
+    out <- aldur_faraldur_logistic_pre %>%
+      rbind(., aldur_faraldur_logistic_pre) %>% 
+      arrange(splitting_variable) %>% 
+      mutate(vacc_at_diagnosis=rep(c(TRUE, FALSE), 9)) %>% 
+      left_join(vacc_prop_age_groups) %>% 
+      mutate(prop_vax=if_else(is.na(prop_vax), 0, prop_vax)) %>% 
+      mutate(prop=count*prop_vax) %>% 
+      mutate(prop=prop/sum(prop)) %>%
+      select(splitting_variable, vacc_at_diagnosis, prop)
+  }
+  else{
+    out <- aldur_faraldur_logistic_pre %>%
+      mutate(prop=count/sum(count)) %>%
+      select(splitting_variable, prop)
+  }
+})
+
+
 
 aldur_faraldur2_logistic <- reactive({
-  get_patient_transitions_at_date('base', date_observed = date_data) %>%
+  out <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
     distinct(patient_id) %>%
     inner_join(individs_splitting_variables,by='patient_id') %>%
     inner_join(select(individs_extended, patient_id, date_diagnosis), by='patient_id') %>%
     filter(date_diagnosis>input$age_dist_start_date) %>%
     rename(splitting_variable=!!'age_official') %>%
     group_by(splitting_variable) %>%
-    summarise(prop=n()) %>%
-    ungroup() %>%
-    mutate(prop=prop/sum(prop))
+    summarise(count=n()) %>%
+    ungroup()
+  if(input$logistic_vax_input){
+    out <- out %>%
+      rbind(., out) %>% 
+      arrange(splitting_variable) %>% 
+      mutate(vacc_at_diagnosis=rep(c(TRUE, FALSE), 9)) %>% 
+      left_join(vacc_prop_age_groups) %>% 
+      mutate(prop_vax=if_else(is.na(prop_vax), 0, prop_vax)) %>% 
+      mutate(prop=count*prop_vax) %>% 
+      mutate(prop=prop/sum(prop)) %>%
+      select(splitting_variable, vacc_at_diagnosis, prop)
+  }
+  else{
+    out <- out %>%
+      mutate(prop=count/sum(count)) %>%
+      select(splitting_variable, prop)
+  }
+  
 })
 
 # aldur_faraldur4_logistic <- aldur_faraldur_logistic %>%
 #   mutate(prop=c(12, 20, 170, 78, 24, 30, 23, 13, 1)/371)
 
-aldur_hagstofa_logistic <- read_delim("dashboard/aldur_hagstofa.csv", ";", escape_double = FALSE,
+aldur_hagstofa_logistic_pre <- read_delim("dashboard/aldur_hagstofa.csv", ";", escape_double = FALSE,
                              locale = locale(encoding = "ISO-8859-2"), trim_ws = TRUE, col_types = cols())
 
-aldur_hagstofa_logistic <- aldur_hagstofa_logistic %>% mutate(Aldur=parse_number(Aldur))
+aldur_hagstofa_logistic_pre <- aldur_hagstofa_logistic_pre %>% mutate(Aldur=parse_number(Aldur))
 
-aldur_hagstofa_logistic$Aldur <- seq(0, max(aldur_hagstofa_logistic$Aldur))
+aldur_hagstofa_logistic_pre$Aldur <- seq(0, max(aldur_hagstofa_logistic_pre$Aldur))
 
-aldur_hagstofa_logistic$splitting_variable <- cut(aldur_hagstofa_logistic$Aldur, breaks = c(seq(0, 80, by = 10), Inf), labels = aldur_faraldur_logistic$splitting_variable, right = FALSE)
+aldur_hagstofa_logistic_pre$splitting_variable <- cut(aldur_hagstofa_logistic_pre$Aldur, breaks = c(seq(0, 80, by = 10), Inf), labels = unique(aldur_faraldur_logistic_pre$splitting_variable), right = FALSE)
 
-aldur_hagstofa_logistic <- aldur_hagstofa_logistic %>% group_by(splitting_variable) %>%
-                    rename("Number"="2020") %>%
-                    summarise(Number=sum(Number)) %>%
-                    mutate(prop=Number/sum(Number))
+aldur_hagstofa_logistic_pre <- aldur_hagstofa_logistic_pre %>% group_by(splitting_variable) %>%
+                    rename("count"="2020") %>%
+                    summarise(count=sum(count))
+
+aldur_hagstofa_logistic <- reactive({
+  if(input$logistic_vax_input){
+    out <- aldur_hagstofa_logistic_pre %>%
+      rbind(., aldur_hagstofa_logistic_pre) %>% 
+      arrange(splitting_variable) %>% 
+      mutate(vacc_at_diagnosis=rep(c(TRUE, FALSE), 9)) %>% 
+      left_join(vacc_prop_age_groups) %>% 
+      mutate(prop_vax=if_else(is.na(prop_vax), 0, prop_vax)) %>% 
+      mutate(prop=count*prop_vax) %>% 
+      mutate(prop=prop/sum(prop)) %>%
+      select(splitting_variable, vacc_at_diagnosis, prop)
+  }
+  else{
+    out <- aldur_hagstofa_logistic_pre %>%
+      mutate(prop=count/sum(count)) %>%
+      select(splitting_variable, prop)
+  }
+})
 
 aldur_stilling_logistic <- reactive({
   N <- 100000
   x <- rbeta(N, input$logistic_aldur_dreif1, input$logistic_aldur_dreif2)*100
   dreifing <- data.frame(aldur=round(x))
   dreifing <- dreifing %>% mutate(splitting_variable=cut(dreifing$aldur, breaks = c(seq(0, 80, by = 10), Inf),
-                                             labels = aldur_faraldur_logistic$splitting_variable, right = FALSE))
+                                             labels = unique(aldur_faraldur_logistic_pre$splitting_variable), right = FALSE))
 
   dreifing <- dreifing %>% group_by(splitting_variable) %>%
-                    aggregate(aldur ~ splitting_variable, data = ., length) %>%
-                    mutate(prop=aldur/sum(aldur)) %>%
-                    select(-aldur)
+                    aggregate(aldur ~ splitting_variable, data = ., length)
 
-  aldur_stilling_logistic <- left_join(select(aldur_faraldur_logistic, splitting_variable), dreifing, by = "splitting_variable") %>%
-    mutate(prop=if_else(is.na(prop), 0, prop))
+  aldur_stilling_logistic <- left_join(select(aldur_faraldur_logistic_pre, splitting_variable) %>% unique(), dreifing, by = "splitting_variable") %>% mutate(aldur=ifelse(is.na(aldur), 0, aldur)) %>% rename(count=aldur)
+  
+  if(input$logistic_vax_input){
+    out <- aldur_stilling_logistic %>%
+      rbind(., aldur_stilling_logistic) %>% 
+      arrange(splitting_variable) %>% 
+      mutate(vacc_at_diagnosis=rep(c(TRUE, FALSE), 9)) %>% 
+      left_join(vacc_prop_age_groups) %>% 
+      mutate(prop_vax=if_else(is.na(prop_vax), 0, prop_vax)) %>% 
+      mutate(prop=count*prop_vax) %>% 
+      mutate(prop=prop/sum(prop)) %>%
+      select(splitting_variable, vacc_at_diagnosis, prop)
+  }
+  else{
+    out <- aldur_stilling_logistic %>%
+      mutate(prop=count/sum(count)) %>%
+      select(splitting_variable, prop)
+  }
 
-  aldur_stilling_logistic
+  out
 })
 #####
 
@@ -1312,9 +1772,9 @@ los_stilling_logistic <- reactive({
 ```{r aldur og LOS reactive logistic}
 age_dist_logistic <- reactive({
   if (input$logistic_aldur_val == 'Þjóðar')
-    aldur_hagstofa_logistic
+    aldur_hagstofa_logistic()
   else if (input$logistic_aldur_val == 'Covid-19')
-   aldur_faraldur_logistic
+   aldur_faraldur_logistic()
   else if (input$logistic_aldur_val == 'Frá dagsetningu:')
    aldur_faraldur2_logistic()
   else if (input$logistic_aldur_val == 'Skv. stillingu:')
@@ -1323,8 +1783,19 @@ age_dist_logistic <- reactive({
     stop("Unexpected dataset")
 })
 
+age_dist_logistic_to_ic <- reactive({
+  if(input$logistic_vax_input){
+    age_dist_logistic() %>% unite(splitting_variable, splitting_variable, vacc_at_diagnosis, sep="_", remove = TRUE) %>% 
+      arrange(splitting_variable)
+  }
+  else{
+    age_dist_logistic()
+  }
+  
+})
+
 los_dist_logistic <- reactive({
-    if (input$los_val2 == 'covid.hi.is')
+  if (input$los_val2 == 'covid.hi.is')
     los_covid_hi_is_logistic
   else if (input$los_val2 == 'LSH gögn')
    los_lsh_logistic
@@ -1341,7 +1812,7 @@ Sviðsmyndir logistic
 ------------------------------
 ### Aldursdreifing
 ```{r}
-renderPlotly({plot_age_distribution(age_dist_logistic())})
+renderPlotly({plot_age_distribution(age_dist_logistic(), input$logistic_vax_input)})
 ```
 
 ### Ný smit
@@ -1405,7 +1876,14 @@ infected_distr_logistic <- smit_folk_logis() %>%
                   #group_by(date) %>%
                   mutate("prob"=1)
 
-ferguson_data_logistic <- run_ferguson_simulation_new(infected_distr_logistic, los_dist_logistic(), age_dist_logistic(), input$hospital_prob_input, input$icu_prob_input)
+if(input$logistic_prob_input){
+  ferguson_data_logistic <- run_ferguson_simulation_new(infected_distr_logistic, los_dist_logistic(), age_dist_logistic_to_ic(), input$hospital_prob_input, input$icu_prob_input, input$logistic_vax_input)
+}
+else{
+  ferguson_data_logistic <- run_ferguson_simulation_new(infected_distr_logistic, los_dist_logistic(), age_dist_logistic_to_ic(), NULL, NULL, input$logistic_vax_input)
+}
+
+
 ferguson_data_logistic %>%
           mutate(state=ifelse(state=="hospital", "inpatient_ward", state))
 })
@@ -1447,13 +1925,21 @@ Stillingar {.sidebar}
 dateInput('manual_start_date', 'Dagsetning fyrsta smits',
           value = Sys.Date(), min = '2020-02-01', max = Sys.Date() + 120)
 hr()
+preset_scenarios <- read.csv('input/preset_stikar.csv')
+selectInput("choose_manual_scenario", "Velja sviðsmynd", choices = preset_scenarios$name, multiple = FALSE, selected = preset_scenarios$name[2])
+
+fileInput("my_scenarios", "Hlaða upp eigin sviðsmyndum",
+                    multiple = FALSE,
+                    accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"))
+hr()
+
 numericInput("manual_S", 'Fjöldi smita (S)',
-            min = 10, max = pop_iceland, step = 1, value = 100)
-checkboxInput('val_stikar', 'Nota nákvæmari stika', value = FALSE)
+            min = 10, max = pop_iceland, step = 1, value = 15000)
+checkboxInput('val_stikar', 'Nota nákvæmari stika', value = TRUE)
 hr()
 
 sliderInput("manual_alpha", 'Hliðrun (α)',
-            min = 0.01, max = 100, step = 0.05, value = 24, ticks = FALSE)
+            min = 0.01, max = 100, step = 0.05, value = 32.71, ticks = FALSE)
 
 conditionalPanel(
   "input.val_stikar == false",
@@ -1466,13 +1952,15 @@ conditionalPanel(
   sliderInput("manual_beta_complex", 'Lögun (β)',
             min = 0.01, max = 1, step = 0.001, value = 0.2),
   sliderInput("manual_nu_complex", 'Skekkja (ν)',
-            min = 0.001, max = 30, step = 0.001, value = 1)
+            min = 0.001, max = 50, step = 0.001, value = 20.275)
 )
 
 hr()
 sliderInput("manual_dagar", 'Fjöldi daga til að teikna',
-            min = 5, max = 100, step = 5, value = 60, ticks = FALSE)
+            min = 5, max = 100, step = 5, value = 70, ticks = FALSE)
 hr()
+
+textInput("manual_name", "Nafn sviðsmyndar", placeholder = "Mín sviðsmynd 1")
 
 manual_beta <- reactive({
   if(input$val_stikar==FALSE){
@@ -1503,14 +1991,70 @@ manual_nu <- reactive({
     input$manual_nu_complex
   } else NULL
 })
+actionButton("add_manual_to_table", "Bæta sviðsmynd við")
 
-actionButton("bua_til_manual", "Búa til spá")
+actionButton("bua_til_manual", "Nota sviðsmynd")
 observeEvent(input$bua_til_manual, {
-  showNotification("Spá vistuð", id = 'manual_spa_ready', type = 'message', duration = 3)
+  showNotification("Nú má nota þessa sviðsmynd í flipanum \"Spá\"", id = 'manual_spa_ready', type = 'message', duration = 3)
   stikar_manual <- data.frame("alpha"=input$manual_alpha, "beta"=manual_beta(), "S"=input$manual_S, "nu"=manual_nu(), "day_n"=input$manual_dagar)
   write.table(stikar_manual, file = paste0('input/stikar_manual.csv'), quote = F,row.names=F,sep=',')
 })
 ```
+
+
+
+```{r}
+# Upload og download aðgerðir
+
+my_scenarios_data <- eventReactive(input$my_scenarios, {
+  if(is.null(input$my_scenarios)){
+    dataset <- preset_scenarios
+  }
+  else if(getExtension(as.character(input$my_scenarios$datapath))!="csv"){
+    dataset <- preset_scenarios
+  }
+  else{
+    dataset <- read.csv(input$my_scenarios$datapath)
+  }
+  dataset
+}, ignoreNULL = FALSE)
+
+observe({
+  if(is.null(input$my_scenarios)) return()
+  if(getExtension(as.character(input$my_scenarios$datapath))!="csv"){
+    showNotification("Villa! Skráin þarf að vera .csv", id = 'error_in_scenario_file', type = 'error', duration = 3)
+    return()
+  }
+  updateSelectInput(
+      session,
+      "choose_manual_scenario",
+      choices = my_scenarios_data()$name,
+      selected = my_scenarios_data()$name[1])
+})
+
+observeEvent(input$choose_manual_scenario, {
+  row_scenario <- which(my_scenarios_data()$name==input$choose_manual_scenario)
+  updateSliderInput(session, "manual_alpha", value = my_scenarios_data()$alpha[row_scenario])
+  updateSliderInput(session, "manual_beta_complex", value = my_scenarios_data()$beta[row_scenario])
+  updateSliderInput(session, "manual_nu_complex", value = my_scenarios_data()$nu[row_scenario])
+  updateNumericInput(session, "manual_S", value = my_scenarios_data()$S[row_scenario])
+  updateSliderInput(session, "manual_dagar", value = my_scenarios_data()$day_n[row_scenario])
+})
+
+scenarios_to_download <- reactive({
+  tibble("name"=character(), "alpha"=numeric(), "beta"=numeric(), "S"=numeric(), "nu"=numeric(), "day_n"=numeric())
+})
+
+values <- reactiveValues()
+
+observeEvent(input$add_manual_to_table,{
+  isolate({
+  row_to_add <- data.frame("name"=input$manual_name, "alpha"=input$manual_alpha, "beta"=manual_beta(), "S"=input$manual_S, "nu"=manual_nu(), "day_n"=input$manual_dagar)
+  values$scenarios_to_download <- rbind(values$scenarios_to_download, row_to_add)
+  })
+})
+```
+
 
 row
 ------------------------------
@@ -1576,6 +2120,16 @@ p <- ggplot(smit_folk_manual()) +
     theme_minimal() +
     labs(y="Heildarsmit", x=NULL)
 ggplotly(p)
+})
+```
+
+row
+------------------------------
+### Sviðsmyndir
+
+```{r}
+renderDataTable({
+  create_dt(values$scenarios_to_download)
 })
 ```
 

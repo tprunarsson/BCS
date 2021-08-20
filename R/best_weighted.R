@@ -16,7 +16,7 @@ options(warn = oldw)
 
 best_weighted_function <- function(date_data, today, los_setting, prediction_type, date_prediction){
   # Stillingar
-  run_id <- 17
+  run_id <- 19
   #date_data <- '2020-10-02'     #covid19_lsh_data_processing #BREYTA með nýjum lsh gögnum
   #date_data <- today            #dagsetning skýrslu er sú sama og dagsetning gagna
   #date_data <- Sys.Date()-1    #Notar alltaf nýjustu gögnin
@@ -60,6 +60,7 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   
   # Ferguson
   run_ferguson_simulation_set_age <- function(infected_distr, los){
+    
     dates <- seq(min(infected_distr$date), max(infected_distr$date),by=1)
     active_cases <- matrix(0,ncol=length(dates)+los$vd,nrow=1000) 
     hospital_cases <- matrix(0,ncol=length(dates)+los$vd,nrow=1000)
@@ -108,23 +109,27 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
   }
   
   transition_prob <- patient_transitions_state_blocks %>%
-    inner_join(select(individs_splitting_variables,patient_id,matches(paste0('^','age_official','$'))),by='patient_id') %>%
+    inner_join(select(individs_splitting_variables,patient_id,vacc_at_diagnosis, matches(paste0('^','age_official','$'))),by='patient_id') %>%
     rename(splitting_variable=!!'age_official') %>%
-    group_by(patient_id,splitting_variable) %>%
+    group_by(patient_id,splitting_variable, vacc_at_diagnosis) %>%
     summarise(hospital=any(state!='home'),icu=any(state=='intensive_care_unit'),death=any(if_else(is.na(state_next),FALSE,state_next=='death'))) %>%
-    group_by(splitting_variable) %>%
+    group_by(splitting_variable, vacc_at_diagnosis) %>%
     summarise(p_hospital=sum(hospital)/n(),p_icu=sum(icu)/sum(hospital),p_death=sum(death)/n()) %>%
     ungroup() %>%
-    mutate(p_icu=if_else(is.na(p_icu),0,as.numeric(p_icu)))
+    mutate(p_icu=if_else(is.na(p_icu),0,as.numeric(p_icu))) %>%
+    unite(splitting_variable, splitting_variable, vacc_at_diagnosis, sep="_", remove = TRUE) %>%
+    arrange(splitting_variable)
   
   splitting_distribution <- get_patient_transitions_at_date('base', date_observed = date_data) %>%
     distinct(patient_id) %>%
     inner_join(individs_splitting_variables,by='patient_id') %>%
     rename(splitting_variable=!!'age_official') %>%
-    group_by(splitting_variable) %>%
+    group_by(splitting_variable, vacc_at_diagnosis) %>%
     summarise(prop=n()) %>%
     ungroup() %>%
-    mutate(prop=prop/sum(prop))
+    mutate(prop=prop/sum(prop)) %>%
+    unite(splitting_variable, splitting_variable, vacc_at_diagnosis, sep="_", remove = TRUE) %>%
+    arrange(splitting_variable)
   
   los_wuhan <- data.frame("vd"=21, "ld"=14, "gd"=10, "pre_lega"=7, "pre_icu"=3)
   los_best <- data.frame("vd"=17, "ld"=8, "gd"=6, "pre_lega"=9, "pre_icu"=1)
