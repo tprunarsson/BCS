@@ -1993,6 +1993,8 @@ manual_nu <- reactive({
 })
 actionButton("add_manual_to_table", "Bæta sviðsmynd við")
 
+hr()
+
 actionButton("bua_til_manual", "Nota sviðsmynd")
 observeEvent(input$bua_til_manual, {
   showNotification("Nú má nota þessa sviðsmynd í flipanum \"Spá\"", id = 'manual_spa_ready', type = 'message', duration = 3)

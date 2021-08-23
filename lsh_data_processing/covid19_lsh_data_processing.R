@@ -118,6 +118,7 @@ path_outpatient_clinic <- 'outpatient_clinic_history/'
 
 #file_name_lsh_data <- paste0(date_data,'_lsh_covid_data.xlsx')
 file_name_lsh_data <- 'lsh_covid_data.xlsx'
+file_name_lsh_vax <- 'voruhus_covid_bolusetn_v1.xlsx'
 file_path_coding <- 'lsh_data_processing/lsh_coding_new.xlsx'
 #file_path_coding <- 'lsh_coding.xlsx'
 file_path_priors <- 'lsh_data_processing/priors.xlsx'
@@ -175,7 +176,7 @@ heuristics_description <- read_excel(file_path_experiment_template,sheet='heuris
 #vaccine_raw_gamla <- read_excel(paste0(path_sensitive_tables,"bolusetningar.xlsx"),sheet='Report 1',skip=9)
 
 #check <- read_excel(paste0(path_sensitive_tables,"/afstemm.xlsx")) 
-vaccine_raw <- read_excel(paste0(path_sensitive_tables,"/bolusetningar.xlsx"),sheet='línur',skip=1)
+vaccine_raw <- read_excel(paste0(path_sensitive_tables, file_name_lsh_vax),sheet='línur',skip=1)
 #vaccine_test <- read_excel(paste0(path_sensitive_tables,"bola.xlsx"),sheet='Report 1',skip=3)
 #vaccine_raw <- read.csv(paste0(path_sensitive_tables,'bola.csv'))
 #test_lsh_data_file()
@@ -194,12 +195,12 @@ covid_diagnosis <- rename(covid_diagnosis_raw,patient_id=`Person Key`,date_time_
                     select(.,patient_id, date_diagnosis_pcr) #%>%
                     #filter(!(patient_id %in% bad_ids))
 
-hospital_isolations_covid_now <- hospital_isolations_heilsugatt_raw %>%
-  rename(patient_id=`Person Key`,date_isolation=`Dags einangrun skráð`,isolation_type=`Sjúklings einangrun`) %>%
-  mutate(.,patient_id=suppressWarnings(as.numeric(patient_id))) %>%
-  filter(!is.na(isolation_type)) %>%
-  filter(isolation_type=='COVID-19'|isolation_type=='Grunur um COVID-19') %>%
-  select(patient_id,date_isolation)
+# hospital_isolations_covid_now <- hospital_isolations_heilsugatt_raw %>%
+#   rename(patient_id=`Person Key`,date_isolation=`Dags einangrun skráð`,isolation_type=`Sjúklings einangrun`) %>%
+#   mutate(.,patient_id=suppressWarnings(as.numeric(patient_id))) %>%
+#   filter(!is.na(isolation_type)) %>%
+#   filter(isolation_type=='COVID-19'|isolation_type=='Grunur um COVID-19') %>%
+#   select(patient_id,date_isolation)
 
 individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, sex=`Yfirfl. kyns`,zip_code=`Póstnúmer`,
                    covid_group_raw=`Heiti sjúklingahóps`) %>%
@@ -207,7 +208,7 @@ individs <- rename(individs_raw,patient_id=`Person Key`,age=`Aldur heil ár`, se
               left_join(.,select(covid_groups,covid_group_raw,covid_group),by='covid_group_raw') %>%
               mutate(clinically_diagnosed=covid_group=='clinically_diagnosed') %>%
               mutate(recovered=covid_group=='recovered') %>%
-              mutate(recovered=if_else(patient_id %in% hospital_isolations_covid_now$patient_id,FALSE,recovered)) %>%
+              #mutate(recovered=if_else(patient_id %in% hospital_isolations_covid_now$patient_id,FALSE,recovered)) %>%
               group_by(.,patient_id) %>%
               summarise(zip_code=min(zip_code,na.rm=T),
                         age=min(age,na.rm=T),
@@ -414,7 +415,7 @@ vacc_data <- vaccine_raw %>%
   filter(!is.na(patient_id)) %>%
   distinct()
 
-#test_cleaning()
+test_cleaning()
 
 ################## ----- Data processing ----- ##############################################################
 
@@ -451,7 +452,7 @@ hospital_visits_filtered <- inner_join(hospital_visits,select(unit_categories,un
                             full_join(.,hospital_isolations_filtered,by=c('patient_id','state_block_nr','unit_in'),suffix=c('','_isolation')) %>%
                             left_join(interview_last,by='patient_id') %>%
                             rename(date_recovered=date_clinical_assessment) %>%
-                            mutate(date_recovered=ifelse(patient_id %in% hospital_isolations_covid_now$patient_id,as.Date(NA),date_recovered)) %>% #bradabirgdalausn fyrir folk i einangrun
+                            #mutate(date_recovered=ifelse(patient_id %in% hospital_isolations_covid_now$patient_id,as.Date(NA),date_recovered)) %>% #bradabirgdalausn fyrir folk i einangrun
                             filter(if_else(!is.na(date_recovered),date_in<=date_recovered,TRUE)) %>% # remove hospital visits after recovery. If recovery date is NA, keep entry
                             mutate(in_hospital_before=if_else(!is.na(date_in),(date_in_isolation-date_in)>1,FALSE)) %>% # check if in hospital before becoming infected
                             mutate(date_in=if_else(is.na(date_in_isolation),date_in,date_in_isolation),
