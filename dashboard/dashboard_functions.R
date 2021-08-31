@@ -370,7 +370,7 @@ plot_skyrsla <- function(state_f, prediction_dat, historical_dat, color_state){
         scale_alpha_manual(values = c(0.7, 1, 0.7)) +
         theme_minimal() + 
         #labs(subtitle = prediction_dat$best_alpha[1]) + 
-        geom_point(data=filter(historical_dat, state==state_f), aes(y=count, label="Söguleg gögn")) + 
+        geom_point(data=filter(historical_dat, state==state_f), aes(y=count)) + 
         theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
 }
 
@@ -410,9 +410,80 @@ getExtension <- function(file){
 #Hermun fyrir börn (states: home, recovered).
 #Sampla hversu mörg börn veikjast daglega
 #Sampla length of stay
-# run_children_simulation <- function(){
-#     
-# }
+#infected_dist <- infections_predicted_per_date
+#date_observed <- Sys.Date()-1
+#dates_sim <- seq.Date(from=Sys.Date(), to=Sys.Date()+14, by=1)
+#ggplot(children_summary, aes(x=date, y=value, lty=key)) + geom_line() + scale_linetype_manual(values=c("dashed", "solid", "dashed"))
+run_children_simulation <- function(dates_sim, date_observed, date_prediction){
+    number_of_rep <- 200
+    cat("Keyrir barnahermun...\n")
+    progress_bar = txtProgressBar(min=0, max=number_of_rep+50, style = 1, char="|")
+    stikar_manual <- read.csv(paste0(path_tables, "stikar_manual.csv"))
+    infected_dist <- get_infections_predicted_per_date(source='manual', date_prediction, stikar_manual$alpha, stikar_manual$beta, stikar_manual$S, stikar_manual$nu, stikar_manual$day_n)
+    date_filter <- ymd("2021-06-01")
+    children_in_now <- individs_extended %>% 
+        filter(age<=15 & is.na(date_outcome)) %>%
+        mutate(length_of_stay_tmp = as.numeric(date_observed-date_diagnosis)) %>%
+        select(patient_id, date_diagnosis, length_of_stay_tmp) %>%
+        mutate(length_of_stay=NA)
+    los_dist <- get_children_los(date_filter, date_observed)
+    children_infection_dist <- get_children_dist2(date_filter, date_observed)
+    children_sim <- tibble()
+    #endurkvæmt fall til að sampla length of stay þar til það fæst los sem er lengra en það sem einstaklingur er með nú þegar
+    fix_los_children_now <- function(los_now, los_new, count=0){
+        if(los_now<=los_new){
+            return(los_new)
+        }
+        else if(count>=30){
+            return(los_now) #Til að komast hjá óendanlegri endurkvæmni
+        }
+        else{
+            los_new <- sample(los_dist$length_of_stay, size=1, prob = los_dist$prob, replace = TRUE)
+            return(fix_los_children_now(los_now, los_new, count+1))
+        }
+    }
+    
+    for(rep in 1:number_of_rep){
+        # úthluta los fyrir þau börn sem eru inni núna
+        setTxtProgressBar(progress_bar, value = rep)
+        los_children_in_now <- sample(los_dist$length_of_stay, size=nrow(children_in_now), prob = los_dist$prob, replace = TRUE)
+        children_sim_now <- children_in_now %>% 
+            mutate(id=rep) %>%
+            mutate(length_of_stay=los_children_in_now) %>% 
+            rowwise() %>%
+            mutate(length_of_stay=fix_los_children_now(length_of_stay_tmp, length_of_stay)) %>%
+            select(-length_of_stay_tmp) %>%
+            ungroup()
+        children_sim <- rbind(children_sim, children_sim_now)
+        for(i in 1:length(dates_sim)){
+            infections_today_table <- infected_dist %>% filter(date==dates_sim[i])
+            infections_today <- sample(infections_today_table$new_cases, size = 1, prob = infections_today_table$count, replace = TRUE)
+            number_of_new_children <- round(sample(children_infection_dist$prop, size = 1, prob = children_infection_dist$prob, replace=TRUE)*infections_today)
+            
+            los_children <- sample(los_dist$length_of_stay, size=number_of_new_children, prob = los_dist$prob, replace = TRUE)
+            new_children <- tibble(patient_id=seq.int(from=min(-1, min(children_sim$patient_id)-1), by=-1, length.out = number_of_new_children), date_diagnosis=dates_sim[i], length_of_stay=los_children, id=rep)
+            children_sim <- rbind(children_sim, new_children)
+        }
+    }
+    get_children_per_day <- function(date, sum_id, data){
+        data %>% filter(id==sum_id & date_diagnosis<=date & date<=date_diagnosis+length_of_stay) %>% nrow()
+    }
+    children_summary <- tibble(id=rep(1:number_of_rep, each=length(dates_sim)), date=rep(dates_sim, number_of_rep)) %>%
+        rowwise() %>%
+        mutate(count=get_children_per_day(date, id, children_sim)) %>%
+        group_by(date) %>%
+        summarise(median=quantile(count, probs=0.5), lower=quantile(count, probs=0.025), upper=quantile(count, probs=0.975)) %>%
+        gather(key=key, value=value, median, lower, upper) %>%
+        mutate(value=round(value)) %>%
+        rename("Fjöldi"=value, "Dagsetning"=date) %>%
+        mutate(key = key %>% recode(median = "Líkleg spá",
+                                    upper = "Svartsýn spá",
+                                    lower = "Bjartsýn spá"))
+    children_summary$key <- factor(children_summary$key, levels = c("Svartsýn spá", "Líkleg spá", "Bjartsýn spá"))
+    setTxtProgressBar(progress_bar, value = number_of_rep+50)
+    close(progress_bar)
+    return(children_summary)
+}
 
 
 

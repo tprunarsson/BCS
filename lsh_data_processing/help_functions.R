@@ -561,7 +561,58 @@ find_most_recent_prediction_date <- function(){
     stop("No prediction data found, check the repository")
   }
   #cat("Using prediction from", as.character(max(dates)), "\n")
-  return(max(dates))
+  #return(max(dates))
+  return(ymd("2020-11-28"))
+}
+
+get_children_dist <- function(date_filter,date_observed){
+  transitions <- get_patient_transitions_at_date('base',date_observed) %>%
+    group_by(patient_id)
+  if(!is.na(date_filter)){
+    transitions <- transitions %>% filter(date>=date_filter)
+  }
+  splitting_dat <- individs_splitting_variables %>% select(patient_id,age_children,age_children_order)
+  first_state <- group_by(transitions,patient_id) %>%
+    summarize(date_diagnosis=min(date),initial_state='home') %>%
+    ungroup() %>%
+    inner_join(.,splitting_dat) %>%
+    #mutate(initial_state=factor(initial_state,levels=active_states),
+    #       splitting_variable=factor(splitting_variable,levels=max_splitting_values)) %>%
+    group_by(initial_state,age_children) %>%
+    summarize(count=n()) %>%
+    #right_join(.,first_state_expanded,by=c('initial_state','splitting_variable')) %>%
+    mutate(count=if_else(is.na(count),0,as.numeric(count))) %>%
+    ungroup() %>%
+    select(-initial_state)
+}
+
+get_children_dist2 <- function(date_filter, date_observed){
+  individs_extended %>% 
+    filter(date_diagnosis>=date_filter) %>%
+    mutate(child=age<=15) %>%
+    group_by(date_diagnosis, child) %>%
+    summarise(count=n()) %>%
+    group_by(date_diagnosis) %>%
+    mutate(prop=round(count/sum(count),2)) %>%
+    ungroup() %>%
+    filter(child) %>%
+    group_by(prop) %>%
+    summarise(count=n()) %>%
+    ungroup() %>%
+    mutate(prob=count/sum(count)) %>%
+    select(-count)
+}
+
+get_children_los <- function(date_filter,date_observed){
+  individs_extended %>% 
+    filter(date_diagnosis>=date_filter & !is.na(date_outcome)) %>%
+    mutate(child=age<=15) %>%
+    mutate(length_of_stay=as.numeric(date_outcome-date_diagnosis)) %>%
+    group_by(length_of_stay) %>%
+    count() %>%
+    ungroup() %>%
+    mutate(prob=n/sum(n)) %>%
+    select(-n)
 }
 
 

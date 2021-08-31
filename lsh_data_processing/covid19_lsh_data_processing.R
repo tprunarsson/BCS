@@ -18,14 +18,14 @@ source('lsh_data_processing/test_covid19_lsh_data_processing.R')
 source('lsh_data_processing/create_input_for_simulation.R')
 source('lsh_data_processing/help_functions.R')
 
-date_data_tmp <- as.Date('2021-08-11','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
-date_prediction_tmp <- as.Date('2020-10-21','%Y-%m-%d') #BREYTA með nýrri spá (þarf að vísu ekki endilega því þessu er breytt í gagnaborðinu líka)
+date_data_tmp <- as.Date('2021-08-26','%Y-%m-%d') #BREYTA með nýjum lsh gögnum
+date_prediction_tmp <- as.Date('2021-07-06','%Y-%m-%d') #BREYTA með nýrri spá (þarf að vísu ekki endilega því þessu er breytt í gagnaborðinu líka)
 date_observed_start_tmp <- date_data_tmp-1
 #path_to_lsh_data_tmp <- '~/projects/covid/BCS/lsh_data/'
 path_to_lsh_data_tmp <- 'lsh_data/'
 write_tables_tmp <- TRUE
 run_id_tmp <- 19
-forecast_tmp <- 'hi'
+forecast_tmp <- 'manual'
 
 #Supported unit category types: all,simple
 unit_category_type <- 'simple'
@@ -731,11 +731,20 @@ historical_data <- group_by(patient_transitions,date,state) %>%
                     summarise(count=n()) %>%
                     right_join(.,historical_expanded,by=c('date','state')) %>%
                     mutate(count=if_else(is.na(count),0,as.numeric(count)))
+historical_data_children <- patient_transitions %>%
+                    left_join(select(individs, patient_id, age), by="patient_id") %>%
+                    filter(age<=15) %>%
+                    group_by(date,state) %>% 
+                    summarise(count=n()) %>%
+                    right_join(.,historical_expanded,by=c('date','state')) %>%
+                    mutate(count=if_else(is.na(count),0,as.numeric(count)))
 historical_turnover <- get_historical_turnover()
 historical_state_sequences_base <- get_state_sequences(model='base',seq_type = 'finished')
 historical_state_sequences_extended <- get_state_sequences(model='extended',seq_type = 'finished')
-
-
+historical_infections_per_date <- covid_diagnosis %>% 
+  group_by(date_diagnosis_pcr) %>% 
+  rename(date=date_diagnosis_pcr) %>%
+  summarize(count=n())
 ################# ----- Predicted number of infections ------ ##############################
 if(forecast=='hi'){
   infections_predicted_per_date <- get_infections_predicted_per_date(source='hi', date_prediction)
@@ -775,6 +784,8 @@ if(write_tables){
   write.table(historical_turnover, file = paste0(path_tables,date_data,'_historical_turnover.csv'), quote = F,row.names=F,sep=',')
   write.table(prop_outpatient_clinic, file=paste0(path_outpatient_clinic,date_data,'_prop_outpatient_clinic.csv'), quote = F,row.names=F,sep=',')
   write.table(infections_predicted_per_date, file = paste0(path_tables,date_data,'_infections_predicted.csv'), quote = F,row.names=F,sep=',')
+  write.table(historical_infections_per_date, file = paste0(path_tables,'infections_historical.csv'), quote = F,row.names=F,sep=',')
+  write.table(historical_data_children, file = paste0(path_tables,'infections_historical_children.csv'), quote = F,row.names=F,sep=',')
 }
 
 ################# ----- Transition summary and length of stay distribution for all experiments ------ ##############################

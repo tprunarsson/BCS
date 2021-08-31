@@ -29,14 +29,250 @@ suppressPackageStartupMessages({
   library(data.table)
   library(httr)
   library(DT)
+  library(rmarkdown)
 })
 source("lsh_data_processing/covid19_lsh_data_processing.R")
 source("lsh_data_processing/help_functions.R")
 source("R/best_weighted.R")
 source('dashboard/dashboard_functions.R')
 
-color_palette <- c("green"=rgb(171, 202, 106, max=255), "yellow"=rgb(229, 174, 62, max=255), "red"=rgb(191, 92, 89, max=255))
+color_palette <- c("#ABCA6A", "#E5AE3E", "#BF5C59")
+color_palette_vax <- c("#88a154", "#b0852e", "#9c4a48")
+pop_iceland <- 368792
 ```
+
+Forsendur um smit {id=manual_spa data-icon="fa-virus"}
+==========================
+
+Stillingar {.sidebar}
+-------------------------------
+```{r}
+br()
+dateInput('manual_start_date', 'Dagsetning fyrsta smits',
+          value = '2021-07-06', min = '2020-02-01', max = Sys.Date() + 120)
+hr()
+preset_scenarios <- read.csv('input/preset_stikar.csv')
+dropdownButton(
+  fileInput("my_scenarios", "",
+                    multiple = FALSE,
+                    accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"), width = "90%"),
+  circle = FALSE, status = "default", size='s',
+  icon=icon("upload"), label="Hlaða upp eigin sviðsmyndum"
+)
+hr()
+pickerInput("choose_manual_scenario", "Velja sviðsmynd", choices = preset_scenarios$name, selected = preset_scenarios$name[2])
+hr()
+
+dropdownButton(
+  numericInput("manual_S", 'Fjöldi smita (S)',
+            min = 10, max = pop_iceland, step = 1, value = 15000, width = "70%"),
+  awesomeCheckbox('val_stikar', 'Nota nákvæmari stika', value = TRUE),
+  hr(),
+  sliderInput("manual_alpha", 'Hliðrun (α)',
+            min = 0.01, max = 100, step = 0.05, value = 32.71, ticks = FALSE, width = "70%"),
+conditionalPanel(
+    "input.val_stikar == false",
+      selectInput('manual_beta_simple', "Lögun", 
+                  choices = c("Mjög hægur vöxtur", "Hægur vöxtur", "Meðal vöxtur", "Hraður vöxtur", "Mjög hraður vöxtur"), 
+                  multiple = FALSE, selected = "Meðal vöxtur", width = "70%"),
+      selectInput('manual_nu_simple', "Skekkja", choices = c("Engin", "Lítil", "Meðal", "Mikil", "Gríðarleg"), 
+                  multiple = FALSE, selected = "Engin", width = "70%")
+  ),
+  conditionalPanel(
+    "input.val_stikar == true",
+    sliderInput("manual_beta_complex", 'Lögun (β)',
+              min = 0.01, max = 1, step = 0.001, value = 0.2, width = "70%"),
+    sliderInput("manual_nu_complex", 'Skekkja (ν)',
+              min = 0.001, max = 50, step = 0.001, value = 20.275, width = "70%")
+  ),
+  hr(),
+  sliderInput("manual_dagar", 'Fjöldi daga til að teikna',
+            min = 5, max = 100, step = 5, value = 70, ticks = FALSE, width = "70%"),
+  circle = FALSE, status = "default", size='default',
+  label="Bylgja",
+  icon=icon("chart-area"),
+  tooltip = tooltipOptions(title = "Stilla bylgju")
+)
+
+hr()
+
+dropdownButton(
+  textInput("manual_name", "Nafn sviðsmyndar", placeholder = "Mín sviðsmynd 1"),
+  actionButton("add_manual_to_table", "Bæta sviðsmynd við"),
+  hr(),
+  renderDataTable({
+    create_dt(values$scenarios_to_download)
+  }),
+  circle = FALSE, status = "default", size='default',
+  label="Sviðsmyndir",
+  icon=icon("save"),
+  tooltip = tooltipOptions(title = "Vista sviðsmyndir")
+)
+
+
+
+manual_beta <- reactive({
+  if(input$val_stikar==FALSE){
+    switch(input$manual_beta_simple,
+          "Mjög hægur vöxtur" = 0.05,
+          "Hægur vöxtur" = 0.1,
+          "Meðal vöxtur" = 0.2,
+          "Hraður vöxtur" = 0.3,
+          "Mjög hraður vöxtur" = 0.5
+          )
+  }
+  else if(input$val_stikar==TRUE){
+    input$manual_beta_complex
+  } else NULL
+})
+
+manual_nu <- reactive({
+  if(input$val_stikar==FALSE){
+    switch(input$manual_nu_simple,
+          "Engin" = 1,
+          "Lítil" = 2,
+          "Meðal" = 3.5,
+          "Mikil" = 5,
+          "Gríðarleg" = 10
+          )
+  }
+  else if(input$val_stikar==TRUE){
+    input$manual_nu_complex
+  } else NULL
+})
+br()
+hr()
+br()
+actionButton("bua_til_manual", "Nota sviðsmynd", icon=icon("check"))
+observeEvent(input$bua_til_manual, {
+  showNotification("Nú má nota þessa sviðsmynd í flipanum \"Spá\"", id = 'manual_spa_ready', type = 'message', duration = 3)
+  stikar_manual <- data.frame("alpha"=input$manual_alpha, "beta"=manual_beta(), "S"=input$manual_S, "nu"=manual_nu(), "day_n"=input$manual_dagar)
+  write.table(stikar_manual, file = paste0('input/stikar_manual.csv'), quote = F,row.names=F,sep=',')
+})
+```
+
+
+
+```{r}
+# Upload og download aðgerðir
+
+my_scenarios_data <- eventReactive(input$my_scenarios, {
+  if(is.null(input$my_scenarios)){
+    dataset <- preset_scenarios
+  }
+  else if(getExtension(as.character(input$my_scenarios$datapath))!="csv"){
+    dataset <- preset_scenarios
+  }
+  else{
+    dataset <- read.csv(input$my_scenarios$datapath)
+  }
+  dataset
+}, ignoreNULL = FALSE)
+
+observe({
+  if(is.null(input$my_scenarios)) return()
+  if(getExtension(as.character(input$my_scenarios$datapath))!="csv"){
+    showNotification("Villa! Skráin þarf að vera .csv", id = 'error_in_scenario_file', type = 'error', duration = 3)
+    return()
+  }
+  updatePickerInput(
+      session,
+      "choose_manual_scenario",
+      choices = my_scenarios_data()$name,
+      selected = my_scenarios_data()$name[1])
+})
+
+observeEvent(input$choose_manual_scenario, {
+  row_scenario <- which(my_scenarios_data()$name==input$choose_manual_scenario)
+  updateSliderInput(session, "manual_alpha", value = my_scenarios_data()$alpha[row_scenario])
+  updateSliderInput(session, "manual_beta_complex", value = my_scenarios_data()$beta[row_scenario])
+  updateSliderInput(session, "manual_nu_complex", value = my_scenarios_data()$nu[row_scenario])
+  updateNumericInput(session, "manual_S", value = my_scenarios_data()$S[row_scenario])
+  updateSliderInput(session, "manual_dagar", value = my_scenarios_data()$day_n[row_scenario])
+})
+
+scenarios_to_download <- reactive({
+  tibble("name"=character(), "alpha"=numeric(), "beta"=numeric(), "S"=numeric(), "nu"=numeric(), "day_n"=numeric())
+})
+
+values <- reactiveValues()
+
+observeEvent(input$add_manual_to_table,{
+  isolate({
+  row_to_add <- tibble("name"=input$manual_name, "alpha"=input$manual_alpha, "beta"=manual_beta(), "S"=input$manual_S, "nu"=manual_nu(), "day_n"=input$manual_dagar)
+  values$scenarios_to_download <- rbind(values$scenarios_to_download, row_to_add)
+  })
+})
+```
+
+
+row
+------------------------------
+### Ný smit
+```{r ný smit data & ný smit plot manual}
+## Create a logistic growth function
+## Fengið frá Brynjólfi
+logistic_growth <- function(time, alpha, beta, S, nu) {
+  z <- beta*(time-alpha)
+  S-S/((1+nu*exp(z))^(1/nu))
+}
+
+logistic_growth_deriv <- function(g, beta, S, nu){
+  (beta/nu)*(S-g)*(1-((S-g)/S)^nu)
+}
+
+smit_folk_manual <- reactive({
+  out_manual <- data.frame("date"=seq.Date(from=input$manual_start_date, length.out = input$manual_dagar, by=1), "day_n"=1:input$manual_dagar)
+  
+  out_manual <- out_manual %>% mutate("total_cases"=sapply(out_manual$day_n, logistic_growth,
+                                      alpha=as.numeric(input$manual_alpha),
+                                      beta=as.numeric(manual_beta()),
+                                      S=as.numeric(input$manual_S)/pop_iceland,
+                                      nu=as.numeric(manual_nu())))
+  
+    out_manual <- out_manual %>% mutate("new_cases"=sapply(out_manual$total_cases, logistic_growth_deriv,
+                                           beta=manual_beta(),
+                                           S=as.numeric(input$manual_S)/pop_iceland,
+                                           nu=as.numeric(manual_nu())))
+  
+  out_manual<- out_manual %>% mutate(., "total_cases"=round(out_manual$total_cases*pop_iceland),
+                                    "new_cases"=round(out_manual$new_cases*pop_iceland))
+  out_manual
+})
+
+infections_per_date_manual <- reactive({
+  covid_diagnosis %>% 
+    group_by(date_diagnosis_pcr) %>% 
+    rename(date=date_diagnosis_pcr) %>%
+    summarize(count=n()) %>%
+    filter(date>input$manual_start_date) %>%
+    mutate(total=cumsum(count)) %>%
+    filter(date<input$manual_start_date + input$manual_dagar)
+})
+
+# plot new cases
+renderPlotly({
+p <- ggplot(smit_folk_manual()) +
+    geom_col(aes(x=date, y=new_cases), fill="#3b6978") +
+    geom_point(data=infections_per_date_manual(), aes(x=date, y=count)) +
+    theme_minimal() +
+    labs(y="Ný smit", x=NULL)
+ggplotly(p)
+})
+```
+
+### Heildarbylgja
+```{r}
+renderPlotly({
+p <- ggplot(smit_folk_manual()) +
+    geom_col(aes(x=date, y=total_cases), fill= "#204051") +
+    geom_point(data=infections_per_date_manual(), aes(x=date, y=total)) +
+    theme_minimal() +
+    labs(y="Heildarsmit", x=NULL)
+ggplotly(p)
+})
+```
+
 
 Spá {id=skyrslur data-icon="fa-notes-medical"}
 =======================================================================
@@ -45,33 +281,99 @@ Stillingar {.sidebar}
 -------------------------------------------------------------
 
 ```{r stillingar skýrslu}
+br()
 dateInput('dagsetning_skyrslu', 'Dagsetning:',
           value = Sys.Date(), min = min(historical_data$date), max = date_data)
 hr()
+awesomeCheckbox('spa_choose', 'Nota eigin forsendur um smit', value=TRUE)
 
-checkboxInput('prior_choose', 'Nota upplýsingar úr fyrri bylgjum', value=FALSE)
-
-hr()
-
-checkboxInput('spa_choose', 'Nota eigin spá um smit', value=FALSE)
 observeEvent(input$bua_til_manual, {
   updateCheckboxInput(session, "spa_choose", value = TRUE)
+})
+br()
+hr()
+br()
+actionButton("birta_skyrslu", "Birta spá", icon=icon("angle-double-right"))
+br()
+dropdownButton(
+  br(),
+  awesomeCheckbox(
+      inputId = "show_legend_skyrslur",
+      label = "Sýna merkingar", 
+      value = FALSE
+  ),
+  dateInput('filter_history', 'Sýna söguleg gögn frá:', value = date_data-3, 
+            min = min(historical_data$date), max=max(historical_data$date), width = "70%"),
+  numericInput('number_predicted_days', "Fjöldi spádaga", value = 15, min=1, max=15, step=1, width = "70%"),
+  awesomeCheckbox('prior_choose', 'Nota upplýsingar úr fyrri bylgjum', value=FALSE, width = "80%"),
+  circle = TRUE, status = "default", size='s',
+  icon=icon("gear"),
+  tooltip = tooltipOptions(title = "Stillingar grafs")
+)
+br()
+hr()
+br()
+br()
+br()
+br()
+br()
+br()
+br()
+br()
+br()
+br()
+br()
+br()
+br()
+
+renderUI({
+downloadButton("download_report", "Sækja skýrslu")
 })
 ```
 
 ```{r}
-hr()
-actionButton("birta_skyrslu", "Birta spá")
-observeEvent(input$birta_skyrslu, {
-  showNotification("Keyrir hermun... \n Það tekur um 2 mínútur að birta spána", id = 'msg_keyra_hermun1', type = 'message', duration = NULL)
-})
+# Sækja skýrslu
+output$download_report <- downloadHandler(
+  filename = paste0("skyrsla_",Sys.Date(),".html"),
+  content = function(file) {
+    # Afrita allar skrár sem skýrslan þarf að nota í tempdir
+    tempPath <- tempdir()
+    tempReport <- file.path(tempPath, "report_new.Rmd")
+    tempSummary <- file.path(tempPath, "simulation_summary.csv")
+    tempHistorical <- file.path(tempPath, 'historical_data.csv')
+    tempPrediction <- file.path(tempPath, 'infections_predicted.csv')
+    tempCasesHistorical <- file.path(tempPath, 'infections_historical.csv')
+    tempSumaryChildren <- file.path(tempPath, 'children_summary.csv')
+    tempHistoricalChildren <- file.path(tempPath, 'historical_children.csv')
+    file.copy("report/report_new.Rmd", tempReport, overwrite = TRUE)
+    file.copy(paste0("output/", Sys.Date(), "_", Sys.Date(), "_19_simulation_summary.csv"), tempSummary, overwrite = TRUE)
+    file.copy(paste0("input/", Sys.Date(), "_historical_data.csv"), tempHistorical, overwrite = TRUE)
+    file.copy(paste0("input/", Sys.Date(), "_infections_predicted.csv"), tempPrediction, overwrite = TRUE)
+    file.copy("input/infections_historical.csv", tempCasesHistorical, overwrite = TRUE)
+    file.copy("output/children_simulation_summary.csv", tempSumaryChildren, overwrite = TRUE)
+    file.copy("input/infections_historical_children.csv", tempHistoricalChildren, overwrite = TRUE)
+    params <- list(date_skyrsla = input$dagsetning_skyrslu,
+                   data_summary = "simulation_summary.csv",
+                   data_historical = 'historical_data.csv',
+                   data_prediction = 'infections_predicted.csv',
+                   data_historical_infections = 'infections_historical.csv',
+                   data_children_summary = 'children_summary.csv',
+                   data_historical_children = 'historical_children.csv')
+    rmarkdown::render(tempReport, output_file = file, 
+                      params = params,
+                      envir = new.env(parent = globalenv())
+    )
+  }
+)
+```
 
-checkboxInput('show_legend_skyrslur', 'Sýna merkingar', value=FALSE)
 
-dateInput('filter_history', 'Sýna söguleg gögn frá:', value = date_data-3, min = min(historical_data$date), max=max(historical_data$date))
-
+```{r}
 dagsetning_skyrslu_reactive1 <- reactive({
   data.frame("dagsetning"=input$dagsetning_skyrslu)
+})
+observeEvent(input$birta_skyrslu, {
+  showNotification("Keyrir hermun... \n Það tekur um 2 mínútur að birta spána", id = 'msg_keyra_hermun1', type = 'message', duration = NULL)
 })
 
 observeEvent(input$dagsetning_skyrslu, {
@@ -83,7 +385,7 @@ observeEvent(input$dagsetning_skyrslu, {
 )
 })
 
-numericInput('number_predicted_days', "Fjöldi spádaga", value = 14, min=1, max=80, step=1)
+
 ```
 
 
@@ -152,7 +454,15 @@ dagsetning_skyrslu_reactive <- eventReactive(input$birta_skyrslu, {
 birta date_prediction {data-height=25px}
 --------------------------------------
 ```{r}
-renderText(paste("Spá um fjölda greindra smita er frá ", as.Date(date_prediction())))
+renderText({
+  if(input$spa_choose){
+    text <- "Líkanið notar forsendur úr flipanum \"Forsendur um smit\"."
+  }
+  else{
+    text <- "Líkanið notar forsendur af covid.hi.is. "
+  }
+  paste(text, "Forsendur um fjölda greindra smita er frá ", as.Date(date_prediction()))
+})
 ```
 
 birta alpha {data-height=25px}
@@ -216,6 +526,200 @@ renderPlotly({
 })
 ```
 
+Börn {data-icon="fa-child"}
+=======================================================================
+
+Stillingar {.sidebar}
+---------------------------------------------------
+```{r}
+br()
+dateInput('dagsetning_children', 'Dagsetning:',
+          value = Sys.Date(), min = min(historical_data$date), max = date_data)
+# hr()
+# renderText({"Þessi spá notar eigin forsendur um smit"})
+# br()
+hr()
+br()
+actionButton("birta_children_spa", "Birta spá", icon=icon("angle-double-right"))
+br()
+dropdownButton(
+  br(),
+  awesomeCheckbox(
+      inputId = "show_legend_children",
+      label = "Sýna merkingar", 
+      value = FALSE
+  ),
+  dateInput('filter_history_children', 'Sýna söguleg gögn frá:', value = date_data-3, 
+            min = min(historical_data$date), max=max(historical_data$date), width = "70%"),
+  circle = TRUE, status = "default", size='s',
+  icon=icon("gear"),
+  tooltip = tooltipOptions(title = "Stillingar grafs")
+)
+observeEvent(input$birta_children_spa, {
+  showNotification("Keyrir hermun... \n Það tekur um 1 mínútu að birta spána", 
+                   id = 'msg_keyra_hermun2', type = 'message', duration = NULL)
+  if(!file.exists("input/stikar_manual.csv")){
+    sendSweetAlert(
+      session = session,
+      title = "Villa",
+      text = "Spá um fjölda smita fannst ekki",
+      type = "warning"
+    )
+  }
+})
+
+observeEvent(input$dagsetning_children, {
+  updateDateInput(
+  session,
+  "filter_history_children",
+  value = input$dagsetning_children-4,
+  max = input$dagsetning_children-2
+)
+})
+
+sim_data_children <- eventReactive(input$birta_children_spa, {
+  dates_to_sim <- seq.Date(from=input$dagsetning_children, to=input$dagsetning_children+14, by="day")
+  run_children_simulation(dates_to_sim, input$dagsetning_children-1, input$manual_start_date)
+})
+
+observeEvent(input$birta_children_spa, {
+  write.table(sim_data_children(), file = 'output/children_simulation_summary.csv', quote = F,row.names=F,sep=',')
+})
+```
+
+row
+---------------------------------------------------
+
+### Spá um fjölda barna í heimaeinangrun
+```{r}
+historical_data_filtered_children <- reactive({
+  historical_data_children %>% filter(date<input$dagsetning_children, date>input$filter_history_children) %>% rename("Dagsetning"=date, "Fjöldi"=count) %>% filter(state=="home")
+})
+
+renderPlotly({
+  p <- ggplot(sim_data_children(), aes(x=Dagsetning, y=Fjöldi)) + 
+    geom_line(aes(lty=key, alpha=key), color="#6f9685") + 
+    scale_linetype_manual(values=c("dashed", "solid", "dashed")) +
+    scale_alpha_manual(values = c(0.7, 1, 0.7)) +
+    geom_point(data=historical_data_filtered_children()) + 
+    labs(x=NULL, linetype = '', alpha = '') +
+    geom_vline(xintercept = as.numeric(input$dagsetning_children), linetype="dotted", color="dodgerblue")
+  removeNotification(id = 'msg_keyra_hermun2')
+  if(input$show_legend_children==TRUE){
+    ggplotly(p)
+  }
+  else{
+    ggplotly(p) %>%
+      layout(showlegend = FALSE)
+  }
+})
+```
+
+texti með titli {data-height=50}
+------------------------------
+ 
+#### Tölulegar upplýsingar
+
+row
+--------------------------------
+ 
+```{r}
+num_children <- reactive({
+  out <- get_patient_transitions_at_date('base',date_observed = date_data) %>%
+    inner_join(select(individs_extended, patient_id, age, vacc_at_diagnosis), by="patient_id") %>%
+    filter(age<=15)
+  if(input$dagsetning_children==Sys.Date()){
+    out <- out %>%
+      filter(date == input$dagsetning_children-1) %>%
+      ungroup()
+  }
+  else{
+    out <- out %>%
+      filter(date == input$dagsetning_children) %>%
+      ungroup()
+  }
+  out
+})
+
+children_los_info <- reactive({
+  individs_extended %>% 
+    filter(age<=15) %>%
+    mutate(length_of_stay_censored=if_else(is.na(date_outcome) | date_outcome>input$dagsetning_children, 
+                                           as.numeric(input$dagsetning_children-date_diagnosis), NULL)) %>%
+    mutate(length_of_stay_uncensored=as.numeric(date_outcome-date_diagnosis)) %>%
+    rename("Fjöldi daga hingað til"=length_of_stay_censored, "Heildarfjöldi daga"=length_of_stay_uncensored)
+})
+
+children_new_cases <- reactive({
+  individs_extended %>%
+    filter(age<=15) %>%
+    group_by(date_diagnosis) %>%
+    summarise(Fjöldi=n()) %>%
+    filter(date_diagnosis>=input$filter_historical_cases_children) %>%
+    rename(Dagsetning=date_diagnosis)
+})
+```
+
+
+### Fjöldi barna í eftirliti {.no-padding}
+ 
+```{r}
+renderValueBox({
+  valueBox(nrow(num_children()), icon = "fa-child")
+})
+```
+
+row
+--------------------------------
+
+### Tími núverandi sjúklinga í eftirliti (hingað til)
+
+```{r}
+renderPlotly({
+  p <- ggplot(children_los_info(), aes(x=`Fjöldi daga hingað til`)) + 
+    geom_bar(fill="#6f9685", color="#6f9685", alpha=0.7) +
+    labs(x="Dagar í eftirliti", y="Fjöldi")
+  ggplotly(p)
+})
+```
+
+### Tími sjúklinga í eftirliti sem hafa lokið einangrun
+
+```{r}
+renderPlotly({
+  p <- ggplot(children_los_info(), aes(x=`Heildarfjöldi daga`)) + 
+    geom_bar(fill="#537063", color="#537063", alpha=0.7) +
+    labs(x="Dagar í eftirliti", y="Fjöldi")
+  ggplotly(p)
+})
+```
+
+row
+--------------------------------
+
+### Fjöldi smita meðal barna
+
+```{r}
+dropdownButton(
+  dateInput('filter_historical_cases_children', 'Sýna söguleg gögn frá:', value = date_data-30, 
+            min = min(historical_data$date), max=max(historical_data$date), width = "70%"),
+  circle = TRUE, status = "default", size='s',
+  icon=icon("gear"),
+  tooltip = tooltipOptions(title = "Stillingar grafs")
+)
+
+renderPlotly({
+  p <- ggplot(children_new_cases(), aes(x=Dagsetning, y=Fjöldi)) + 
+    geom_point(color="#3e574b") + 
+    geom_line(color="#3e574b", alpha=0.3) +
+    labs(x=NULL, y="Fjöldi") + ylim(0,NA)
+  ggplotly(p)
+})
+```
+
+
+
+
 
 Færslulíkur & Legutímar {data-icon="fa-calculator"}
 =======================================================================
@@ -223,19 +727,20 @@ Færslulíkur & Legutímar {data-icon="fa-calculator"}
 Stillingar {.sidebar}
 ---------------------------------------------------
 ```{r}
+br()
 dateRangeInput('dagsetning_forsendur', 'Tímabil:',
                start = min(individs_extended$date_diagnosis, na.rm = TRUE), end=max(historical_data$date),
                min = min(individs_extended$date_diagnosis, na.rm = TRUE), max = Sys.Date()-1)
 
-selectInput("age_forsendur", "Aldursskipting:",
+pickerInput("age_forsendur", "Aldursskipting:",
                 c("0-50 ára, 51+ ára" = "age_simple",
                   "0-50 ára, 51-74 ára, 75+ ára" = "age_three",
                   "0-9, 10-19,...,70-79, 80+ ára" = "age_official",
                   "Engin skipting" = "all"))
 
-checkboxInput("vaccine_forsendur", "Skipta eftir bólusetningu", value=TRUE)
+awesomeCheckbox("vaccine_forsendur", "Skipta eftir bólusetningu", value=TRUE)
 
-selectInput("tourist", "Ferðamenn:",
+pickerInput("tourist", "Ferðamenn:",
             c("Bólusettir" = "vaccine",
               "Óbólusettir" = "no_vaccine",
               "Sleppa ferðamönnum" = "no_tourist"))
@@ -524,24 +1029,26 @@ renderDataTable({
 Staða {data-icon="fa-user-md"}
 =======================================================================
 
+<!-- texti með titli {data-height=50} -->
+<!-- ------------------------------ -->
+
+<!-- #### Upplýsingar um stöðu sjúklinga -->
+
+
 Stillingar {.sidebar}
 ---------------------------------------------------
 
 ```{r stillingar visual}
+br()
 dateInput('dagsetning', 'Dagsetning:',
           value = Sys.Date() - 1, min = min(historical_data$date), max = date_data-1)
-
-# selectInput til að ákveða hvað á að sýna
-selectInput('choose_visual_gauge', "Veldu upplýsingar til að sjá á mæli", choices = c("Hlutfall sjúklinga sem hafa verið með einkenni í færri en sex daga", "Hlutfall sjúklinga eldri en 50 ára", "Hlutfall sjúklinga með undirliggjandi sjúkdóma"), multiple = FALSE)
-
-selectInput('choose_visual_graph', "Veldu upplýsingar til að sjá á grafi", choices = c("Tími frá upphafi einkenna", "Aldur", "Fjöldi undirliggjandi sjúkdóma"), multiple = FALSE)
 ```
 
 texti með titli {data-height=50}
 ------------------------------
  
-#### Upplýsingar um stöðu sjúklinga
- 
+#### Fjöldi sjúklinga
+
 row
 --------------------------------
  
@@ -666,13 +1173,34 @@ renderValueBox({
 })
 ```
 
-tölfræðilegt output gauge text {data-height=100px}
+tölfræðilegt output gauge text {data-height=50px}
 -------------------------------
 
 #### `r renderText(paste(input$choose_visual_gauge))`
 
+tölfræðilegt output stillingar gauge {data-height=50px}
+-------------------------------
 
-tölfræðilegt output gauge {data-height=220px}
+```{r}
+visual_gauge_val <- c("Hlutfall sjúklinga sem hafa verið með einkenni í færri en sex daga", 
+                        "Hlutfall sjúklinga eldri en 50 ára", 
+                        "Hlutfall sjúklinga með undirliggjandi sjúkdóma")
+dropdownButton(
+  radioGroupButtons(
+   inputId = "choose_visual_gauge",
+   label = "",
+   choices = visual_gauge_val,
+   direction = "vertical",
+   size="s"
+  ),
+  circle = FALSE, status = "default", size='s',
+  label="Stillingar",
+  icon=icon("gear"),
+  tooltip = tooltipOptions(title = "Veldu upplýsingar til að sjá á mæli")
+)
+```
+
+tölfræðilegt output gauge
 -------------------------------
 
 ```{r output in gauge}
@@ -699,92 +1227,54 @@ gaugeInputIcu <- reactive({
           "Hlutfall sjúklinga með undirliggjandi sjúkdóma" = hlutfall_sjuklinga_num_comorbidity_icu()
           )
   })
+```
 
+### Heimaeinangrun
+```{r}
 renderGauge({
    gaugeInputHome()
 })
 
+```
+
+### Legudeild
+```{r}
 renderGauge({
    gaugeInputInpatient_ward()
 })
+```
 
+### Gjörgæsla
+```{r}
 renderGauge({
    gaugeInputIcu()
 })
 ```
 
-row na gauge {data-height=55px}
--------------------------------
 
-```{r}
-count_na_gauge <- reactive({
-   switch(input$choose_visual_gauge,
-          "Hlutfall sjúklinga sem hafa verið með einkenni í færri en sex daga" = count_na_symptoms(),
-          "Hlutfall sjúklinga eldri en 50 ára" = count_na_age(),
-          "Hlutfall sjúklinga með undirliggjandi sjúkdóma" = count_na_comorbidities()
-          )
-})
-
-count_na_gauge_home <- reactive({
-  dat <- count_na_gauge() %>% filter(state=="home")
-  nrow(dat)
-})
-
-count_na_gauge_iw <- reactive({
-  dat <- count_na_gauge() %>% filter(state=="inpatient_ward")
-  nrow(dat)
-})
-
-count_na_gauge_icu <- reactive({
-  dat <- count_na_gauge() %>% filter(state=="intensive_care_unit")
-  nrow(dat)
-})
-
-renderPlot({
-  if(count_na_gauge_home()==1){
-    text=paste0("Gildi vantar frá ", count_na_gauge_home(), " einstaklingi")
-  }
-  else{
-    text=paste0("Gildi vantar frá ", count_na_gauge_home(), " einstaklingum")
-  }
-  par(mar = c(0,0,0,0))
-    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
-    text(x = 0.8, y = 0.97, text, 
-     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
-})
-
-renderPlot({
-  if(count_na_gauge_iw()==1){
-    text=paste0("Gildi vantar frá ", count_na_gauge_iw(), " einstaklingi")
-  }
-  else{
-    text=paste0("Gildi vantar frá ", count_na_gauge_iw(), " einstaklingum")
-  }
-  par(mar = c(0,0,0,0))
-    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
-    text(x = 0.8, y = 0.97, text, 
-     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
-})
-
-renderPlot({
-  if(count_na_gauge_icu()==1){
-    text=paste0("Gildi vantar frá ", count_na_gauge_icu(), " einstaklingi")
-  }
-  else{
-    text=paste0("Gildi vantar frá ", count_na_gauge_icu(), " einstaklingum")
-  }
-  par(mar = c(0,0,0,0))
-    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
-    text(x = 0.8, y = 0.97, text, 
-     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
-})
-```
-
-
-tölfræðilegt output graph text {data-height=100px}
+tölfræðilegt output graph text {data-height=50px}
 -------------------------------
 
 #### `r renderText(paste(input$choose_visual_graph))`
+
+tölfræðilegt output stillingar graph {data-height=50px}
+-------------------------------
+
+```{r}
+dropdownButton(
+  radioGroupButtons(
+   inputId = "choose_visual_graph",
+   label = "",
+   choices = c("Tími frá upphafi einkenna", "Aldur", "Fjöldi undirliggjandi sjúkdóma"),
+   direction = "vertical",
+   size="s"
+  ),
+  circle = FALSE, status = "default", size='s',
+  label="Stillingar",
+  icon=icon("gear"),
+  tooltip = tooltipOptions(title = "Veldu upplýsingar til að sjá á grafi")
+)
+```
 
 tölfræðilegt output graph
 -------------------------------
@@ -813,21 +1303,33 @@ graphInputIcu <- reactive({
           "Fjöldi undirliggjandi sjúkdóma" = plot_num_comorbidity_icu()
           )
   })
+```
 
+
+### Heimaeinangrun
+```{r}
 renderPlotly({
    graphInputHome()
 })
+```
 
+### Legudeild
+```{r}
 renderPlotly({
    graphInputinpatient_ward()
 })
+```
 
+### Gjörgæsla
+```{r}
 renderPlotly({
    graphInputIcu()
 })
 ```
 
-row_na_graph {data-height=35px}
+
+
+row_na_graph
 --------------
 
 ```{r}
@@ -854,45 +1356,35 @@ count_na_graph_icu <- reactive({
   nrow(dat)
 })
 
-renderPlot({
+text_na_home <- reactive({
   if(count_na_graph_home()==1){
     text=paste0("Gildi vantar frá ", count_na_graph_home(), " einstaklingi")
   }
   else{
     text=paste0("Gildi vantar frá ", count_na_graph_home(), " einstaklingum")
   }
-  par(mar = c(0,0,0,0))
-    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
-    text(x = 0.8, y = 0.5, text, 
-     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+  text
 })
 
-renderPlot({
+text_na_iw <- reactive({
   if(count_na_graph_iw()==1){
     text=paste0("Gildi vantar frá ", count_na_graph_iw(), " einstaklingi")
   }
   else{
     text=paste0("Gildi vantar frá ", count_na_graph_iw(), " einstaklingum")
   }
-  par(mar = c(0,0,0,0))
-    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
-    text(x = 0.8, y = 0.5, text, 
-     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+  text
 })
 
-renderPlot({
+text_na_icu <- reactive({
   if(count_na_graph_icu()==1){
     text=paste0("Gildi vantar frá ", count_na_graph_icu(), " einstaklingi")
   }
   else{
     text=paste0("Gildi vantar frá ", count_na_graph_icu(), " einstaklingum")
   }
-  par(mar = c(0,0,0,0))
-    plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
-    text(x = 0.8, y = 0.5, text, 
-     cex = 1.2, col = "gray30", family="sans", font=1, adj=1)
+  text
 })
-
 ```
 
 <!--tolfrædi sjuklinga aldur - gauge data -->
@@ -902,6 +1394,8 @@ patients_data <- reactive({
                     get_patient_transitions_at_date('base', date_observed = date_data) %>%
                         inner_join(individs_splitting_variables, by = 'patient_id') %>%
                         rename(splitting_variable = !!'age_simple') %>%
+                        mutate(vacc_at_diagnosis = if_else(vacc_at_diagnosis, "Bólusettir", "Óbólusettir")) %>%
+                        rename("Bólusetning"=vacc_at_diagnosis) %>%
                         group_by(splitting_variable) %>%
                         filter(date == input$dagsetning) %>%
                         ungroup()
@@ -990,7 +1484,9 @@ symptoms_unfiltered <- reactive({
                     get_patient_transitions_at_date('base', date_observed = date_data) %>%
                        inner_join(individs_extended, by = 'patient_id') %>%
                        group_by(patient_id) %>%
-                       select(patient_id, date, state, severity, date_first_symptoms) %>%
+                       select(patient_id, date, state, severity, date_first_symptoms, vacc_at_diagnosis) %>%
+                       mutate(vacc_at_diagnosis = if_else(vacc_at_diagnosis, "Bólusettir", "Óbólusettir")) %>%
+                       rename("Bólusetning"=vacc_at_diagnosis) %>%
                        filter(date == input$dagsetning) %>%
                        mutate(less_than_six_days_with_symptoms = 
                                 if_else(date - date_first_symptoms <= 6, "Yes", "No")) %>%
@@ -1085,34 +1581,43 @@ hlutfall_sjuklinga_6_gauge_icu <- reactive({
 
 ```{r}
 plot_symptoms_start_home <- reactive({
-  ggplot(data=filter(symptoms(), state=="home"), aes(days_since_symptoms)) + 
-    geom_bar(color=color_palette[1], fill=color_palette[1], alpha=0.5) + 
+  ggplot(data=filter(symptoms(), state=="home"), aes(days_since_symptoms, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[1], color_palette_vax[1])) +
+    scale_color_manual(values=c(color_palette[1], color_palette_vax[1])) +
     geom_vline(aes(xintercept=median(days_since_symptoms, na.rm = TRUE)), 
-               color=color_palette[1], linetype="dashed", size=1) + 
+               color="black", linetype="dashed", size=1, alpha=0.5) + 
     theme_minimal() + 
-    labs(x="Dagar frá einkennum", y=NULL, title="Heimaeinangrun")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Dagar frá einkennum", y=NULL, fill=NULL, color=NULL, title=text_na_home())
 })
 ```
 
 ```{r}
 plot_symptoms_start_iw <- reactive({
-  ggplot(data=filter(symptoms(), state=="inpatient_ward"), aes(days_since_symptoms)) + 
-    geom_bar(color=color_palette[2], fill=color_palette[2], alpha=0.5) + 
+  ggplot(data=filter(symptoms(), state=="inpatient_ward"), aes(days_since_symptoms, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[2], color_palette_vax[2])) +
+    scale_color_manual(values=c(color_palette[2], color_palette_vax[2])) +
     geom_vline(aes(xintercept=median(days_since_symptoms, na.rm = TRUE)), 
-               color=color_palette[2], linetype="dashed", size=1) + 
+               color="black", linetype="dashed", size=1, alpha=0.5) + 
     theme_minimal() + 
-    labs(x="Dagar frá einkennum", y=NULL, title="Legudeild")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Dagar frá einkennum", y=NULL, fill=NULL, color=NULL, title=text_na_iw())
 })
 ```
 
 ```{r}
 plot_symptoms_start_icu <- reactive({
-  ggplot(data=filter(symptoms(), state=="intensive_care_unit"), aes(days_since_symptoms)) + 
-    geom_bar(color=color_palette[3], fill=color_palette[3], alpha=0.5) + 
+  ggplot(data=filter(symptoms(), state=="intensive_care_unit"), aes(days_since_symptoms, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[3], color_palette_vax[3])) +
+    scale_color_manual(values=c(color_palette[3], color_palette_vax[3])) +
     geom_vline(aes(xintercept=median(days_since_symptoms, na.rm = TRUE)), 
-               color=color_palette[3], linetype="dashed", size=1) + 
+               color="black", linetype="dashed", size=1, alpha=0.5) + 
     theme_minimal() + 
-    labs(x="Dagar frá einkennum", y=NULL, title="Gjörgæsla")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Dagar frá einkennum", y=NULL, fill=NULL, color=NULL, title=text_na_icu())
 })
 ```
 
@@ -1120,31 +1625,40 @@ plot_symptoms_start_icu <- reactive({
 
 ```{r}
 plot_age_home <- reactive({
-  ggplot(data=filter(patients_data(), state=="home"), aes(age_official)) + 
-    geom_bar(color=color_palette[1], fill=color_palette[1], alpha=0.5) + 
+  ggplot(data=filter(patients_data(), state=="home"), aes(age_official, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[1], color_palette_vax[1])) +
+    scale_color_manual(values=c(color_palette[1], color_palette_vax[1])) +
     theme_minimal() + 
     theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)) +
-    labs(x="Aldur", y=NULL, title = "Heimaeinangrun")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Aldur", y=NULL, fill=NULL, color=NULL, title=text_na_home())
 })
 ```
 
 ```{r}
 plot_age_iw <- reactive({
-  ggplot(data=filter(patients_data(), state=="inpatient_ward"), aes(age)) + 
-    geom_bar(color=color_palette[2], fill=color_palette[2], alpha=0.5) + 
-    geom_vline(aes(xintercept=median(age, na.rm = TRUE)), color=color_palette[2], linetype="dashed", size=1) + 
+  ggplot(data=filter(patients_data(), state=="inpatient_ward"), aes(age, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) +
+    scale_fill_manual(values=c(color_palette[2], color_palette_vax[2])) +
+    scale_color_manual(values=c(color_palette[2], color_palette_vax[2])) +
+    geom_vline(aes(xintercept=median(age, na.rm = TRUE)), color="black", linetype="dashed", size=1, alpha=0.5) + 
     theme_minimal() + 
-    labs(x="Aldur", y=NULL, title = "Legudeild")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Aldur", y=NULL, fill=NULL, color=NULL, title=text_na_iw())
 })
 ```
 
 ```{r}
 plot_age_icu <- reactive({
-  ggplot(data=filter(patients_data(), state=="intensive_care_unit"), aes(age)) + 
-    geom_bar(color=color_palette[3], fill=color_palette[3], alpha=0.5) + 
-    geom_vline(aes(xintercept=median(age, na.rm = TRUE)), color=color_palette[3], linetype="dashed", size=1) + 
+  ggplot(data=filter(patients_data(), state=="intensive_care_unit"), aes(age, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[3], color_palette_vax[3])) +
+    scale_color_manual(values=c(color_palette[3], color_palette_vax[3])) +
+    geom_vline(aes(xintercept=median(age, na.rm = TRUE)), color="black", linetype="dashed", size=1, alpha=0.5) + 
     theme_minimal() +
-    labs(x="Aldur", y=NULL, title = "Gjörgæsla")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Aldur", y=NULL, fill=NULL, color=NULL, title=text_na_icu())
 })
 ```
 
@@ -1155,7 +1669,9 @@ comorbidities_number_unfiltered <- reactive({
                           get_patient_transitions_at_date('base', date_observed = date_data) %>%
                           inner_join(individs_extended, by = 'patient_id') %>%
                           filter(date == input$dagsetning) %>%
-                          select(patient_id, state, num_comorbidity)
+                          select(patient_id, state, num_comorbidity, vacc_at_diagnosis) %>%
+                          mutate(vacc_at_diagnosis = if_else(vacc_at_diagnosis, "Bólusettir", "Óbólusettir")) %>%
+                          rename("Bólusetning"=vacc_at_diagnosis)
 })
 
 comorbidities_number <- reactive({
@@ -1245,31 +1761,40 @@ hlutfall_sjuklinga_num_comorbidity_icu <- reactive({
 
 ```{r}
 plot_num_comorbidity_home <- reactive({
-    ggplot(data=filter(comorbidities_number(), state=="home"), aes(num_comorbidity)) + 
-    geom_bar(color=color_palette[1], fill=color_palette[1], alpha=0.5) + 
-    geom_vline(aes(xintercept=median(num_comorbidity, na.rm = TRUE)), color=color_palette[1], linetype="dashed", size=1) +
+    ggplot(data=filter(comorbidities_number(), state=="home"), aes(num_comorbidity, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[1], color_palette_vax[1])) +
+    scale_color_manual(values=c(color_palette[1], color_palette_vax[1])) +
+    geom_vline(aes(xintercept=median(num_comorbidity, na.rm = TRUE)), color="black", linetype="dashed", size=1, alpha=0.5) +
     theme_minimal() + 
-    labs(x="Fjöldi undirliggjandi sjúkdóma", y=NULL, title = "Heimaeinangrun")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Fjöldi undirliggjandi sjúkdóma", y=NULL, fill=NULL, color=NULL, title=text_na_home())
 })
 ```
 
 ```{r}
 plot_num_comorbidity_iw <- reactive({
-    ggplot(data=filter(comorbidities_number(), state=="inpatient_ward"), aes(num_comorbidity)) + 
-    geom_bar(color=color_palette[2], fill=color_palette[2], alpha=0.5) + 
-    geom_vline(aes(xintercept=median(num_comorbidity, na.rm = TRUE)), color=color_palette[2], linetype="dashed", size=1) +
+    ggplot(data=filter(comorbidities_number(), state=="inpatient_ward"), aes(num_comorbidity, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[2], color_palette_vax[2])) +
+    scale_color_manual(values=c(color_palette[2], color_palette_vax[2])) +
+    geom_vline(aes(xintercept=median(num_comorbidity, na.rm = TRUE)), color="black", linetype="dashed", size=1, alpha=0.5) +
     theme_minimal() + 
-    labs(x="Fjöldi undirliggjandi sjúkdóma", y=NULL, title = "Legudeild")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Fjöldi undirliggjandi sjúkdóma", y=NULL, fill=NULL, color=NULL, title=text_na_iw())
 })
 ```
 
 ```{r}
 plot_num_comorbidity_icu <- reactive({
-    ggplot(data=filter(comorbidities_number(), state=="intensive_care_unit"), aes(num_comorbidity)) + 
-    geom_bar(color=color_palette[3], fill=color_palette[3], alpha=0.5) + 
-    geom_vline(aes(xintercept=median(num_comorbidity, na.rm = TRUE)), color=color_palette[3], linetype="dashed", size=1) +
+    ggplot(data=filter(comorbidities_number(), state=="intensive_care_unit"), aes(num_comorbidity, fill=Bólusetning, color=Bólusetning)) + 
+    geom_bar(alpha=0.7, position = "stack", na.rm = TRUE, width = 1) + 
+    scale_fill_manual(values=c(color_palette[3], color_palette_vax[3])) +
+    scale_color_manual(values=c(color_palette[3], color_palette_vax[3])) +
+    geom_vline(aes(xintercept=median(num_comorbidity, na.rm = TRUE)), color="black", linetype="dashed", size=1, alpha=0.5) +
     theme_minimal() + 
-    labs(x="Fjöldi undirliggjandi sjúkdóma", y=NULL, title = "Gjörgæsla")
+    theme(plot.title=element_text(color='#7d2323',vjust=0.5,size=11), legend.position = "none") +
+    labs(x="Fjöldi undirliggjandi sjúkdóma", y=NULL, fill=NULL, color=NULL, title=text_na_icu())
 })
 ```
 
@@ -1280,14 +1805,20 @@ Stillingar {.sidebar}
 ---------------------------------------------------
 
 ```{r}
+br()
 dateRangeInput('dagsetning_flow', 'Tímabil:', 
                start = Sys.Date()-14, end=Sys.Date()+1, min = min(historical_data$date), max = Sys.Date() + 30)
 
-checkboxInput('show_recovered_death', "Sýna lokastöður", value = FALSE)
+dropdownButton(
+  awesomeCheckbox('show_recovered_death', "Sýna lokastöður", value = FALSE),
+  awesomeCheckbox('hide_home_recovered', "Fela þá sem fara aldrei á spítala", value = FALSE),
+  actionBttn(inputId = "help_sankey", style="jelly", icon = icon("question")),
+  circle = TRUE, status = "default", size='s',
+  icon=icon("gear"),
+  tooltip = tooltipOptions(title = "Stillingar Flæðirits")
+)
 
-checkboxInput('hide_home_recovered', "Fela 1. Heimaeinangrun -> 2. Bati", value = FALSE)
 
-actionBttn(inputId = "help_sankey", style="jelly", icon = icon("question"))
 
 observeEvent(input$help_sankey, {
   showNotification("Sankey flæðiritið sýnir flæði sjúklinga á milli stöðva í kerfinu. Hægt er að sjá hversu margir fara í gegnum stöðvarnar með því að fara með músina á viðeigandi stað. Breidd hlekkjanna er í samræmi við flæðið.", id = "msg_help_sankey", type = 'message', duration=NULL)
@@ -1471,16 +2002,18 @@ Sviðsmyndir {id=svidsmyndir_logistic data-icon="fa-chart-bar"}
 Stillingar {.sidebar}
 ---------------------------------------------------
 ```{r stillingar scenario logistic}
-helpText("Smella þarf á \"Keyra\" eftir að stilling er valin")
+# helpText("Smella þarf á \"Keyra\" eftir að stilling er valin")
+br()
 # Fyrir plottun
 # Aldursdreifing
-hr()
 # Aðrar stillingar
 dateInput('logistic_start_date', 'Dagsetning fyrsta smits',
           value = Sys.Date() + 1, min = '2020-05-01', max = Sys.Date() + 120)
 hr()
-checkboxInput('logistic_vax_input', 'Taka tillit til bólusetninga', value=TRUE)
-checkboxInput('logistic_prob_input', 'Handskrá líkur á spítalainnlögn', value=FALSE)
+awesomeCheckbox('eigin_spa_svidsmyndir', 'Nota "Forsendur um smit"', value=FALSE)
+hr()
+awesomeCheckbox('logistic_vax_input', 'Taka tillit til bólusetninga', value=TRUE)
+awesomeCheckbox('logistic_prob_input', 'Handskrá líkur á spítalainnlögn', value=FALSE)
 conditionalPanel(
   "input.logistic_prob_input == true",
   numericInput("hospital_prob_input", 'Líkur á innlögn',
@@ -1490,24 +2023,37 @@ conditionalPanel(
 )
 hr()
 
-#Aldursdreifing (4. bylgja frá 23. júlí)
-radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('Frá dagsetningu:', 'Covid-19', 'Þjóðar', 'Skv. stillingu:'))
-conditionalPanel(
-  "input.logistic_aldur_val == 'Frá dagsetningu:'",
-  dateInput('age_dist_start_date', 'Dagsetning aldursdreifingar',
-          value = '2021-07-01', min = '2020-02-28', max = Sys.Date() - 30)
+#Aldursdreifing
+dropdownButton(
+  #radioButtons('logistic_aldur_val', 'Aldursdreifing', choices = c('Frá dagsetningu:', 'Covid-19', 'Þjóðar', 'Skv. stillingu:')),
+  awesomeRadio(
+    inputId = "logistic_aldur_val",
+    label = "", 
+    choices = c('Frá dagsetningu:', 'Covid-19', 'Þjóðar', 'Skv. stillingu:'),
+    selected = "Frá dagsetningu:"
+  ),
+  conditionalPanel(
+    "input.logistic_aldur_val == 'Frá dagsetningu:'",
+    dateInput('age_dist_start_date', 'Dagsetning aldursdreifingar',
+            value = '2021-07-01', min = '2020-02-28', max = Sys.Date() - 30, width = "70%")
+  ),
+  conditionalPanel(
+    "input.logistic_aldur_val == 'Skv. stillingu:'",
+    sliderInput("logistic_aldur_dreif1",
+                HTML('Alpha'),
+                min = 0, max = 10, step=0.1, value = c(5), width = "70%"),
+    sliderInput("logistic_aldur_dreif2",
+                HTML('Beta'),
+                min = 0, max = 10, step=0.1, value = c(5), width = "70%")
+  ),
+  circle = FALSE, status = "default", size='default',
+  label="Aldursdreifing",
+  icon=icon("child"),
+  tooltip = tooltipOptions(title = "Velja aldursdreifingu")
 )
-conditionalPanel(
-  "input.logistic_aldur_val == 'Skv. stillingu:'",
-  sliderInput("logistic_aldur_dreif1",
-              HTML('Alpha'),
-              min = 0, max = 10, step=0.1, value = c(5)),
-  sliderInput("logistic_aldur_dreif2",
-              HTML('Beta'),
-              min = 0, max = 10, step=0.1, value = c(5))
-)
+
 hr()
-checkboxInput('eigin_spa_svidsmyndir', 'Nota spá úr "Eigin spá um smit"', value=FALSE)
+
 observeEvent(input$eigin_spa_svidsmyndir, {
   if(input$eigin_spa_svidsmyndir==TRUE){
     updateCheckboxInput(session, "val_stikar_logistic", value = TRUE)
@@ -1520,32 +2066,37 @@ observeEvent(input$eigin_spa_svidsmyndir, {
   }
 })
 #Stikar
-pop_iceland <- 364134
-numericInput("logistic_S", 'Fjöldi smita (S)',
-            min = 10, max = pop_iceland, step = 1, value = 100)
-checkboxInput('val_stikar_logistic', 'Nota nákvæmari stika', value=FALSE)
-
-hr()
-sliderInput("logistic_alpha", 'Hliðrun (α)',
-            min = 0.01, max = 100, step = 0.05, value = 24, ticks = FALSE)
-
-conditionalPanel(
-  "input.val_stikar_logistic == false",
-    selectInput('logistic_beta_simple', "Lögun", choices = c("Mjög hægur vöxtur", "Hægur vöxtur", "Meðal vöxtur", "Hraður vöxtur", "Mjög hraður vöxtur"), multiple = FALSE, selected = "Meðal vöxtur"),
-    selectInput('logistic_nu_simple', "Skekkja", choices = c("Engin", "Lítil", "Meðal", "Mikil", "Gríðarleg"), multiple = FALSE, selected = "Engin")
+dropdownButton(
+  numericInput("logistic_S", 'Fjöldi smita (S)',
+            min = 10, max = pop_iceland, step = 1, value = 100, width = "70%"),
+  awesomeCheckbox('val_stikar_logistic', 'Nota nákvæmari stika', value=FALSE),
+  hr(),
+  sliderInput("logistic_alpha", 'Hliðrun (α)',
+            min = 0.01, max = 100, step = 0.05, value = 24, ticks = FALSE, width = "70%"),
+  conditionalPanel(
+    "input.val_stikar_logistic == false",
+      selectInput('logistic_beta_simple', "Lögun", 
+                  choices = c("Mjög hægur vöxtur", "Hægur vöxtur", "Meðal vöxtur", "Hraður vöxtur", "Mjög hraður vöxtur"), 
+                  multiple = FALSE, selected = "Meðal vöxtur", width = "70%"),
+      selectInput('logistic_nu_simple', "Skekkja", choices = c("Engin", "Lítil", "Meðal", "Mikil", "Gríðarleg"), 
+                  multiple = FALSE, selected = "Engin", width = "70%")
+  ),
+  conditionalPanel(
+    "input.val_stikar_logistic == true",
+    sliderInput("logistic_beta_complex", 'Lögun (β)',
+              min = 0.01, max = 1, step = 0.001, value = 0.2, width = "70%"),
+    sliderInput("logistic_nu_complex", 'Skekkja (ν)',
+              min = 0.001, max = 50, step = 0.001, value = 1, width = "70%")
+  ),
+  hr(),
+  sliderInput("logistic_dagar", 'Fjöldi daga til að teikna',
+            min = 5, max = 250, step = 5, value = 60, ticks = FALSE, width = "70%"),
+  circle = FALSE, status = "default", size='default',
+  label="Bylgja",
+  icon=icon("chart-area"),
+  tooltip = tooltipOptions(title = "Stilla bylgju")
 )
 
-conditionalPanel(
-  "input.val_stikar_logistic == true",
-  sliderInput("logistic_beta_complex", 'Lögun (β)',
-            min = 0.01, max = 1, step = 0.001, value = 0.2),
-  sliderInput("logistic_nu_complex", 'Skekkja (ν)',
-            min = 0.001, max = 50, step = 0.001, value = 1)
-)
-
-hr()
-sliderInput("logistic_dagar", 'Fjöldi daga til að teikna',
-            min = 5, max = 250, step = 5, value = 60, ticks = FALSE)
 
 logistic_beta <- reactive({
   if(input$val_stikar_logistic==FALSE){
@@ -1579,35 +2130,44 @@ logistic_nu <- reactive({
 
 #Legutími
 hr()
-radioButtons('los_val2', 'Legutími', choices = c('covid.hi.is', 'LSH gögn', 'Skv. stillingu:'))
-conditionalPanel(
-  "input.los_val2 == 'Skv. stillingu:'",
-  sliderInput("los_vd2",
-              HTML('Veikindadagar'),
-              min = 12, max = 22, step=1, value = c(17), ticks = F),
-  sliderInput("los_ld2",
-              HTML('Dagar á legudeild'),
-              min = 4, max = 16, step=1, value = c(8), ticks = F),
-  sliderInput("los_gd2",
-              HTML('Dagar á gjörgæslu'),
-              min = 3, max = 15, step=1, value = c(6), ticks = F)
+dropdownButton(
+  awesomeRadio('los_val2', 'Legutími', choices = c('covid.hi.is', 'LSH gögn', 'Skv. stillingu:')),
+  conditionalPanel(
+    "input.los_val2 == 'Skv. stillingu:'",
+    sliderInput("los_vd2",
+                HTML('Veikindadagar'),
+                min = 12, max = 22, step=1, value = c(17), ticks = F),
+    sliderInput("los_ld2",
+                HTML('Dagar á legudeild'),
+                min = 4, max = 16, step=1, value = c(8), ticks = F),
+    sliderInput("los_gd2",
+                HTML('Dagar á gjörgæslu'),
+                min = 3, max = 15, step=1, value = c(6), ticks = F)
+  ),
+  renderText({
+      paste0('Veikindadagar: ', los_dist_logistic()$vd, ' , ')
+  }),
+  renderText({
+      paste0('Dagar á legudeild: ', los_dist_logistic()$ld, ' , ')
+  }),
+  renderText({
+      paste0('Dagar á gjörgæslu: ', los_dist_logistic()$gd, ' , ')
+  }),
+  renderText({
+      paste0('Dagar heima fyrir legudeild: ', los_dist_logistic()$pre_lega, ' , ')
+  }),
+  renderText({
+      paste0('Dagar á legudeild fyrir gjörgæslu: ', los_dist_logistic()$pre_icu)
+  }),
+  circle = FALSE, status = "default", size='default',
+  label="Legutími",
+  icon=icon("hourglass-half"),
+  tooltip = tooltipOptions(title = "Stilla legutíma")
 )
-
-renderText({
-    paste0('Veikindadagar: ', los_dist_logistic()$vd, ' , ')
-})
-renderText({
-    paste0('Dagar á legudeild: ', los_dist_logistic()$ld, ' , ')
-})
-renderText({
-    paste0('Dagar á gjörgæslu: ', los_dist_logistic()$gd, ' , ')
-})
-renderText({
-    paste0('Dagar heima fyrir legudeild: ', los_dist_logistic()$pre_lega, ' , ')
-})
-renderText({
-    paste0('Dagar á legudeild fyrir gjörgæslu: ', los_dist_logistic()$pre_icu)
-})
+br()
+hr()
+br()
+actionButton("logistic_keyra", "Keyra", icon=icon("angle-double-right"))
 
 #Dagar á legudeild þurfa að vera færri en veikindadagar
 observeEvent(input$los_vd2,{
@@ -1804,8 +2364,6 @@ los_dist_logistic <- reactive({
   else
     stop("Unexpected dataset")
 })
-
-actionButton("logistic_keyra", "Keyra")
 ```
 
 Sviðsmyndir logistic
@@ -1915,223 +2473,3 @@ ggplotly(p, tooltip = list('linetype', 'date', 'value')) %>%
   layout(legend = list(orientation = "h", x = 0, y =-0.1))
 })
 ```
-
-Eigin spá um smit {id=manual_spa data-icon="fa-virus"}
-==========================
-
-Stillingar {.sidebar}
--------------------------------
-```{r}
-dateInput('manual_start_date', 'Dagsetning fyrsta smits',
-          value = Sys.Date(), min = '2020-02-01', max = Sys.Date() + 120)
-hr()
-preset_scenarios <- read.csv('input/preset_stikar.csv')
-selectInput("choose_manual_scenario", "Velja sviðsmynd", choices = preset_scenarios$name, multiple = FALSE, selected = preset_scenarios$name[2])
-
-fileInput("my_scenarios", "Hlaða upp eigin sviðsmyndum",
-                    multiple = FALSE,
-                    accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"))
-hr()
-
-numericInput("manual_S", 'Fjöldi smita (S)',
-            min = 10, max = pop_iceland, step = 1, value = 15000)
-checkboxInput('val_stikar', 'Nota nákvæmari stika', value = TRUE)
-hr()
-
-sliderInput("manual_alpha", 'Hliðrun (α)',
-            min = 0.01, max = 100, step = 0.05, value = 32.71, ticks = FALSE)
-
-conditionalPanel(
-  "input.val_stikar == false",
-    selectInput('manual_beta_simple', "Lögun", choices = c("Mjög hægur vöxtur", "Hægur vöxtur", "Meðal vöxtur", "Hraður vöxtur", "Mjög hraður vöxtur"), multiple = FALSE, selected = "Meðal vöxtur"),
-    selectInput('manual_nu_simple', "Skekkja", choices = c("Engin", "Lítil", "Meðal", "Mikil", "Gríðarleg"), multiple = FALSE, selected = "Engin")
-)
-
-conditionalPanel(
-  "input.val_stikar == true",
-  sliderInput("manual_beta_complex", 'Lögun (β)',
-            min = 0.01, max = 1, step = 0.001, value = 0.2),
-  sliderInput("manual_nu_complex", 'Skekkja (ν)',
-            min = 0.001, max = 50, step = 0.001, value = 20.275)
-)
-
-hr()
-sliderInput("manual_dagar", 'Fjöldi daga til að teikna',
-            min = 5, max = 100, step = 5, value = 70, ticks = FALSE)
-hr()
-
-textInput("manual_name", "Nafn sviðsmyndar", placeholder = "Mín sviðsmynd 1")
-
-manual_beta <- reactive({
-  if(input$val_stikar==FALSE){
-    switch(input$manual_beta_simple,
-          "Mjög hægur vöxtur" = 0.05,
-          "Hægur vöxtur" = 0.1,
-          "Meðal vöxtur" = 0.2,
-          "Hraður vöxtur" = 0.3,
-          "Mjög hraður vöxtur" = 0.5
-          )
-  }
-  else if(input$val_stikar==TRUE){
-    input$manual_beta_complex
-  } else NULL
-})
-
-manual_nu <- reactive({
-  if(input$val_stikar==FALSE){
-    switch(input$manual_nu_simple,
-          "Engin" = 1,
-          "Lítil" = 2,
-          "Meðal" = 3.5,
-          "Mikil" = 5,
-          "Gríðarleg" = 10
-          )
-  }
-  else if(input$val_stikar==TRUE){
-    input$manual_nu_complex
-  } else NULL
-})
-actionButton("add_manual_to_table", "Bæta sviðsmynd við")
-
-hr()
-
-actionButton("bua_til_manual", "Nota sviðsmynd")
-observeEvent(input$bua_til_manual, {
-  showNotification("Nú má nota þessa sviðsmynd í flipanum \"Spá\"", id = 'manual_spa_ready', type = 'message', duration = 3)
-  stikar_manual <- data.frame("alpha"=input$manual_alpha, "beta"=manual_beta(), "S"=input$manual_S, "nu"=manual_nu(), "day_n"=input$manual_dagar)
-  write.table(stikar_manual, file = paste0('input/stikar_manual.csv'), quote = F,row.names=F,sep=',')
-})
-```
-
-
-
-```{r}
-# Upload og download aðgerðir
-
-my_scenarios_data <- eventReactive(input$my_scenarios, {
-  if(is.null(input$my_scenarios)){
-    dataset <- preset_scenarios
-  }
-  else if(getExtension(as.character(input$my_scenarios$datapath))!="csv"){
-    dataset <- preset_scenarios
-  }
-  else{
-    dataset <- read.csv(input$my_scenarios$datapath)
-  }
-  dataset
-}, ignoreNULL = FALSE)
-
-observe({
-  if(is.null(input$my_scenarios)) return()
-  if(getExtension(as.character(input$my_scenarios$datapath))!="csv"){
-    showNotification("Villa! Skráin þarf að vera .csv", id = 'error_in_scenario_file', type = 'error', duration = 3)
-    return()
-  }
-  updateSelectInput(
-      session,
-      "choose_manual_scenario",
-      choices = my_scenarios_data()$name,
-      selected = my_scenarios_data()$name[1])
-})
-
-observeEvent(input$choose_manual_scenario, {
-  row_scenario <- which(my_scenarios_data()$name==input$choose_manual_scenario)
-  updateSliderInput(session, "manual_alpha", value = my_scenarios_data()$alpha[row_scenario])
-  updateSliderInput(session, "manual_beta_complex", value = my_scenarios_data()$beta[row_scenario])
-  updateSliderInput(session, "manual_nu_complex", value = my_scenarios_data()$nu[row_scenario])
-  updateNumericInput(session, "manual_S", value = my_scenarios_data()$S[row_scenario])
-  updateSliderInput(session, "manual_dagar", value = my_scenarios_data()$day_n[row_scenario])
-})
-
-scenarios_to_download <- reactive({
-  tibble("name"=character(), "alpha"=numeric(), "beta"=numeric(), "S"=numeric(), "nu"=numeric(), "day_n"=numeric())
-})
-
-values <- reactiveValues()
-
-observeEvent(input$add_manual_to_table,{
-  isolate({
-  row_to_add <- data.frame("name"=input$manual_name, "alpha"=input$manual_alpha, "beta"=manual_beta(), "S"=input$manual_S, "nu"=manual_nu(), "day_n"=input$manual_dagar)
-  values$scenarios_to_download <- rbind(values$scenarios_to_download, row_to_add)
-  })
-})
-```
-
-
-row
-------------------------------
-### Ný smit
-```{r ný smit data & ný smit plot manual}
-## Create a logistic growth function
-## Fengið frá Brynjólfi
-logistic_growth <- function(time, alpha, beta, S, nu) {
-  z <- beta*(time-alpha)
-  S-S/((1+nu*exp(z))^(1/nu))
-}
-
-logistic_growth_deriv <- function(g, beta, S, nu){
-  (beta/nu)*(S-g)*(1-((S-g)/S)^nu)
-}
-
-smit_folk_manual <- reactive({
-  out_manual <- data.frame("date"=seq.Date(from=input$manual_start_date, length.out = input$manual_dagar, by=1), "day_n"=1:input$manual_dagar)
-  
-  out_manual <- out_manual %>% mutate("total_cases"=sapply(out_manual$day_n, logistic_growth,
-                                      alpha=as.numeric(input$manual_alpha),
-                                      beta=as.numeric(manual_beta()),
-                                      S=as.numeric(input$manual_S)/pop_iceland,
-                                      nu=as.numeric(manual_nu())))
-  
-    out_manual <- out_manual %>% mutate("new_cases"=sapply(out_manual$total_cases, logistic_growth_deriv,
-                                           beta=manual_beta(),
-                                           S=as.numeric(input$manual_S)/pop_iceland,
-                                           nu=as.numeric(manual_nu())))
-  
-  out_manual<- out_manual %>% mutate(., "total_cases"=round(out_manual$total_cases*pop_iceland),
-                                    "new_cases"=round(out_manual$new_cases*pop_iceland))
-  out_manual
-})
-
-infections_per_date_manual <- reactive({
-  covid_diagnosis %>% 
-    group_by(date_diagnosis_pcr) %>% 
-    rename(date=date_diagnosis_pcr) %>%
-    summarize(count=n()) %>%
-    filter(date>input$manual_start_date) %>%
-    mutate(total=cumsum(count)) %>%
-    filter(date<input$manual_start_date + input$manual_dagar)
-})
-
-# plot new cases
-renderPlotly({
-p <- ggplot(smit_folk_manual()) +
-    geom_col(aes(x=date, y=new_cases), fill="#3b6978") +
-    geom_point(data=infections_per_date_manual(), aes(x=date, y=count)) +
-    theme_minimal() +
-    labs(y="Ný smit", x=NULL)
-ggplotly(p)
-})
-```
-
-### Heildarbylgja
-```{r}
-renderPlotly({
-p <- ggplot(smit_folk_manual()) +
-    geom_col(aes(x=date, y=total_cases), fill= "#204051") +
-    geom_point(data=infections_per_date_manual(), aes(x=date, y=total)) +
-    theme_minimal() +
-    labs(y="Heildarsmit", x=NULL)
-ggplotly(p)
-})
-```
-
-row
-------------------------------
-### Sviðsmyndir
-
-```{r}
-renderDataTable({
-  create_dt(values$scenarios_to_download)
-})
-```
-

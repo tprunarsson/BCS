@@ -42,12 +42,12 @@ border: 1px black solid;
 }
 .btn-default.btn:hover {
 color: black;
-background-color: #d3dadb;
+background-color: #b6bfc2;
 }
 .btn-default.active {
 color: black;
-background-color: #b0bdbf;
-border-color: #b0bdbf;
+background-color: #abb8ad;
+border-color: black;
 }
 
 /* NAVBAR */
