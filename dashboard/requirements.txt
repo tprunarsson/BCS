@@ -19,3 +19,4 @@ optparse
 readxl
 tibble
 DT
+rmarkdown
