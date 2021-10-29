@@ -38,7 +38,7 @@ best_weighted_function <- function(date_data, today, los_setting, prediction_typ
     group_by(date) %>%
     mutate(prob=count/sum(count))
   
-  sim_days <- as.numeric(max(infected_distr$date)-today)
+  sim_days <- min(17, as.numeric(max(infected_distr$date)-today))
   
   run_execute_run <- paste("./execute_run.sh -d", date_data, "-n 7", "-s", week_ago, "-b", date_prediction, "-r", run_id, "-c", prediction_type, "-e", today, "-f")
 #  setwd("../experiments")

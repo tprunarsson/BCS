@@ -49,7 +49,7 @@ Stillingar {.sidebar}
 ```{r}
 br()
 dateInput('manual_start_date', 'Dagsetning fyrsta smits',
-          value = '2021-07-06', min = '2020-02-01', max = Sys.Date() + 120)
+          value = '2021-09-18', min = '2020-02-01', max = Sys.Date() + 120)
 hr()
 preset_scenarios <- read.csv('input/preset_stikar.csv')
 dropdownButton(
@@ -326,9 +326,9 @@ br()
 br()
 br()
 
-renderUI({
-downloadButton("download_report", "Sækja skýrslu")
-})
+# renderUI({
+# downloadButton("download_report", "Sækja skýrslu")
+# })
 ```
 
 ```{r}
@@ -578,7 +578,10 @@ observeEvent(input$dagsetning_children, {
 })
 
 sim_data_children <- eventReactive(input$birta_children_spa, {
-  dates_to_sim <- seq.Date(from=input$dagsetning_children, to=input$dagsetning_children+14, by="day")
+  dates_to_sim <- seq.Date(from=input$dagsetning_children, to=input$manual_start_date+input$manual_dagar-1, by="day")
+  if(length(dates_to_sim)>21){
+    dates_to_sim <- dates_to_sim[1:21]
+  }
   run_children_simulation(dates_to_sim, input$dagsetning_children-1, input$manual_start_date)
 })
 
